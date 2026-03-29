@@ -35,10 +35,17 @@ function generateOTP() {
 
 /** Load an order assigned to the current delivery dealer */
 function getAssignedOrder(orderId, dealerId) {
-  return db.prepare(`
-    SELECT co.* FROM consumer_orders co
+  const order = db.prepare(`
+    SELECT co.*, c.phone AS consumer_phone
+    FROM consumer_orders co
+    LEFT JOIN consumers c ON c.id = co.consumer_id
     WHERE co.id = ? AND co.delivery_dealer_id = ?
   `).get(orderId, dealerId);
+  if (order) {
+    // Fall back to consumer's registered phone if delivery address has no phone
+    order.otp_phone = order.delivery_phone || order.consumer_phone;
+  }
+  return order;
 }
 
 /* ═════════════════════════════════════════════════════════════════════
@@ -240,12 +247,12 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
       return res.status(400).json({ error: `Cannot start delivery with delivery_status '${order.delivery_status}'. Must be 'packed'.` });
     }
 
-    if (!order.delivery_phone) {
+    if (!order.otp_phone) {
       return res.status(400).json({ error: 'No phone number on file for this delivery address. Cannot send OTP.' });
     }
 
     // Send OTP via Twilio Verify — Twilio generates and sends the code
-    const smsResult = await sendDeliveryOtp(order.delivery_phone);
+    const smsResult = await sendDeliveryOtp(order.otp_phone);
     if (!smsResult.sent && !smsResult.dev) {
       return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
     }
@@ -306,7 +313,7 @@ router.post(
       }
 
       // Verify OTP via Twilio (or dev fallback: "000000")
-      const { approved, error: checkError } = await checkDeliveryOtp(order.delivery_phone, req.body.otp);
+      const { approved, error: checkError } = await checkDeliveryOtp(order.otp_phone, req.body.otp);
 
       if (!approved) {
         return res.status(400).json({ error: checkError || 'Invalid OTP. Please try again.' });
@@ -364,12 +371,12 @@ router.post('/orders/:id/resend-otp', param('id').isInt(), async (req, res) => {
       return res.status(400).json({ error: 'Order is not out for delivery' });
     }
 
-    if (!order.delivery_phone) {
+    if (!order.otp_phone) {
       return res.status(400).json({ error: 'No phone number on file for this delivery address.' });
     }
 
     // Twilio Verify handles rate limiting and resend automatically
-    const smsResult = await sendDeliveryOtp(order.delivery_phone);
+    const smsResult = await sendDeliveryOtp(order.otp_phone);
     if (!smsResult.sent && !smsResult.dev) {
       return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
     }
