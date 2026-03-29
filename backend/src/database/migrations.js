@@ -210,6 +210,14 @@ function runMigrations(db) {
     db.exec(`ALTER TABLE consumer_orders ADD COLUMN delivery_failed_reason TEXT`);
     console.log('[migration] consumer_orders: added delivery_failed_reason');
   }
+  if (!hasColumn('consumer_orders', 'razorpay_order_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_order_id TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_order_id');
+  }
+  if (!hasColumn('consumer_orders', 'razorpay_payment_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_payment_id TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_payment_id');
+  }
 
   // Users table: delivery terms acceptance
   if (!hasColumn('users', 'accepts_delivery_terms')) {
@@ -255,6 +263,22 @@ function runMigrations(db) {
     txAddr();
     console.log(`[migration] back-filled h3_index for ${addrNeedsH3.length} consumer address(es)`);
   }
+
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration 8:  Withdrawal requests table
+   * ═══════════════════════════════════════════════════════════════════ */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS withdrawal_requests (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      trader_id    INTEGER NOT NULL REFERENCES users(id),
+      amount       REAL    NOT NULL,
+      upi_id       TEXT    NOT NULL,
+      status       TEXT    NOT NULL DEFAULT 'pending',
+      admin_notes  TEXT,
+      requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      processed_at DATETIME
+    )
+  `);
 
   console.log('[migration] all migrations applied');
 }

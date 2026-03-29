@@ -304,6 +304,16 @@ router.get('/commissions', (req, res) => {
     FROM commissions WHERE trader_id=?
   `).get(req.user.id);
 
+  const withdrawn = db.prepare(`
+    SELECT COALESCE(SUM(amount),0) as total
+    FROM withdrawal_requests
+    WHERE trader_id=? AND status IN ('pending','approved')
+  `).get(req.user.id);
+
+  const available_balance = parseFloat(
+    (parseFloat(String(summary.total_amount)) - parseFloat(String(withdrawn.total))).toFixed(2)
+  );
+
   const weeklyBreakdown = db.prepare(`
     SELECT week_start, week_end, COUNT(*) as count,
            SUM(amount) as amount, status,
@@ -316,7 +326,29 @@ router.get('/commissions', (req, res) => {
     SELECT * FROM weekly_payouts WHERE trader_id=? ORDER BY created_at DESC LIMIT 10
   `).all(req.user.id);
 
-  res.json({ commissions, summary, weeklyBreakdown, payouts });
+  const withdrawals = db.prepare(`
+    SELECT * FROM withdrawal_requests WHERE trader_id=? ORDER BY requested_at DESC LIMIT 20
+  `).all(req.user.id);
+
+  res.json({ commissions, summary, weeklyBreakdown, payouts, withdrawals, available_balance });
+});
+
+/* ── Withdrawal Requests ──────────────────────────────────────────────── */
+router.post('/commissions/withdraw', (req, res) => {
+  const { amount, upi_id } = req.body;
+  if (!amount || !upi_id) return res.status(400).json({ error: 'amount and upi_id are required' });
+  const amt = parseFloat(amount);
+  if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+  /* Check available balance */
+  const summary = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM commissions WHERE trader_id=?`).get(req.user.id);
+  const withdrawn = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM withdrawal_requests WHERE trader_id=? AND status IN ('pending','approved')`).get(req.user.id);
+  const available = parseFloat(String(summary.total)) - parseFloat(String(withdrawn.total));
+
+  if (amt > available + 0.01) return res.status(400).json({ error: `Insufficient balance. Available: ₹${available.toFixed(2)}` });
+
+  const r = db.prepare(`INSERT INTO withdrawal_requests (trader_id,amount,upi_id) VALUES (?,?,?)`).run(req.user.id, amt, upi_id.trim());
+  res.status(201).json({ success: true, id: r.lastInsertRowid });
 });
 
 /* ── My Inventory ────────────────────────────────────────────────────── */

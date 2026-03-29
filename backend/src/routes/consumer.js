@@ -390,26 +390,7 @@ router.post('/orders', authConsumer, [
       db.prepare(`UPDATE products SET stock=stock-? WHERE id=?`).run(it.quantity, it.product_id);
     }
 
-    /* Commissions — only for dealer-linked orders */
-    if (!isDirect) {
-      const dealer = db.prepare(`SELECT * FROM users WHERE id=?`).get(linkedDealerId);
-      const now = new Date();
-      const ws  = new Date(now); ws.setDate(now.getDate() - now.getDay() + 1);
-      const we  = new Date(ws);  we.setDate(ws.getDate() + 6);
-      const weekStart = ws.toISOString().slice(0, 10);
-      const weekEnd   = we.toISOString().slice(0, 10);
-
-      const commAmt = parseFloat((totalAmt * dealer.commission_rate / 100).toFixed(2));
-      db.prepare(`INSERT INTO commissions (trader_id,consumer_order_id,amount,rate,type,status,week_start,week_end) VALUES (?,?,?,?,'direct','pending',?,?)`)
-        .run(linkedDealerId, or.lastInsertRowid, commAmt, dealer.commission_rate, weekStart, weekEnd);
-
-      if (dealer.tier === 2 && dealer.referred_by_id) {
-        const parent    = db.prepare(`SELECT * FROM users WHERE id=?`).get(dealer.referred_by_id);
-        const parentAmt = parseFloat((totalAmt * parent.commission_rate / 100).toFixed(2));
-        db.prepare(`INSERT INTO commissions (trader_id,consumer_order_id,amount,rate,type,status,week_start,week_end) VALUES (?,?,?,?,'override','pending',?,?)`)
-          .run(parent.id, or.lastInsertRowid, parentAmt, parent.commission_rate, weekStart, weekEnd);
-      }
-    }
+    /* Commissions are recorded after payment confirmation, not here */
 
     /* Optionally save new address to profile */
     if (!address_id && save_address) {

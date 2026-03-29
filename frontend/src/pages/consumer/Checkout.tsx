@@ -155,18 +155,74 @@ export default function Checkout() {
         ? await consumerApi.post('/consumer/orders', payload)
         : await api.post('/consumer/orders', payload);
       const data = res.data;
-      setSuccess({
-        orderNumber:       data.order_number || data.order?.order_number,
-        message:           data.confirmation?.message,
-        deliveryDealerName: data.delivery?.dealerName,
-        deliveryDistanceKm: data.delivery?.distanceKm,
-        deliveryMethod:     data.delivery?.method,
+
+      if (!consumer) {
+        // Guest: no payment, show success immediately
+        setSuccess({
+          orderNumber:        data.order_number || data.order?.order_number,
+          message:            data.confirmation?.message,
+          deliveryDealerName: data.delivery?.dealerName,
+          deliveryDistanceKm: data.delivery?.distanceKm,
+          deliveryMethod:     data.delivery?.method,
+        });
+        setPlacing(false);
+        return;
+      }
+
+      // Logged-in consumer: initiate Razorpay payment
+      const payRes = await consumerApi.post('/payments/create-order', {
+        consumer_order_id: data.order.id,
       });
-      // Refresh consumer state so referral link / discount shows immediately everywhere
-      if (consumer) refreshConsumer();
+      const { razorpay_order_id, amount, currency, key_id } = payRes.data;
+
+      setPlacing(false); // Razorpay modal handles UX from here
+
+      const rzp = new window.Razorpay({
+        key:         key_id,
+        amount,
+        currency,
+        name:        'Sanathana Tattva',
+        description: `Order ${data.order.order_number}`,
+        image:       '/Gemini_Generated_Image_agra6kagra6kagra.png',
+        order_id:    razorpay_order_id,
+        handler: async (response: any) => {
+          setPlacing(true);
+          try {
+            await consumerApi.post('/payments/verify', {
+              razorpay_order_id:  response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              consumer_order_id:  data.order.id,
+            });
+            refreshConsumer();
+            setSuccess({
+              orderNumber:        data.order.order_number,
+              message:            data.confirmation?.message,
+              deliveryDealerName: data.delivery?.dealerName,
+              deliveryDistanceKm: data.delivery?.distanceKm,
+              deliveryMethod:     data.delivery?.method,
+            });
+          } catch {
+            toast.error('Payment verification failed. Please contact support.');
+          } finally {
+            setPlacing(false);
+          }
+        },
+        prefill: {
+          name:    consumer?.name    || '',
+          contact: consumer?.phone   || '',
+          email:   consumer?.email   || '',
+        },
+        theme: { color: '#16a34a' },
+        modal: {
+          ondismiss: () => {
+            toast('Payment cancelled. Complete payment from My Orders anytime.', { icon: 'ℹ️' });
+          },
+        },
+      });
+      rzp.open();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to place order');
-    } finally {
       setPlacing(false);
     }
   };
@@ -388,7 +444,7 @@ export default function Checkout() {
                         </div>
                       </label>
                       {saveNewAddr && (
-                        <label className="flex items-start gap-3 cursor-pointer select-none ml-7 pt-2 border-t border-slate-100">
+                        <label className="flex items-start gap-3 cursor-pointer select-none pt-2 border-t border-slate-100">
                           <input
                             type="checkbox"
                             checked={makeDefaultAddr}
@@ -572,7 +628,7 @@ export default function Checkout() {
               className="btn-primary w-full py-4 mt-5 text-base font-bold flex items-center justify-center gap-2"
             >
               {placing && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {placing ? 'Placing Order…' : `Place Order · ₹${finalTotal.toFixed(2)}`}
+              {placing ? 'Processing…' : consumer ? `Pay ₹${finalTotal.toFixed(2)}` : `Place Order · ₹${finalTotal.toFixed(2)}`}
             </button>
 
             {!consumer && (

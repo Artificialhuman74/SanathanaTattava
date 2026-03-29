@@ -16,6 +16,7 @@ const consumerRoutes      = require('./routes/consumer');
 const locationRoutes      = require('./routes/location');
 const notificationRoutes  = require('./routes/notifications');
 const deliveryRoutes      = require('./routes/delivery');
+const paymentRoutes       = require('./routes/payments');
 
 const app  = express();
 const PORT = process.env.PORT || 5001;
@@ -60,6 +61,7 @@ app.use('/api/consumer',      consumerRoutes);
 app.use('/api/location',      locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/delivery',      deliveryRoutes);
+app.use('/api/payments',      paymentRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

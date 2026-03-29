@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
-  DollarSign, ChevronDown, Zap, Check, Clock, Users, RefreshCw,
-  Star, AlertCircle,
+  DollarSign, ChevronDown, Zap, Check, Clock, RefreshCw,
+  Star, AlertCircle, ArrowDownToLine,
 } from 'lucide-react';
 
 interface CommissionSummary {
@@ -29,32 +29,57 @@ interface Payout {
   created_at: string;
 }
 
+interface Withdrawal {
+  id: number;
+  trader_id: number;
+  trader_name: string;
+  trader_tier: number;
+  amount: number;
+  upi_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_notes: string | null;
+  requested_at: string;
+  processed_at: string | null;
+}
+
 const PAYOUT_STATUS_COLORS: Record<string, string> = {
   pending:   'bg-amber-100 text-amber-700',
   processed: 'bg-emerald-100 text-emerald-700',
   failed:    'bg-red-100 text-red-700',
 };
 
+const WITHDRAWAL_STATUS_COLORS: Record<string, string> = {
+  pending:  'bg-amber-100 text-amber-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+  rejected: 'bg-red-100 text-red-700',
+};
+
 export default function AdminCommissions() {
   const [summary,      setSummary]      = useState<CommissionSummary[]>([]);
   const [payouts,      setPayouts]      = useState<Payout[]>([]);
+  const [withdrawals,  setWithdrawals]  = useState<Withdrawal[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [processing,   setProcessing]   = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [updatingId,   setUpdatingId]   = useState<number | null>(null);
+  const [wFilter,      setWFilter]      = useState('pending');
 
   const fetchData = useCallback(() => {
     setLoading(true);
     const params: any = {};
     if (statusFilter) params.status = statusFilter;
+    const wParams: any = {};
+    if (wFilter) wParams.status = wFilter;
     Promise.all([
       api.get('/admin/commissions/summary'),
       api.get('/admin/commissions/payouts', { params }),
-    ]).then(([summaryRes, payoutsRes]) => {
-      setSummary(summaryRes.data.summary || summaryRes.data || []);
-      setPayouts(payoutsRes.data.payouts || payoutsRes.data || []);
+      api.get('/admin/withdrawals', { params: wParams }),
+    ]).then(([summaryRes, payoutsRes, wRes]) => {
+      setSummary(summaryRes.data.summary || []);
+      setPayouts(payoutsRes.data.payouts || []);
+      setWithdrawals(wRes.data.withdrawals || []);
     }).finally(() => setLoading(false));
-  }, [statusFilter]);
+  }, [statusFilter, wFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -78,6 +103,16 @@ export default function AdminCommissions() {
       toast.success(`Payout marked as ${newStatus}`);
       fetchData();
     } catch { toast.error('Failed to update payout'); }
+    finally { setUpdatingId(null); }
+  };
+
+  const handleWithdrawal = async (w: Withdrawal, status: 'approved' | 'rejected', notes?: string) => {
+    setUpdatingId(w.id);
+    try {
+      await api.put(`/admin/withdrawals/${w.id}`, { status, admin_notes: notes });
+      toast.success(`Withdrawal ${status}`);
+      fetchData();
+    } catch { toast.error('Failed to update withdrawal'); }
     finally { setUpdatingId(null); }
   };
 
@@ -184,6 +219,106 @@ export default function AdminCommissions() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Withdrawal Requests */}
+      <div className="card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <ArrowDownToLine size={18} className="text-brand-600" />
+            <div>
+              <h3 className="font-bold text-slate-900">Withdrawal Requests</h3>
+              <p className="text-slate-400 text-xs mt-0.5">Approve or reject dealer withdrawal requests</p>
+            </div>
+          </div>
+          <div className="relative">
+            <select value={wFilter} onChange={e => setWFilter(e.target.value)} className="form-input appearance-none pr-8 min-w-32 text-sm">
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+          </div>
+        </div>
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Dealer</th>
+                <th>Tier</th>
+                <th>Amount</th>
+                <th>UPI ID</th>
+                <th>Status</th>
+                <th>Requested</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {withdrawals.map(w => (
+                <tr key={w.id}>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-xs">
+                        {w.trader_name?.[0]?.toUpperCase()}
+                      </div>
+                      <span className="font-medium text-sm">{w.trader_name}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`badge text-xs ${w.trader_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {w.trader_tier === 1 ? <span className="flex items-center gap-1"><Star size={10} />Tier 1</span> : 'Sub-Dealer'}
+                    </span>
+                  </td>
+                  <td className="font-bold text-emerald-600">
+                    ₹{parseFloat(String(w.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="font-mono text-sm text-slate-600">{w.upi_id}</td>
+                  <td>
+                    <span className={`badge ${WITHDRAWAL_STATUS_COLORS[w.status] || 'bg-slate-100 text-slate-600'}`}>
+                      {w.status}
+                    </span>
+                    {w.admin_notes && <p className="text-xs text-slate-400 mt-0.5">{w.admin_notes}</p>}
+                  </td>
+                  <td className="text-xs text-slate-400">{new Date(w.requested_at).toLocaleDateString('en-IN')}</td>
+                  <td>
+                    {w.status === 'pending' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleWithdrawal(w, 'approved')}
+                          disabled={updatingId === w.id}
+                          className="btn-ghost text-xs text-emerald-600 hover:text-emerald-700 font-semibold"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            const notes = window.prompt('Reason for rejection (optional):') ?? '';
+                            handleWithdrawal(w, 'rejected', notes);
+                          }}
+                          disabled={updatingId === w.id}
+                          className="btn-ghost text-xs text-red-500 hover:text-red-600 font-semibold"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                    {w.status !== 'pending' && (
+                      <span className="text-xs text-slate-400">
+                        {w.processed_at ? new Date(w.processed_at).toLocaleDateString('en-IN') : '—'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {withdrawals.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-slate-400">No withdrawal requests</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Payouts History */}

@@ -215,6 +215,25 @@ function notifyLinkedDealerOrderRouted({
 
 /* ── Exports ─────────────────────────────────────────────────────────── */
 
+/**
+ * Generic notification helper.
+ * @param {'dealer'|'consumer'|'admin'} userType
+ * @param {number} userId
+ * @param {string} title
+ * @param {string} body
+ * @param {object} [data]
+ */
+function createNotification(userType, userId, title, body, data = {}) {
+  const dataStr = JSON.stringify(data);
+  const r = db.prepare(`
+    INSERT INTO notifications (user_type, user_id, title, body, data, channel)
+    VALUES (?, ?, ?, ?, ?, 'in_app')
+  `).run(userType, userId, title, body, dataStr);
+  pushNotification(userType, userId, {
+    id: r.lastInsertRowid, title, body, data, created_at: new Date().toISOString(),
+  });
+}
+
 module.exports = {
   notifyDealerDeliveryAssigned,
   notifyConsumerDeliveryAssigned,
@@ -224,4 +243,5 @@ module.exports = {
   getNotifications,
   markRead,
   markAllRead,
+  createNotification,
 };
