@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { User, MapPin, ShoppingBag, LogOut, ChevronRight } from 'lucide-react';
+import api from '../../api/axios';
+import { User, MapPin, ShoppingBag, LogOut, ChevronRight, Tag } from 'lucide-react';
 
 export default function ConsumerProfile() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
+  const [discountPct, setDiscountPct] = useState(0);
+
+  useEffect(() => {
+    api.get('/consumer/settings')
+      .then(r => setDiscountPct(parseFloat(r.data.referral_discount_percent) || 0))
+      .catch(() => {});
+  }, []);
 
   const handleLogout = () => {
     consumerLogout();
@@ -70,6 +78,35 @@ export default function ConsumerProfile() {
           iconBg="bg-emerald-50"
         />
       </div>
+
+      {/* Referral */}
+      {discountPct > 0 && (
+        <div className="mt-4">
+          {consumer.referral_code_used ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <Tag size={16} className="text-emerald-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-emerald-800">{discountPct}% referral discount active</p>
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  Code: <span className="font-mono font-bold">{consumer.referral_code_used}</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Tag size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Have a referral code?</p>
+                <p className="text-xs text-amber-600 mt-0.5">Enter it at checkout to get <strong>{discountPct}% off</strong></p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Logout */}
       <div className="mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

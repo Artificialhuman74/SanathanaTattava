@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag,
-  CheckCircle2, ChevronDown, Info,
+  Check, ChevronDown,
 } from 'lucide-react';
 
 interface Product {
@@ -37,6 +37,8 @@ export default function Shop() {
   const [cart,       setCart]       = useState<CartItem[]>([]);
   const [cartOpen,   setCartOpen]   = useState(false);
   const [discountPct,setDiscountPct]= useState<number>(0);
+  const [justAdded,  setJustAdded]  = useState<Set<number>>(new Set());
+  const [shakingId,  setShakingId]  = useState<number | null>(null);
 
   // Pre-fill cart from "order again" (set in Orders.tsx)
   useEffect(() => {
@@ -83,14 +85,20 @@ export default function Shop() {
 
   /* ── Cart helpers ─────────────────────────────────────────────────── */
   const addToCart = (product: Product) => {
-    if (product.stock === 0) { toast.error('Out of stock'); return; }
+    if (product.stock === 0) {
+      setShakingId(product.id);
+      setTimeout(() => setShakingId(null), 450);
+      return;
+    }
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) { toast.error('Insufficient stock'); return prev; }
+        if (existing.quantity >= product.stock) return prev;
         return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      toast.success(`${product.name} added to cart`);
+      // Trigger bounce animation on first add
+      setJustAdded(s => new Set([...s, product.id]));
+      setTimeout(() => setJustAdded(s => { const n = new Set(s); n.delete(product.id); return n; }), 550);
       return [...prev, { product, quantity: 1 }];
     });
   };
@@ -98,7 +106,7 @@ export default function Shop() {
   const updateQty = (id: number, qty: number) => {
     if (qty < 1) { removeFromCart(id); return; }
     const product = cart.find(i => i.product.id === id)?.product;
-    if (product && qty > product.stock) { toast.error('Insufficient stock'); return; }
+    if (product && qty > product.stock) return;
     setCart(prev => prev.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
   };
 
@@ -116,46 +124,6 @@ export default function Shop() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-
-      {/* Referral discount banner (logged-in, has code) */}
-      {consumer && consumer.referral_code_used && discountPct > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-          <Tag size={18} className="text-emerald-600 flex-shrink-0" />
-          <p className="text-sm text-emerald-800 font-medium">
-            You have a <strong>{discountPct}% referral discount</strong> on all orders!{' '}
-            Code: <span className="font-mono font-bold bg-emerald-100 px-1.5 py-0.5 rounded">{consumer.referral_code_used}</span>
-          </p>
-        </div>
-      )}
-
-      {/* Upsell: logged-in but no referral */}
-      {consumer && !consumer.referral_code_used && discountPct > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
-          <Info size={18} className="text-amber-600 flex-shrink-0" />
-          <p className="text-sm text-amber-800">
-            Have a dealer referral code? Enter it at checkout to get <strong>{discountPct}% off</strong> your order!
-          </p>
-        </div>
-      )}
-
-      {/* Guest login banner */}
-      {!consumer && (
-        <div className="flex items-start gap-3 p-4 bg-brand-50 rounded-xl border border-brand-200">
-          <Info size={18} className="text-brand-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-brand-800">
-              <Link to="/shop/login" className="font-semibold text-brand-700 hover:underline">Login</Link>{' '}or{' '}
-              <Link to="/shop/register" className="font-semibold text-brand-700 hover:underline">register</Link>{' '}
-              for faster checkout and order tracking!
-            </p>
-            {discountPct > 0 && (
-              <p className="text-xs text-brand-600 mt-1">
-                Have a dealer referral code? Get <strong>{discountPct}% off</strong> at checkout!
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 -mx-4 sm:-mx-6 px-4 sm:px-6 py-1">
@@ -248,9 +216,6 @@ export default function Shop() {
                     ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                     : <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-slate-300" /></div>
                   }
-                  {inCart > 0 && (
-                    <div className="absolute top-2 right-2 bg-brand-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">×{inCart}</div>
-                  )}
                   {outOfStock && (
                     <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
                       <span className="bg-red-100 text-red-600 font-bold px-2 py-1 rounded-full text-xs">Out of Stock</span>
@@ -262,22 +227,46 @@ export default function Shop() {
                     <Tag size={10} />{p.category}
                   </span>
                   <p className="font-bold text-slate-900 mt-1 leading-snug line-clamp-2 text-sm flex-1">{p.name}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div>
+                  <div className="flex items-center justify-between mt-2 gap-1">
+                    <div className="min-w-0">
                       <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                       <p className="text-xs text-slate-400">per {p.unit}</p>
                     </div>
-                    <button
-                      onClick={() => addToCart(p)}
-                      disabled={outOfStock}
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                        outOfStock ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
-                        inCart > 0  ? 'bg-brand-600 text-white shadow-md' :
-                        'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white'
-                      }`}
-                    >
-                      {inCart > 0 ? <CheckCircle2 size={16} /> : <Plus size={16} />}
-                    </button>
+
+                    {/* Cart button area */}
+                    {inCart > 0 ? (
+                      /* Qty controls: [−] [✓ n] [+] */
+                      <div className="flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 flex-shrink-0">
+                        <button
+                          onClick={() => updateQty(p.id, inCart - 1)}
+                          className="w-6 h-6 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
+                        >
+                          <Minus size={11} />
+                        </button>
+                        <span className={`flex items-center gap-0.5 px-1 text-xs font-bold text-brand-700 min-w-[1.75rem] justify-center ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
+                          <Check size={10} strokeWidth={3} />
+                          {inCart}
+                        </span>
+                        <button
+                          onClick={() => addToCart(p)}
+                          className="w-6 h-6 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      /* Add button */
+                      <button
+                        onClick={() => addToCart(p)}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                          outOfStock
+                            ? `bg-red-50 text-red-400 ${shakingId === p.id ? 'animate-shake' : ''}`
+                            : 'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white'
+                        }`}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
