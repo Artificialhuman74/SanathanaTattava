@@ -2,7 +2,7 @@
  * Socket.IO React Context
  *
  * Provides a single shared WebSocket connection across the app.
- * Auto-connects with JWT auth, auto-reconnects on drop.
+ * Auto-connects with JWT auth, reconnects on network drop AND on same-tab login.
  *
  * Usage:
  *   const { socket, connected, on, off } = useSocket();
@@ -35,10 +35,6 @@ const SocketContext = createContext<SocketContextType>({
   emit: () => {},
 });
 
-/**
- * Determine which token to use.
- * Traders/admins use `token`, consumers use `consumer_token`.
- */
 function getAuthToken(): string | null {
   return localStorage.getItem('token') || localStorage.getItem('consumer_token');
 }
@@ -47,20 +43,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const socketRef   = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
 
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      // No auth — disconnect if any
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setConnected(false);
-      }
-      return;
+  /** Create a fresh socket with the current token. Tears down any existing one. */
+  const initSocket = useCallback(() => {
+    // Tear down existing socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setConnected(false);
     }
 
-    // In production VITE_API_URL points to the Railway backend.
-    // In dev (no env var set) fall back to same origin (vite proxy handles it).
+    const token = getAuthToken();
+    if (!token) return;
+
     const baseUrl = import.meta.env.VITE_API_URL || window.location.origin;
 
     const sock = io(baseUrl, {
@@ -77,44 +71,43 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.log('[ws] connected', sock.id);
       setConnected(true);
     });
-
     sock.on('disconnect', (reason) => {
       console.log('[ws] disconnected:', reason);
       setConnected(false);
     });
-
     sock.on('connect_error', (err) => {
       console.warn('[ws] connect error:', err.message);
       setConnected(false);
     });
 
     socketRef.current = sock;
+  }, []);
 
+  // Initial connect on mount
+  useEffect(() => {
+    initSocket();
     return () => {
-      sock.disconnect();
+      socketRef.current?.disconnect();
       socketRef.current = null;
       setConnected(false);
     };
-  }, []);  // Only run once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reconnect when auth changes (login/logout)
+  // Reconnect on auth changes:
+  // - cross-tab: native `storage` event fires automatically
+  // - same-tab:  AuthContext dispatches `tradehub-auth-changed` custom event
   useEffect(() => {
+    const handleAuthChanged = () => initSocket();
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'token' || e.key === 'consumer_token') {
-        // Token changed — force reconnect
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-        }
-        const newToken = getAuthToken();
-        if (newToken && socketRef.current) {
-          socketRef.current.auth = { token: newToken };
-          socketRef.current.connect();
-        }
-      }
+      if (e.key === 'token' || e.key === 'consumer_token') initSocket();
     };
+    window.addEventListener('tradehub-auth-changed', handleAuthChanged);
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    return () => {
+      window.removeEventListener('tradehub-auth-changed', handleAuthChanged);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [initSocket]);
 
   const on = useCallback((event: string, handler: (...args: any[]) => void) => {
     socketRef.current?.on(event, handler);

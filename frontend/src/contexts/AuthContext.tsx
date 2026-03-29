@@ -128,12 +128,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
     setToken(t); setUser(u);
+    window.dispatchEvent(new Event('tradehub-auth-changed'));
   };
 
   const persistConsumer = (t: string, c: Consumer) => {
     localStorage.setItem('consumer_token', t);
     localStorage.setItem('consumer', JSON.stringify(c));
     setConsumerToken(t); setConsumer(c);
+    window.dispatchEvent(new Event('tradehub-auth-changed'));
   };
 
   /* ── Trader / Admin ──────────────────────────────────────────────────── */
@@ -151,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null); setUser(null);
+    window.dispatchEvent(new Event('tradehub-auth-changed'));
   }, []);
 
   /* ── Consumer OTP Auth ───────────────────────────────────────────────── */
@@ -210,6 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('consumer_token');
     localStorage.removeItem('consumer');
     setConsumerToken(null); setConsumer(null);
+    window.dispatchEvent(new Event('tradehub-auth-changed'));
   }, []);
 
   /** Re-fetch consumer profile from the server and update state + localStorage */

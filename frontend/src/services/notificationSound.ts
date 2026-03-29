@@ -98,10 +98,9 @@ export function showBrowserNotification(
   try {
     const notif = new Notification(title, {
       body,
-      icon: options?.icon || '/tradehub-icon.png',
+      icon: options?.icon || '/Gemini_Generated_Image_agra6kagra6kagra.png',
       tag: options?.tag || `tradehub-${Date.now()}`,
-      badge: '/tradehub-icon.png',
-      silent: true, // We play our own sound
+      // silent: false → OS plays its default notification sound
     });
 
     if (options?.onClick) {

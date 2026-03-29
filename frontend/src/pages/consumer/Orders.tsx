@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
+import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import toast from 'react-hot-toast';
 import {
   ShoppingBag, X, Package, Phone, MapPin, Star, Truck, User,
@@ -66,7 +67,7 @@ export default function ConsumerOrders() {
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ConsumerOrder | null>(null);
 
-  useEffect(() => {
+  const fetchOrders = useCallback(() => {
     if (!consumer) { navigate('/shop/login', { replace: true }); return; }
     consumerApi.get('/consumer/orders')
       .then(r => setOrders(r.data.orders || r.data || []))
@@ -79,7 +80,12 @@ export default function ConsumerOrders() {
         }
       })
       .finally(() => setLoading(false));
-  }, [consumer]);
+  }, [consumer]); // eslint-disable-line
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // Real-time: refresh when delivery agent updates order status
+  useOrderUpdates(() => { fetchOrders(); });
 
   const totalOrders  = orders.length;
   const pending      = orders.filter(o => o.status === 'pending').length;

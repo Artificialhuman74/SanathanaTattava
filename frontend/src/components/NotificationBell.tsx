@@ -92,7 +92,7 @@ export default function NotificationBell({ variant = 'dealer' }: NotificationBel
       if (document.hidden || !open) {
         if (isNotificationPermitted()) {
           showBrowserNotification(notif.title, notif.body, {
-            icon: '/tradehub-icon.svg',
+            icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
             tag: `tradehub-notif-${notif.id}`,
             onClick: () => {
               window.focus();
@@ -104,7 +104,7 @@ export default function NotificationBell({ variant = 'dealer' }: NotificationBel
             setPushPermission(granted ? 'granted' : 'denied');
             if (granted) {
               showBrowserNotification(notif.title, notif.body, {
-                icon: '/tradehub-icon.svg',
+                icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
                 tag: `tradehub-notif-${notif.id}`,
               });
             }
@@ -152,8 +152,8 @@ export default function NotificationBell({ variant = 'dealer' }: NotificationBel
     const granted = await requestNotificationPermission();
     setPushPermission(granted ? 'granted' : 'denied');
     if (granted) {
-      showBrowserNotification('Notifications enabled', 'You will now receive push notifications from TradeHub.', {
-        icon: '/tradehub-icon.svg',
+      showBrowserNotification('Notifications enabled', 'You will now receive push notifications from Sanathana Tattva.', {
+        icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
       });
     }
   };

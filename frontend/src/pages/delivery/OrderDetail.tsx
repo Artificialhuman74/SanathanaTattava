@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Phone, MapPin, Package, Clock, CheckCircle2,
   Truck, Loader2, AlertCircle, X, User, ShoppingBag,
-  XCircle,
+  XCircle, Navigation,
 } from 'lucide-react';
 
 const DELIVERY_STATUS_COLORS: Record<string, string> = {
@@ -206,9 +206,22 @@ export default function DeliveryOrderDetail() {
           {order.delivery_address && (
             <div className="flex items-start gap-2 mt-3 pt-3 border-t border-slate-50">
               <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-600">{order.delivery_address}</p>
                 {order.pincode && <p className="text-xs text-slate-400 mt-0.5">PIN: {order.pincode}</p>}
+                <a
+                  href={
+                    order.latitude && order.longitude
+                      ? `https://www.google.com/maps?q=${order.latitude},${order.longitude}`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((order.delivery_address || '') + ' ' + (order.pincode || ''))}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Navigate
+                </a>
               </div>
             </div>
           )}

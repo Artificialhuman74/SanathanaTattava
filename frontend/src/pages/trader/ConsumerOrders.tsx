@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   ShoppingBag, Search, ChevronDown, X, Phone, MapPin, Package,
-  User, Truck, Star, CheckCircle2,
+  User, Truck,
 } from 'lucide-react';
 
 interface ConsumerOrder {
@@ -112,27 +112,7 @@ export default function TraderConsumerOrders() {
     finally { setUpdatingId(null); }
   };
 
-  const updateOrderStatus = async (orderId: number, status: string) => {
-    setUpdatingId(orderId);
-    try {
-      await api.put(`/trader/consumer-orders/${orderId}/status`, { status });
-      const labels: Record<string, string> = {
-        processing: 'Order marked as packed',
-        shipped:    'Order marked as out for delivery',
-        delivered:  'Order marked as delivered',
-        cancelled:  'Order cancelled',
-      };
-      toast.success(labels[status] || `Status updated to ${status}`);
-      fetchOrders();
-      if (selected?.id === orderId) {
-        setSelected(prev => prev ? { ...prev, status } : null);
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update status');
-    } finally { setUpdatingId(null); }
-  };
-
-  const totalOrders   = orders.length;
+const totalOrders   = orders.length;
   const pending       = orders.filter(o => o.status === 'pending').length;
   const delivered     = orders.filter(o => o.status === 'delivered').length;
 
@@ -315,86 +295,6 @@ export default function TraderConsumerOrders() {
                   </div>
                 </div>
               </div>
-
-              {/* ── Fulfillment Checkpoints ────────────────────────── */}
-              {selected.status !== 'cancelled' && (
-                <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-                  <p className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                    <Package size={12} /> Fulfillment Status
-                  </p>
-                  <div className="space-y-0">
-                    {/* Step 1: Order Packed */}
-                    {(() => {
-                      const isPacked   = ['processing','shipped','delivered'].includes(selected.status);
-                      const canPack    = selected.status === 'pending' || selected.status === 'confirmed';
-                      return (
-                        <div className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${isPacked ? 'bg-violet-100' : canPack ? 'hover:bg-violet-50 cursor-pointer' : 'opacity-50'}`}
-                             onClick={() => canPack && !updatingId && updateOrderStatus(selected.id, 'processing')}>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${isPacked ? 'bg-violet-600 border-violet-600' : canPack ? 'border-violet-400' : 'border-slate-300'}`}>
-                            {isPacked && <CheckCircle2 size={14} className="text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <p className={`text-sm font-semibold ${isPacked ? 'text-violet-900' : 'text-slate-700'}`}>Order Packed</p>
-                            <p className="text-xs text-slate-500">Items verified, packed and ready for dispatch</p>
-                          </div>
-                          {updatingId === selected.id && canPack && (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-violet-600 flex-shrink-0 mt-1" />
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Connector */}
-                    <div className="ml-6 pl-3 border-l-2 border-dashed border-violet-200 h-3" />
-
-                    {/* Step 2: Out for Delivery */}
-                    {(() => {
-                      const isShipped  = ['shipped','delivered'].includes(selected.status);
-                      const canShip    = selected.status === 'processing';
-                      return (
-                        <div className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${isShipped ? 'bg-violet-100' : canShip ? 'hover:bg-violet-50 cursor-pointer' : 'opacity-40'}`}
-                             onClick={() => canShip && !updatingId && updateOrderStatus(selected.id, 'shipped')}>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${isShipped ? 'bg-violet-600 border-violet-600' : canShip ? 'border-violet-400' : 'border-slate-300'}`}>
-                            {isShipped && <CheckCircle2 size={14} className="text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <p className={`text-sm font-semibold ${isShipped ? 'text-violet-900' : 'text-slate-700'}`}>Out for Delivery</p>
-                            <p className="text-xs text-slate-500">Dispatched — on the way to the consumer</p>
-                          </div>
-                          {updatingId === selected.id && canShip && (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-violet-600 flex-shrink-0 mt-1" />
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Connector */}
-                    <div className="ml-6 pl-3 border-l-2 border-dashed border-violet-200 h-3" />
-
-                    {/* Step 3: Delivered */}
-                    {(() => {
-                      const isDone     = selected.status === 'delivered';
-                      const canDeliver = selected.status === 'shipped';
-                      return (
-                        <div className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${isDone ? 'bg-emerald-100' : canDeliver ? 'hover:bg-emerald-50 cursor-pointer' : 'opacity-40'}`}
-                             onClick={() => canDeliver && !updatingId && updateOrderStatus(selected.id, 'delivered')}>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${isDone ? 'bg-emerald-600 border-emerald-600' : canDeliver ? 'border-emerald-400' : 'border-slate-300'}`}>
-                            {isDone && <CheckCircle2 size={14} className="text-white" />}
-                          </div>
-                          <div className="flex-1">
-                            <p className={`text-sm font-semibold ${isDone ? 'text-emerald-900' : 'text-slate-700'}`}>Delivered</p>
-                            <p className="text-xs text-slate-500">Consumer has received the order</p>
-                          </div>
-                          {updatingId === selected.id && canDeliver && (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600 flex-shrink-0 mt-1" />
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-3 pl-1">Click each step to advance the order. Updates are visible to the consumer instantly.</p>
-                </div>
-              )}
 
               {/* Delivery Assignment (Tier 1 only) */}
               {isTier1 && (
