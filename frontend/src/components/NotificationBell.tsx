@@ -25,11 +25,13 @@ interface Notification {
 interface NotificationBellProps {
   /** 'dealer' for trader layouts, 'admin' for admin layout, 'consumer' for consumer layout */
   variant?: 'dealer' | 'admin' | 'consumer';
+  /** Which side the dropdown opens towards. Default 'right' (dropdown extends left). 'left' for mobile menus. */
+  align?: 'right' | 'left';
 }
 
 const SOUND_KEY = 'tradehub_sound_enabled';
 
-export default function NotificationBell({ variant = 'dealer' }: NotificationBellProps) {
+export default function NotificationBell({ variant = 'dealer', align = 'right' }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount]     = useState(0);
   const [open, setOpen]                   = useState(false);
@@ -65,12 +67,18 @@ export default function NotificationBell({ variant = 'dealer' }: NotificationBel
     isFirstLoad.current = false;
   }, [fetchNotifications]);
 
-  // Request browser notification permission on mount (one-time)
+  // For consumers: silently request notification permission on first user interaction
+  // (browsers require a gesture, so we attach a one-time click listener)
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      // We'll ask on the first real notification instead, to avoid
-      // annoying users on page load. See handler below.
-    }
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    const grantOnInteraction = () => {
+      requestNotificationPermission().then(granted => {
+        setPushPermission(granted ? 'granted' : 'denied');
+      });
+      document.removeEventListener('click', grantOnInteraction);
+    };
+    document.addEventListener('click', grantOnInteraction, { once: true });
+    return () => document.removeEventListener('click', grantOnInteraction);
   }, []);
 
   // Real-time push via WebSocket
@@ -192,7 +200,7 @@ export default function NotificationBell({ variant = 'dealer' }: NotificationBel
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-[70vh] flex flex-col">
+        <div className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-2 w-[min(22rem,90vw)] bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-[70vh] flex flex-col`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <h3 className="font-bold text-slate-900 text-sm">Notifications</h3>

@@ -186,6 +186,10 @@ function runMigrations(db) {
     db.exec(`ALTER TABLE consumer_orders ADD COLUMN delivery_otp_attempts INTEGER DEFAULT 0`);
     console.log('[migration] consumer_orders: added delivery_otp_attempts');
   }
+  if (!hasColumn('consumer_orders', 'delivery_otp_plain')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN delivery_otp_plain TEXT`);
+    console.log('[migration] consumer_orders: added delivery_otp_plain');
+  }
   if (!hasColumn('consumer_orders', 'delivery_verified_at')) {
     db.exec(`ALTER TABLE consumer_orders ADD COLUMN delivery_verified_at DATETIME`);
     console.log('[migration] consumer_orders: added delivery_verified_at');

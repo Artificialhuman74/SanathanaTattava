@@ -135,7 +135,7 @@ export default function ConsumerLayout() {
             {consumer && (
               <>
                 <div className="flex items-center gap-2 px-3 py-2.5">
-                  <NotificationBell variant="consumer" />
+                  <NotificationBell variant="consumer" align="left" />
                   <span className="text-sm text-slate-600">Notifications</span>
                 </div>
                 <NavLink

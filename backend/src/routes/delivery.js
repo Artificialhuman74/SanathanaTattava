@@ -251,12 +251,13 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), (req, res) => {
       SET delivery_status = 'out_for_delivery',
           delivery_started_at = ?,
           delivery_otp_hash = ?,
+          delivery_otp_plain = ?,
           delivery_otp_expires_at = ?,
           delivery_otp_attempts = 0,
           status = 'shipped',
           updated_at = ?
       WHERE id = ?
-    `).run(now.toISOString(), otpHash, expiresAt.toISOString(), now.toISOString(), order.id);
+    `).run(now.toISOString(), otpHash, plainOtp, expiresAt.toISOString(), now.toISOString(), order.id);
 
     // Send the PLAIN OTP to consumer via notification
     notifyConsumer(
@@ -330,12 +331,13 @@ router.post(
         });
       }
 
-      // OTP correct — mark delivered
+      // OTP correct — mark delivered, clear plain OTP
       const now = new Date().toISOString();
       db.prepare(`
         UPDATE consumer_orders
         SET delivery_status = 'delivered',
             delivery_verified_at = ?,
+            delivery_otp_plain = NULL,
             status = 'delivered',
             updated_at = ?
         WHERE id = ?
@@ -361,6 +363,56 @@ router.post(
     }
   }
 );
+
+/* ═════════════════════════════════════════════════════════════════════
+ * POST /delivery/orders/:id/resend-otp
+ * Resends the delivery OTP to the consumer via notification.
+ * If the OTP has expired, generates a fresh one.
+ * ═════════════════════════════════════════════════════════════════════ */
+router.post('/orders/:id/resend-otp', param('id').isInt(), (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  try {
+    const order = getAssignedOrder(req.params.id, req.user.id);
+    if (!order) return res.status(404).json({ error: 'Order not found or not assigned to you' });
+
+    if (order.delivery_status !== 'out_for_delivery') {
+      return res.status(400).json({ error: 'Order is not out for delivery' });
+    }
+
+    const now = new Date();
+    let plainOtp = order.delivery_otp_plain;
+
+    // If OTP expired or plain text not available, generate a new one
+    if (!plainOtp || new Date(order.delivery_otp_expires_at) <= now) {
+      plainOtp = generateOTP();
+      const otpHash  = bcrypt.hashSync(plainOtp, 10);
+      const expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
+      db.prepare(`
+        UPDATE consumer_orders
+        SET delivery_otp_hash = ?,
+            delivery_otp_plain = ?,
+            delivery_otp_expires_at = ?,
+            delivery_otp_attempts = 0,
+            updated_at = ?
+        WHERE id = ?
+      `).run(otpHash, plainOtp, expiresAt.toISOString(), now.toISOString(), order.id);
+    }
+
+    notifyConsumer(
+      order.consumer_id,
+      `Delivery OTP — ${order.order_number}`,
+      `Your delivery OTP is: ${plainOtp}. Share this with the delivery partner to complete the delivery.`,
+      { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp: plainOtp }
+    );
+
+    res.json({ success: true, message: 'OTP sent to customer via notification' });
+  } catch (err) {
+    console.error('POST /delivery/orders/:id/resend-otp error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 /* ═════════════════════════════════════════════════════════════════════
  * POST /delivery/orders/:id/fail
