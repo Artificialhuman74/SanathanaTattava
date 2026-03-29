@@ -32,17 +32,28 @@ export default function RollingNumber({ value, className = '' }: RollingNumberPr
 
   const previousAnim = direction === 'up' ? 'animate-roll-out-down' : 'animate-roll-out-up';
   const currentAnim = direction === 'up' ? 'animate-roll-in-from-top' : 'animate-roll-in-from-bottom';
+  const widthCh = Math.max(String(current).length, String(previous).length, 1) + 0.35;
 
   return (
     <span
-      className={`relative inline-flex h-[1.15em] min-w-[1.8ch] overflow-hidden items-center justify-center leading-none tabular-nums ${className}`}
+      className={`relative inline-flex h-[1.15em] overflow-hidden items-center justify-center leading-none tabular-nums ${className}`}
+      style={{ minWidth: `${widthCh}ch` }}
     >
-      {animating && (
-        <span className={`absolute inset-0 flex items-center justify-center ${previousAnim}`}>
-          {previous}
+      {!animating && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          {current}
         </span>
       )}
-      <span className={animating ? currentAnim : ''}>{current}</span>
+      {animating && (
+        <>
+          <span className={`absolute inset-0 flex items-center justify-center ${previousAnim}`}>
+            {previous}
+          </span>
+          <span className={`absolute inset-0 flex items-center justify-center ${currentAnim}`}>
+            {current}
+          </span>
+        </>
+      )}
     </span>
   );
 }

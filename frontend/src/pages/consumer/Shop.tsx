@@ -177,12 +177,12 @@ export default function Shop() {
         </div>
         <button
           onClick={() => setCartOpen(true)}
-          className={`relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors ${cartIconBounce ? 'animate-drop-bounce' : ''}`}
+          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           <ShoppingCart size={18} />
           {cartCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} />
+            <span className={`absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.15rem] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
+              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[9px]" />
             </span>
           )}
         </button>
@@ -257,6 +257,41 @@ export default function Shop() {
                     ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                     : <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-slate-300" /></div>
                   }
+                  <div className="absolute top-2 right-2 z-20 overflow-hidden rounded-xl max-w-[calc(100%-1rem)]">
+                    <div className={`relative h-9 transition-all duration-300 ease-out ${inCart > 0 ? 'w-[116px]' : 'w-9'}`}>
+                      {inCart === 0 ? (
+                        <button
+                          onClick={() => addToCart(p)}
+                          className={`absolute inset-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                            outOfStock
+                              ? `bg-red-50 text-red-400 ${shakingId === p.id ? 'animate-shake' : ''}`
+                              : 'bg-white/95 text-brand-600 shadow-sm hover:bg-brand-600 hover:text-white active:animate-drop-bounce'
+                          }`}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      ) : (
+                        <div className={`absolute inset-0 flex items-center gap-1 bg-white/95 rounded-xl px-1 py-1 shadow-sm ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
+                          <button
+                            onClick={() => updateQty(p.id, inCart - 1)}
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="h-7 min-w-[42px] px-1 text-xs font-bold text-brand-700 flex items-center justify-center gap-1 rounded-md">
+                            <Check size={10} strokeWidth={3} />
+                            <RollingNumber value={inCart} className="text-[13px]" />
+                          </span>
+                          <button
+                            onClick={() => addToCart(p)}
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {outOfStock && (
                     <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
                       <span className="bg-red-100 text-red-600 font-bold px-2 py-1 rounded-full text-xs">Out of Stock</span>
@@ -269,44 +304,9 @@ export default function Shop() {
                   </span>
                   <p className="font-bold text-slate-900 mt-1 leading-snug line-clamp-2 text-sm flex-1">{p.name}</p>
                   {/* Price row */}
-                  <div className="flex items-center justify-between mt-2 gap-1">
-                    <div className="min-w-0">
-                      <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
-                      <p className="text-xs text-slate-400">per {p.unit}</p>
-                    </div>
-                    <div className={`relative flex-shrink-0 h-9 transition-all duration-300 ease-out ${inCart > 0 ? 'w-[116px]' : 'w-9'}`}>
-                      {inCart === 0 ? (
-                        <button
-                          onClick={() => addToCart(p)}
-                          className={`absolute inset-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
-                            outOfStock
-                              ? `bg-red-50 text-red-400 ${shakingId === p.id ? 'animate-shake' : ''}`
-                              : 'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white active:animate-drop-bounce'
-                          }`}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      ) : (
-                        <div className={`absolute inset-0 flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
-                          <button
-                            onClick={() => updateQty(p.id, inCart - 1)}
-                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <span className="flex items-center gap-0.5 px-2 text-xs font-bold text-brand-700 min-w-[3ch] justify-center">
-                            <Check size={10} strokeWidth={3} />
-                            <RollingNumber value={inCart} />
-                          </span>
-                          <button
-                            onClick={() => addToCart(p)}
-                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                  <div className="mt-2">
+                    <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
+                    <p className="text-xs text-slate-400">per {p.unit}</p>
                   </div>
                 </div>
               </div>
