@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import toast from 'react-hot-toast';
-import {
-  ShoppingBag, X, Package, Phone, MapPin, Star, Truck, User,
-} from 'lucide-react';
+import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw } from 'lucide-react';
 
 interface ConsumerOrder {
   id: number;
@@ -40,24 +38,25 @@ const STATUS_LABELS: Record<string, string> = {
   confirmed:  'Confirmed',
   processing: 'Packed & Ready',
   shipped:    'Out for Delivery',
-  delivered:  'Delivered',
+  delivered:  'Order Delivered',
   cancelled:  'Cancelled',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:    'bg-amber-100 text-amber-700',
-  confirmed:  'bg-blue-100 text-blue-700',
-  processing: 'bg-purple-100 text-purple-700',
-  shipped:    'bg-orange-100 text-orange-700',
-  delivered:  'bg-emerald-100 text-emerald-700',
-  cancelled:  'bg-red-100 text-red-700',
+  pending:    'text-amber-600 bg-amber-50',
+  confirmed:  'text-blue-600 bg-blue-50',
+  processing: 'text-purple-600 bg-purple-50',
+  shipped:    'text-orange-600 bg-orange-50',
+  delivered:  'text-emerald-600 bg-emerald-50',
+  cancelled:  'text-red-600 bg-red-50',
 };
 
-const PAYMENT_COLORS: Record<string, string> = {
-  pending:  'bg-amber-100 text-amber-700',
-  paid:     'bg-emerald-100 text-emerald-700',
-  failed:   'bg-red-100 text-red-700',
-  refunded: 'bg-slate-100 text-slate-600',
+const PAYMENT_LABELS: Record<string, string> = {
+  pending:  'Pending',
+  paid:     'Paid online',
+  failed:   'Payment failed',
+  refunded: 'Refunded',
+  cod:      'Cash on delivery',
 };
 
 export default function ConsumerOrders() {
@@ -83,50 +82,34 @@ export default function ConsumerOrders() {
   }, [consumer]); // eslint-disable-line
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
-
-  // Real-time: refresh when delivery agent updates order status
   useOrderUpdates(() => { fetchOrders(); });
 
-  const totalOrders  = orders.length;
-  const pending      = orders.filter(o => o.status === 'pending').length;
-  const delivered    = orders.filter(o => o.status === 'delivered').length;
-  const totalSpent   = orders.reduce((s, o) => s + parseFloat(String(o.total_amount)), 0);
+  const handleOrderAgain = (order: ConsumerOrder, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!order.items?.length) { navigate('/shop'); return; }
+    sessionStorage.setItem('reorder_ids', JSON.stringify(
+      order.items.map(i => ({ id: i.product_id, qty: i.quantity }))
+    ));
+    navigate('/shop');
+    toast.success('Select your items again!');
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
     </div>
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">My Orders</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Welcome back, {consumer?.name}</p>
-      </div>
+    <div className="max-w-2xl mx-auto px-4 py-5">
+      <h1 className="text-xl font-bold text-gray-900 mb-4">Order History</h1>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Orders',  value: totalOrders, color: 'text-brand-600' },
-          { label: 'Pending',       value: pending,     color: 'text-amber-600' },
-          { label: 'Delivered',     value: delivered,   color: 'text-emerald-600' },
-          { label: 'Total Spent',   value: `₹${totalSpent.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, color: 'text-purple-600' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-slate-100 p-4 text-center shadow-sm">
-            <p className={`text-xl font-extrabold ${color}`}>{value}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Orders List */}
       {orders.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center text-slate-400">
-          <ShoppingBag size={48} className="mx-auto mb-3 opacity-20" />
-          <p className="font-medium text-lg">No orders yet</p>
-          <p className="text-sm mt-1">Start shopping to place your first order</p>
-          <button onClick={() => navigate('/shop')} className="btn-primary mt-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+          <ShoppingBag size={44} className="mx-auto mb-3 text-gray-200" />
+          <p className="font-semibold text-gray-700">No orders yet</p>
+          <p className="text-sm text-gray-400 mt-1">Start shopping to place your first order</p>
+          <button onClick={() => navigate('/shop')} className="mt-4 px-6 py-2.5 bg-brand-600 text-white rounded-full text-sm font-semibold">
             Browse Products
           </button>
         </div>
@@ -136,124 +119,170 @@ export default function ConsumerOrders() {
             <div
               key={order.id}
               onClick={() => setSelected(order)}
-              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 cursor-pointer hover:shadow-md transition-all"
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag size={18} className="text-brand-600" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-slate-900">{order.order_number}</p>
-                      <span className={`badge ${STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-600'}`}>
-                        {STATUS_LABELS[order.status] || order.status}
-                      </span>
-                      <span className={`badge ${PAYMENT_COLORS[order.payment_status] || 'bg-slate-100 text-slate-600'}`}>
-                        {order.payment_status}
-                      </span>
+              {/* Status header */}
+              <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-gray-50'}`}>
+                  {STATUS_LABELS[order.status] || order.status}
+                </span>
+                <ChevronRight size={16} className="text-gray-300" />
+              </div>
+
+              {/* Order meta */}
+              <div className="px-4 pb-2">
+                <p className="text-base font-extrabold text-gray-900">₹{parseFloat(String(order.total_amount)).toFixed(2)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {PAYMENT_LABELS[order.payment_status] || order.payment_status}
+                  {' · '}
+                  {order.item_count ?? (order.items?.length ?? 0)} {(order.item_count ?? (order.items?.length ?? 0)) === 1 ? 'item' : 'items'}
+                  {' · '}
+                  {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+
+              {/* Item thumbnails */}
+              {order.items?.length > 0 && (
+                <div className="px-4 pb-3 flex gap-2">
+                  {order.items.slice(0, 4).map((item, i) => (
+                    <div key={i} className="relative w-14 h-14 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100">
+                      {item.image_url
+                        ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+                        : <Package size={20} className="text-gray-300 m-auto mt-3" />
+                      }
+                      {item.quantity > 1 && (
+                        <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[9px] font-bold px-1 rounded">×{item.quantity}</span>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-500 mt-0.5">
-                      {order.item_count ?? (order.items?.length ?? 0)} items · {new Date(order.created_at).toLocaleDateString('en-IN')}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Dealer: <span className="text-slate-600 font-medium">{order.dealer_name}</span>
-                      {order.delivery_dealer_name && <> · Delivery: <span className="text-slate-600 font-medium">{order.delivery_dealer_name}</span></>}
-                    </p>
-                  </div>
+                  ))}
+                  {order.items.length > 4 && (
+                    <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-100">
+                      <span className="text-xs font-bold text-gray-500">+{order.items.length - 4}</span>
+                    </div>
+                  )}
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="font-extrabold text-slate-900 text-lg">₹{parseFloat(String(order.total_amount)).toFixed(2)}</p>
-                  <p className="text-xs text-brand-600 font-medium mt-0.5">View details →</p>
-                </div>
+              )}
+
+              {/* Order Again */}
+              <div className="px-4 pb-4">
+                <button
+                  onClick={e => handleOrderAgain(order, e)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  <RotateCcw size={14} />
+                  Order Again
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Order Detail Modal */}
+      {/* ── Order Detail Modal ─────────────────────────────────────────── */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Handle bar (mobile) */}
+            <div className="flex justify-center pt-3 sm:hidden">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
               <div>
-                <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
-                <p className="text-xs text-slate-400">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
+                <p className="font-bold text-gray-900">{selected.order_number}</p>
+                <p className="text-xs text-gray-400">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`badge ${STATUS_COLORS[selected.status]}`}>{STATUS_LABELS[selected.status] || selected.status}</span>
-                <button onClick={() => setSelected(null)} className="btn-ghost p-2"><X size={18} /></button>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>
+                  {STATUS_LABELS[selected.status] || selected.status}
+                </span>
+                <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                  <X size={16} className="text-gray-500" />
+                </button>
               </div>
             </div>
 
             <div className="p-5 space-y-5">
               {/* Items */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Package size={12} />Items</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items</p>
                 <div className="space-y-2">
-                  {(selected.items || []).length === 0 && (
-                    <p className="text-sm text-slate-400 text-center py-4">No item details available</p>
-                  )}
                   {(selected.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-sm">
-                      <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden flex-shrink-0">
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
+                      <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
-                          : <Package size={16} className="text-slate-300 m-auto mt-3" />
+                          : <Package size={16} className="text-gray-300 m-auto mt-3" />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{item.product_name}</p>
-                        <p className="text-xs text-slate-400">₹{parseFloat(String(item.price)).toFixed(2)} × {item.quantity} {item.unit || ''}</p>
+                        <p className="font-semibold truncate text-gray-900">{item.product_name}</p>
+                        <p className="text-xs text-gray-400">₹{parseFloat(String(item.price)).toFixed(2)} × {item.quantity} {item.unit || ''}</p>
                       </div>
-                      <p className="font-bold flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>
+                      <p className="font-bold text-gray-900 flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center px-3 pt-2 border-t border-slate-200">
-                    <span className="font-bold">Total</span>
+                  {(!selected.items || selected.items.length === 0) && (
+                    <p className="text-sm text-gray-400 text-center py-4">No item details available</p>
+                  )}
+                  <div className="flex justify-between items-center px-3 pt-2 border-t border-gray-100">
+                    <span className="font-semibold text-gray-700">Total</span>
                     <span className="font-extrabold text-brand-600 text-lg">₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Payment */}
-              <div className={`p-3 rounded-xl flex items-center gap-2 ${PAYMENT_COLORS[selected.payment_status] || 'bg-slate-50'}`}>
-                <p className="text-sm font-semibold">Payment: {selected.payment_status}</p>
+              <div className={`px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${
+                selected.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                selected.payment_status === 'failed' ? 'bg-red-50 text-red-600' :
+                'bg-amber-50 text-amber-700'
+              }`}>
+                Payment: {PAYMENT_LABELS[selected.payment_status] || selected.payment_status}
               </div>
 
-              {/* Dealer Info */}
-              <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Dealer Information</p>
-                <div className="flex items-start gap-3">
+              {/* Dealer & Delivery */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Dealer</p>
+                <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
                     {selected.dealer_name?.[0]?.toUpperCase()}
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">{selected.dealer_name}</p>
-                    <span className={`badge text-xs ${selected.dealer_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {selected.dealer_tier === 1 ? 'Tier 1 Dealer' : 'Sub-Dealer'}
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{selected.dealer_name}</p>
                     {selected.dealer_phone && (
-                      <p className="text-sm text-slate-600 mt-1 flex items-center gap-1"><Phone size={12} />{selected.dealer_phone}</p>
+                      <p className="text-xs text-gray-500 flex items-center gap-1"><Phone size={10} />{selected.dealer_phone}</p>
                     )}
                   </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selected.dealer_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                    {selected.dealer_tier === 1 ? 'Tier 1' : 'Sub-Dealer'}
+                  </span>
                 </div>
-
                 {selected.delivery_dealer_name && (
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200 mt-2">
-                    <Truck size={14} className="text-teal-600" />
+                  <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                    <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                      <Truck size={14} className="text-teal-600" />
+                    </div>
                     <div>
-                      <p className="text-xs text-slate-400">Delivery by</p>
-                      <p className="font-semibold text-sm text-slate-900">{selected.delivery_dealer_name}</p>
+                      <p className="text-xs text-gray-400">Delivery by</p>
+                      <p className="font-semibold text-sm text-gray-900">{selected.delivery_dealer_name}</p>
                       {selected.delivery_dealer_phone && (
-                        <p className="text-xs text-slate-500 flex items-center gap-1"><Phone size={10} />{selected.delivery_dealer_phone}</p>
+                        <p className="text-xs text-gray-500 flex items-center gap-1"><Phone size={10} />{selected.delivery_dealer_phone}</p>
                       )}
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Order again */}
+              <button
+                onClick={e => handleOrderAgain(selected, e)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold"
+              >
+                <RotateCcw size={14} />
+                Order Again
+              </button>
             </div>
           </div>
         </div>

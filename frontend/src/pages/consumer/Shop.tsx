@@ -38,6 +38,28 @@ export default function Shop() {
   const [cartOpen,   setCartOpen]   = useState(false);
   const [discountPct,setDiscountPct]= useState<number>(0);
 
+  // Pre-fill cart from "order again" (set in Orders.tsx)
+  useEffect(() => {
+    const reorder = sessionStorage.getItem('reorder_ids');
+    if (!reorder || !products.length) return;
+    sessionStorage.removeItem('reorder_ids');
+    try {
+      const items: { id: number; qty: number }[] = JSON.parse(reorder);
+      const newCart: CartItem[] = [];
+      for (const { id, qty } of items) {
+        const product = products.find(p => p.id === id);
+        if (product && product.stock > 0) {
+          newCart.push({ product, quantity: Math.min(qty, product.stock) });
+        }
+      }
+      if (newCart.length) {
+        setCart(newCart);
+        setCartOpen(true);
+        toast.success('Your previous items are in the cart!');
+      }
+    } catch {}
+  }, [products]);
+
   const fetchProducts = useCallback(() => {
     setLoading(true);
     const params: any = {};
@@ -136,19 +158,21 @@ export default function Shop() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 -mx-4 sm:-mx-6 px-4 sm:px-6 py-1">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Shop</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{products.length} products available</p>
+          {consumer
+            ? <h1 className="text-xl font-bold text-gray-900">Hi, {consumer.name.split(' ')[0]}!</h1>
+            : <h1 className="text-xl font-bold text-gray-900">Shop</h1>
+          }
+          <p className="text-gray-400 text-xs mt-0.5">{products.length} products available</p>
         </div>
         <button
           onClick={() => setCartOpen(true)}
-          className="relative btn-primary flex items-center gap-2"
+          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
-          <ShoppingCart size={16} />
-          <span className="hidden sm:inline">Cart</span>
+          <ShoppingCart size={18} />
           {cartCount > 0 && (
-            <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
               {cartCount > 9 ? '9+' : cartCount}
             </span>
           )}
