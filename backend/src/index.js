@@ -27,6 +27,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://localhost:3000',
   'http://localhost:5001',
+  'https://localhost:5001',
 ];
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 
@@ -34,6 +35,8 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl, same-origin)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any trycloudflare.com subdomain (temporary tunnels)
+    if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
