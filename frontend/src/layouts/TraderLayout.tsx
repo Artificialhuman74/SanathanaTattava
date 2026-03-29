@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, ShoppingCart,
   Users, DollarSign, QrCode, Warehouse, UserCircle,
-  LogOut, Menu, X, TrendingUp, ChevronRight, Bell, Star,
+  LogOut, Menu, X, ChevronRight, Bell, Star, Truck,
 } from 'lucide-react';
 import LocationPrompt from '../components/LocationPrompt';
 import NotificationBell from '../components/NotificationBell';
@@ -23,6 +23,7 @@ export default function TraderLayout() {
     { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Dealers',     show: isTier1 },
     { to: '/trader/commissions',      icon: DollarSign,      label: 'Commissions',     show: true },
     { to: '/trader/profile',          icon: UserCircle,      label: 'My Profile',      show: true },
+    { to: '/delivery/dashboard',      icon: Truck,           label: 'Delivery',        show: true },
   ].filter(item => item.show);
 
   const tierBadge = user?.tier === 1
@@ -30,12 +31,10 @@ export default function TraderLayout() {
     : <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">Sub-Dealer</span>;
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className={`flex flex-col h-full bg-gradient-to-b from-slate-900 to-slate-800 ${mobile ? 'w-72' : 'w-64'}`}>
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-white/10">
-        <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-          <TrendingUp className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-white font-bold text-lg">TradeHub</span>
+    <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
+        <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg flex-shrink-0" alt="Sanathana Tattva" />
+        <span className="text-white font-bold text-sm leading-tight">Sanathana Tattva</span>
         {mobile && (
           <button onClick={() => setSidebarOpen(false)} className="ml-auto text-white/60 hover:text-white">
             <X className="w-5 h-5" />

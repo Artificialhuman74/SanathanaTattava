@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Truck, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function DeliveryLogin() {
   const navigate = useNavigate();
@@ -21,8 +21,8 @@ export default function DeliveryLogin() {
       const stored = localStorage.getItem('user');
       const user = stored ? JSON.parse(stored) : null;
 
-      if (!user || user.role !== 'trader' || !user.will_deliver) {
-        // Not a delivery partner — logout and show error
+      if (!user || user.role !== 'trader') {
+        // Not a trader — logout and show error
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setError('This account is not authorized as a delivery partner. Please contact admin.');
@@ -40,15 +40,13 @@ export default function DeliveryLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] to-[#166534] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Truck className="w-9 h-9 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">TradeHub Delivery</h1>
-          <p className="text-emerald-200 text-sm mt-1">Sign in to start delivering</p>
+          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-16 w-16 object-contain rounded-2xl mx-auto mb-4" alt="Sanathana Tattva" />
+          <h1 className="text-2xl font-bold text-white">Sanathana Tattva</h1>
+          <p className="text-green-200 text-sm mt-1">Delivery Partner Sign In</p>
         </div>
 
         {/* Login Form */}
@@ -106,7 +104,7 @@ export default function DeliveryLogin() {
           </button>
         </form>
 
-        <p className="text-center text-emerald-200 text-xs mt-6">
+        <p className="text-center text-green-200 text-xs mt-6">
           Only authorized delivery partners can sign in.
         </p>
       </div>

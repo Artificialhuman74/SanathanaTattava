@@ -82,7 +82,7 @@
 
 @layer utilities {
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-blue-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-700 to-gold-500;
   }
   .glass {
     @apply bg-white/10 backdrop-blur-md border border-white/20;

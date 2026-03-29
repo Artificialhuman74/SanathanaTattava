@@ -3,8 +3,8 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Users, ShoppingBag,
-  DollarSign, LogOut, Menu, X, TrendingUp, ChevronRight,
-  UserCheck, Settings, Warehouse,
+  DollarSign, LogOut, Menu, X, ChevronRight,
+  UserCheck, Settings, Warehouse, Truck,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -17,6 +17,7 @@ const navItems = [
   { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Dealer Inventory' },
   { to: '/admin/commissions',     icon: DollarSign,      label: 'Commissions' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
+  { to: '/delivery/login',        icon: Truck,           label: 'Delivery' },
 ];
 
 export default function AdminLayout() {
@@ -27,13 +28,11 @@ export default function AdminLayout() {
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className={`flex flex-col h-full bg-gradient-to-b from-slate-900 to-slate-800 ${mobile ? 'w-72' : 'w-64'}`}>
+    <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-white/10">
-        <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-          <TrendingUp className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-white font-bold text-lg tracking-tight">TradeHub</span>
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
+        <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg flex-shrink-0" alt="Sanathana Tattva" />
+        <span className="text-white font-bold text-sm leading-tight">Sanathana Tattva</span>
         {mobile && (
           <button onClick={() => setSidebarOpen(false)} className="ml-auto text-white/60 hover:text-white">
             <X className="w-5 h-5" />

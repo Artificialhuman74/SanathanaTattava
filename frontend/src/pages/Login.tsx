@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { TrendingUp, Mail, Lock, Eye, EyeOff, Shield, Users, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, Users, ArrowLeft, ShoppingBag } from 'lucide-react';
 
 type Tab = 'trader' | 'admin';
 
@@ -45,7 +45,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-brand-950 to-slate-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] via-[#14532d] to-[#0d1f10] flex flex-col items-center justify-center p-4">
       <div className="absolute inset-0 hero-pattern" />
 
       <div className="relative w-full max-w-md">
@@ -55,10 +55,8 @@ export default function Login() {
             <ArrowLeft size={14} /> Back to Home
           </Link>
           <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-2xl font-extrabold text-white">TradeHub</span>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <span className="text-xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
           </div>
           <p className="text-white/60 mt-2 text-sm">Sign in to your account</p>
         </div>

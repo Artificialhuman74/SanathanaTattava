@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { TrendingUp, ShoppingBag, LogOut, User, Menu, X, ShoppingCart, MapPin } from 'lucide-react';
+import { ShoppingBag, LogOut, User, Menu, X, ShoppingCart, MapPin } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 export default function ConsumerLayout() {
@@ -22,10 +22,8 @@ export default function ConsumerLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
           {/* Logo */}
           <Link to="/shop" className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg text-slate-900">TradeHub</span>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg" alt="Sanathana Tattva" />
+            <span className="font-bold text-base text-slate-900 leading-tight">Sanathana Tattva</span>
           </Link>
 
           {/* Desktop Nav Links */}
@@ -215,12 +213,10 @@ export default function ConsumerLayout() {
       <footer className="bg-slate-900 py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-brand-600 rounded flex items-center justify-center">
-              <TrendingUp className="w-3 h-3 text-white" />
-            </div>
-            <span className="font-bold text-white text-sm">TradeHub</span>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-6 w-6 object-contain rounded" alt="logo" />
+            <span className="font-bold text-white text-sm">Sanathana Tattva</span>
           </div>
-          <p className="text-slate-500 text-xs">© 2024 TradeHub. Your trusted distribution network.</p>
+          <p className="text-slate-500 text-xs">© {new Date().getFullYear()} Sanathana Tattva. Purity of Tradition in Every Drop.</p>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <Link to="/" className="hover:text-slate-300 transition-colors">Home</Link>
             <Link to="/login" className="hover:text-slate-300 transition-colors">Trader Login</Link>

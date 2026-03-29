@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, Package, ShoppingCart, Shield, BarChart3,
+  ShoppingCart, Shield,
   Star, ArrowRight, CheckCircle2, Zap, Globe, Award,
-  ChevronDown, Truck, Tag, Search, Percent, Clock,
-  Phone, MapPin, Heart, Users, Lock,
+  ChevronDown, Truck, Percent, Clock,
+  Phone, MapPin, Lock,
 } from 'lucide-react';
 
 const consumerSteps = [
@@ -68,10 +68,8 @@ export default function Landing() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-white" size={18} />
-            </div>
-            <span className="font-bold text-lg text-slate-900">TradeHub</span>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg" alt="Sanathana Tattva" />
+            <span className="font-bold text-base text-slate-900 leading-tight">Sanathana Tattva</span>
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-2 sm:gap-3">
@@ -93,7 +91,7 @@ export default function Landing() {
       <section
         className="relative pt-32 pb-20 sm:pt-40 sm:pb-28 overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)',
+          background: 'linear-gradient(135deg, #0d1f10 0%, #14532d 50%, #1a2e0d 100%)',
         }}
       >
         <div
@@ -104,8 +102,8 @@ export default function Landing() {
             backgroundPosition: 'center',
           }}
         />
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 right-1/4 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl" />
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-green-600/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 right-1/4 w-64 h-64 bg-gold-400/10 rounded-full blur-3xl" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white/80 text-sm font-medium mb-8">
@@ -113,13 +111,13 @@ export default function Landing() {
             Quality Products. Local Delivery. Great Prices.
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white leading-tight mb-6">
-            Shop Smarter with<br />
-            <span className="bg-gradient-to-r from-brand-400 to-cyan-400 bg-clip-text text-transparent">
-              TradeHub
+            Pure Tradition.<br />
+            <span className="bg-gradient-to-r from-gold-400 to-gold-200 bg-clip-text text-transparent">
+              Sanathana Tattva
             </span>
           </h1>
           <p className="text-lg sm:text-xl text-white/70 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Browse quality products, get exclusive referral discounts, and enjoy fast local delivery right to your doorstep.
+            Cold pressed oils crafted the traditional way. Get exclusive referral discounts and enjoy fast local delivery right to your doorstep.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <button
@@ -251,7 +249,7 @@ export default function Landing() {
       <section className="py-20 sm:py-28 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-14">
-            <span className="inline-block px-4 py-1.5 bg-brand-50 text-brand-700 rounded-full text-sm font-semibold mb-4">Why TradeHub</span>
+            <span className="inline-block px-4 py-1.5 bg-brand-50 text-brand-700 rounded-full text-sm font-semibold mb-4">Why Sanathana Tattva</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4">Built for Smart Shoppers</h2>
             <p className="text-lg text-slate-500 max-w-xl mx-auto">Everything you need for a seamless shopping experience.</p>
           </div>
@@ -304,7 +302,7 @@ export default function Landing() {
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <Award className="w-12 h-12 text-yellow-400 mx-auto mb-5" />
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">Ready to Start Shopping?</h2>
-          <p className="text-brand-200 text-lg mb-8">Join thousands of happy shoppers on TradeHub. Sign up in seconds.</p>
+          <p className="text-brand-200 text-lg mb-8">Join thousands of happy shoppers. Sign up in seconds.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={() => navigate('/shop')} className="px-8 py-4 bg-white text-brand-700 font-bold rounded-2xl hover:bg-brand-50 transition-all shadow-lg flex items-center justify-center gap-2">
               <ShoppingCart size={18} /> Shop Now
@@ -322,12 +320,10 @@ export default function Landing() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 pb-8 border-b border-slate-800">
             <div>
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-bold text-white text-lg">TradeHub</span>
+                <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 object-contain rounded-lg" alt="logo" />
+                <span className="font-bold text-white text-base leading-tight">Sanathana Tattva</span>
               </div>
-              <p className="text-slate-400 text-sm leading-relaxed">Quality products delivered to your doorstep by trusted local dealers. Shop smarter with TradeHub.</p>
+              <p className="text-slate-400 text-sm leading-relaxed">Pure cold pressed oils delivered to your doorstep. Purity of Tradition in Every Drop.</p>
             </div>
             <div>
               <p className="font-semibold text-white text-sm mb-3">Quick Links</p>
@@ -350,7 +346,7 @@ export default function Landing() {
 
           {/* Trader / Admin access — subtle, at the very bottom */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6">
-            <p className="text-slate-500 text-sm">&copy; {new Date().getFullYear()} TradeHub. All rights reserved.</p>
+            <p className="text-slate-500 text-sm">&copy; {new Date().getFullYear()} Sanathana Tattva. All rights reserved.</p>
             <div className="flex items-center gap-4 text-xs text-slate-600">
               <button onClick={() => navigate('/login')} className="hover:text-slate-400 transition-colors flex items-center gap-1">
                 <Lock size={10} /> Trader Portal

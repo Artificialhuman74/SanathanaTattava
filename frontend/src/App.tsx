@@ -68,7 +68,7 @@ const DeliveryRoute = ({ children }: { children: React.ReactNode }) => {
     </div>
   );
   if (!user) return <Navigate to="/delivery/login" replace />;
-  if (user.role !== 'trader' || !user.will_deliver) return <Navigate to="/delivery/login" replace />;
+  if (user.role !== 'trader') return <Navigate to="/delivery/login" replace />;
   return <>{children}</>;
 };
 

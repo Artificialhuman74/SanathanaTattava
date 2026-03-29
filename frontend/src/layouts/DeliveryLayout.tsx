@@ -46,19 +46,17 @@ export default function DeliveryLayout() {
       <LocationPrompt />
 
       {/* Top Header */}
-      <header className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="bg-[#14532d] text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-            <Truck className="w-5 h-5 text-white" />
-          </div>
+          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 object-contain rounded-lg flex-shrink-0" alt="logo" />
           <div>
-            <h1 className="text-sm font-bold leading-tight">TradeHub Delivery</h1>
+            <h1 className="text-sm font-bold leading-tight">Sanathana Tattva Delivery</h1>
             <p className="text-xs text-emerald-100 leading-tight">{user?.name}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            isOnline ? 'bg-emerald-400/30 text-white' : 'bg-white/20 text-emerald-100'
+            isOnline ? 'bg-green-400/30 text-white' : 'bg-white/20 text-green-100'
           }`}>
             {isOnline ? 'ONLINE' : 'OFFLINE'}
           </span>
