@@ -77,18 +77,22 @@ export default {
         },
         rollInFromTop: {
           '0%': { transform: 'translateY(-110%)', opacity: '0' },
+          '35%': { opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         rollInFromBottom: {
           '0%': { transform: 'translateY(110%)', opacity: '0' },
+          '35%': { opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         rollOutToTop: {
           '0%': { transform: 'translateY(0)', opacity: '1' },
+          '35%': { opacity: '0' },
           '100%': { transform: 'translateY(-110%)', opacity: '0' },
         },
         rollOutToBottom: {
           '0%': { transform: 'translateY(0)', opacity: '1' },
+          '35%': { opacity: '0' },
           '100%': { transform: 'translateY(110%)', opacity: '0' },
         },
       },

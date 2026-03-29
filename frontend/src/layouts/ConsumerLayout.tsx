@@ -95,8 +95,8 @@ export default function ConsumerLayout() {
                 <div className="relative">
                   <ShoppingCart size={20} className="text-gray-700" />
                   {cartCount > 0 && (
-                    <span className={`absolute -top-1.5 -right-2 min-w-[1.15rem] h-[1.15rem] px-1 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
-                      <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[9px]" />
+                    <span className={`absolute -top-1.5 -right-2 min-w-[1.25rem] h-[1.25rem] px-1 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
+                      <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
                     </span>
                   )}
                 </div>

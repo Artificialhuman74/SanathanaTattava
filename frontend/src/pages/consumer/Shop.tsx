@@ -38,7 +38,6 @@ export default function Shop() {
   const [cart,       setCart]       = useState<CartItem[]>([]);
   const [cartOpen,   setCartOpen]   = useState(false);
   const [discountPct,setDiscountPct]= useState<number>(0);
-  const [justAdded,  setJustAdded]  = useState<Set<number>>(new Set());
   const [shakingId,  setShakingId]  = useState<number | null>(null);
   const [cartIconBounce, setCartIconBounce] = useState(false);
   const prevCartCountRef = useRef(0);
@@ -87,46 +86,27 @@ export default function Shop() {
   }, []);
 
   /* ── Cart helpers ─────────────────────────────────────────────────── */
-  const triggerQtyBounce = (id: number) => {
-    setJustAdded(s => new Set([...s, id]));
-    setTimeout(() => {
-      setJustAdded(s => {
-        const n = new Set(s);
-        n.delete(id);
-        return n;
-      });
-    }, 520);
-  };
-
   const addToCart = (product: Product) => {
     if (product.stock === 0) {
       setShakingId(product.id);
       setTimeout(() => setShakingId(null), 450);
       return;
     }
-    let changed = false;
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (existing) {
         if (existing.quantity >= product.stock) return prev;
-        changed = true;
         return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      changed = true;
       return [...prev, { product, quantity: 1 }];
     });
-    if (changed) triggerQtyBounce(product.id);
   };
 
   const updateQty = (id: number, qty: number) => {
     if (qty < 1) { removeFromCart(id); return; }
     const product = cart.find(i => i.product.id === id)?.product;
     if (product && qty > product.stock) return;
-    let changed = false;
     setCart(prev => prev.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
-    const currentQty = cart.find(i => i.product.id === id)?.quantity;
-    if (currentQty !== qty) changed = true;
-    if (changed) triggerQtyBounce(id);
   };
 
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
@@ -181,8 +161,8 @@ export default function Shop() {
         >
           <ShoppingCart size={18} />
           {cartCount > 0 && (
-            <span className={`absolute -top-1.5 -right-1.5 min-w-[1.15rem] h-[1.15rem] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
-              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[9px]" />
+            <span className={`absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
+              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
             </span>
           )}
         </button>
@@ -271,20 +251,20 @@ export default function Shop() {
                           <Plus size={16} />
                         </button>
                       ) : (
-                        <div className={`absolute inset-0 flex items-center gap-1 bg-white/95 rounded-xl px-1 py-1 shadow-sm ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
+                        <div className="absolute inset-0 flex items-center gap-1 bg-white/95 rounded-xl px-1 py-1 shadow-sm">
                           <button
                             onClick={() => updateQty(p.id, inCart - 1)}
-                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce"
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
                           >
                             <Minus size={12} />
                           </button>
-                          <span className="h-7 min-w-[42px] px-1 text-xs font-bold text-brand-700 flex items-center justify-center gap-1 rounded-md">
+                          <span className="h-7 min-w-[48px] px-1.5 text-xs font-bold text-brand-700 flex items-center justify-center gap-1.5 rounded-md leading-none">
                             <Check size={10} strokeWidth={3} />
-                            <RollingNumber value={inCart} className="text-[13px]" />
+                            <RollingNumber value={inCart} className="text-[13px] leading-none" />
                           </span>
                           <button
                             onClick={() => addToCart(p)}
-                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce"
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
                           >
                             <Plus size={12} />
                           </button>
