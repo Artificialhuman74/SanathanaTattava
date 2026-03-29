@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const { body, param, query, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate, requireTrader } = require('../middleware/auth');
@@ -7,6 +6,7 @@ const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
 const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
+const { sendDeliveryOtp, checkDeliveryOtp } = require('../services/smsService');
 
 const router = express.Router();
 
@@ -228,7 +228,7 @@ router.post('/orders/:id/packed', param('id').isInt(), (req, res) => {
 /* ═════════════════════════════════════════════════════════════════════
  * POST /delivery/orders/:id/start-delivery
  * ═════════════════════════════════════════════════════════════════════ */
-router.post('/orders/:id/start-delivery', param('id').isInt(), (req, res) => {
+router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -240,32 +240,36 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), (req, res) => {
       return res.status(400).json({ error: `Cannot start delivery with delivery_status '${order.delivery_status}'. Must be 'packed'.` });
     }
 
-    // Generate 6-digit OTP
-    const plainOtp = generateOTP();
-    const otpHash = bcrypt.hashSync(plainOtp, 10);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes
+    if (!order.delivery_phone) {
+      return res.status(400).json({ error: 'No phone number on file for this delivery address. Cannot send OTP.' });
+    }
 
+    // Send OTP via Twilio Verify — Twilio generates and sends the code
+    const smsResult = await sendDeliveryOtp(order.delivery_phone);
+    if (!smsResult.sent && !smsResult.dev) {
+      return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
+    }
+
+    const now = new Date().toISOString();
     db.prepare(`
       UPDATE consumer_orders
       SET delivery_status = 'out_for_delivery',
           delivery_started_at = ?,
-          delivery_otp_hash = ?,
-          delivery_otp_plain = ?,
-          delivery_otp_expires_at = ?,
-          delivery_otp_attempts = 0,
+          delivery_otp_plain = NULL,
           status = 'shipped',
           updated_at = ?
       WHERE id = ?
-    `).run(now.toISOString(), otpHash, plainOtp, expiresAt.toISOString(), now.toISOString(), order.id);
+    `).run(now, now, order.id);
 
-    // Send the PLAIN OTP to consumer via notification
-    notifyConsumer(
-      order.consumer_id,
-      `Your delivery is on the way — ${order.order_number}`,
-      `Your delivery OTP is: ${plainOtp}. Share this with the delivery partner upon arrival. Valid for 30 minutes.`,
-      { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp: plainOtp }
-    );
+    // Notify consumer in-app (no OTP in notification — they receive it via SMS)
+    if (order.consumer_id) {
+      notifyConsumer(
+        order.consumer_id,
+        `Your delivery is on the way — ${order.order_number}`,
+        `Your order is out for delivery. You will receive an OTP via SMS. None of our delivery agents will ask for money.`,
+        { orderNumber: order.order_number, delivery_status: 'out_for_delivery' }
+      );
+    }
 
     emitOrderUpdate({
       orderId: order.id, orderNumber: order.order_number,
@@ -275,8 +279,7 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), (req, res) => {
       extra: { otpSent: true },
     });
 
-    // Do NOT return the OTP to the delivery app
-    res.json({ success: true, message: 'Delivery started. OTP sent to consumer.' });
+    res.json({ success: true, message: 'Delivery started. OTP sent to consumer via SMS.' });
   } catch (err) {
     console.error('POST /delivery/orders/:id/start-delivery error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -290,7 +293,7 @@ router.post(
   '/orders/:id/verify-otp',
   param('id').isInt(),
   body('otp').isString().isLength({ min: 6, max: 6 }).withMessage('OTP must be a 6-digit string'),
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -302,36 +305,14 @@ router.post(
         return res.status(400).json({ error: `Cannot verify OTP with delivery_status '${order.delivery_status}'. Must be 'out_for_delivery'.` });
       }
 
-      // Check brute force limit
-      if ((order.delivery_otp_attempts || 0) >= 5) {
-        return res.status(429).json({ error: 'Maximum OTP attempts exceeded. Please contact support.' });
+      // Verify OTP via Twilio (or dev fallback: "000000")
+      const { approved, error: checkError } = await checkDeliveryOtp(order.delivery_phone, req.body.otp);
+
+      if (!approved) {
+        return res.status(400).json({ error: checkError || 'Invalid OTP. Please try again.' });
       }
 
-      // Check expiry
-      const expiresAt = new Date(order.delivery_otp_expires_at);
-      if (expiresAt <= new Date()) {
-        return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
-      }
-
-      // Compare OTP with bcrypt
-      const isValid = bcrypt.compareSync(req.body.otp, order.delivery_otp_hash);
-
-      if (!isValid) {
-        // Increment attempts
-        db.prepare(`
-          UPDATE consumer_orders
-          SET delivery_otp_attempts = delivery_otp_attempts + 1, updated_at = ?
-          WHERE id = ?
-        `).run(new Date().toISOString(), order.id);
-
-        const remaining = 4 - (order.delivery_otp_attempts || 0);
-        return res.status(400).json({
-          error: 'Invalid OTP',
-          attempts_remaining: Math.max(remaining, 0),
-        });
-      }
-
-      // OTP correct — mark delivered, clear plain OTP
+      // OTP correct — mark delivered
       const now = new Date().toISOString();
       db.prepare(`
         UPDATE consumer_orders
@@ -343,12 +324,14 @@ router.post(
         WHERE id = ?
       `).run(now, now, order.id);
 
-      notifyConsumer(
-        order.consumer_id,
-        `Order delivered — ${order.order_number}`,
-        `Your order has been successfully delivered. Thank you!`,
-        { orderNumber: order.order_number, delivery_status: 'delivered' }
-      );
+      if (order.consumer_id) {
+        notifyConsumer(
+          order.consumer_id,
+          `Order delivered — ${order.order_number}`,
+          `Your order has been successfully delivered. Thank you for shopping with Sanathana Tattva!`,
+          { orderNumber: order.order_number, delivery_status: 'delivered' }
+        );
+      }
       emitOrderUpdate({
         orderId: order.id, orderNumber: order.order_number,
         status: 'delivered', deliveryStatus: 'delivered',
@@ -369,7 +352,7 @@ router.post(
  * Resends the delivery OTP to the consumer via notification.
  * If the OTP has expired, generates a fresh one.
  * ═════════════════════════════════════════════════════════════════════ */
-router.post('/orders/:id/resend-otp', param('id').isInt(), (req, res) => {
+router.post('/orders/:id/resend-otp', param('id').isInt(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
@@ -381,36 +364,30 @@ router.post('/orders/:id/resend-otp', param('id').isInt(), (req, res) => {
       return res.status(400).json({ error: 'Order is not out for delivery' });
     }
 
-    const now = new Date();
-    let plainOtp = order.delivery_otp_plain;
-
-    // If OTP expired or plain text not available, generate a new one
-    if (!plainOtp || new Date(order.delivery_otp_expires_at) <= now) {
-      plainOtp = generateOTP();
-      const otpHash  = bcrypt.hashSync(plainOtp, 10);
-      const expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
-      db.prepare(`
-        UPDATE consumer_orders
-        SET delivery_otp_hash = ?,
-            delivery_otp_plain = ?,
-            delivery_otp_expires_at = ?,
-            delivery_otp_attempts = 0,
-            updated_at = ?
-        WHERE id = ?
-      `).run(otpHash, plainOtp, expiresAt.toISOString(), now.toISOString(), order.id);
+    if (!order.delivery_phone) {
+      return res.status(400).json({ error: 'No phone number on file for this delivery address.' });
     }
 
-    notifyConsumer(
-      order.consumer_id,
-      `Delivery OTP — ${order.order_number}`,
-      `Your delivery OTP is: ${plainOtp}. Share this with the delivery partner to complete the delivery.`,
-      { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp: plainOtp }
-    );
+    // Twilio Verify handles rate limiting and resend automatically
+    const smsResult = await sendDeliveryOtp(order.delivery_phone);
+    if (!smsResult.sent && !smsResult.dev) {
+      return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
+    }
 
-    res.json({ success: true, message: 'OTP sent to customer via notification' });
+    // In-app notification (no OTP in text — consumer receives it via SMS)
+    if (order.consumer_id) {
+      notifyConsumer(
+        order.consumer_id,
+        `Delivery OTP resent — ${order.order_number}`,
+        `A new OTP has been sent to your registered phone number. None of our delivery agents will ask for money.`,
+        { orderNumber: order.order_number, delivery_status: 'out_for_delivery' }
+      );
+    }
+
+    res.json({ success: true, message: 'OTP resent to customer via SMS' });
   } catch (err) {
     console.error('POST /delivery/orders/:id/resend-otp error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 

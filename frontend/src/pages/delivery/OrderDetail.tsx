@@ -38,6 +38,8 @@ export default function DeliveryOrderDetail() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [showFailModal, setShowFailModal] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetchOrder();
@@ -114,12 +116,27 @@ export default function DeliveryOrderDetail() {
     try {
       await api.post(`/delivery/orders/${id}/resend-otp`);
       toast.success('OTP sent to customer!');
+      // Start 30-second cooldown
+      setOtpCooldown(30);
+      cooldownRef.current = setInterval(() => {
+        setOtpCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(cooldownRef.current!);
+            cooldownRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to send OTP');
     } finally {
       setSendingOtp(false);
     }
   };
+
+  // Cleanup interval on unmount
+  useEffect(() => () => { if (cooldownRef.current) clearInterval(cooldownRef.current); }, []);
 
   const handleFail = async (reason: string) => {
     setActionLoading(true);
@@ -393,11 +410,11 @@ export default function DeliveryOrderDetail() {
             {/* Send OTP to customer notification */}
             <button
               onClick={handleResendOtp}
-              disabled={sendingOtp}
+              disabled={sendingOtp || otpCooldown > 0}
               className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2 min-h-[48px] text-sm"
             >
               {sendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sendingOtp ? 'Sending...' : 'Send OTP to Customer'}
+              {sendingOtp ? 'Sending…' : otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Send OTP to Customer'}
             </button>
             <button
               onClick={() => setShowOtpModal(true)}

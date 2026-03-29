@@ -528,6 +528,8 @@ router.get('/orders', authConsumer, (req, res) => {
     const items = stmtItems.all(o.id);
     o.items = items;
     o.item_count = items.length;
+    // OTP is managed by Twilio Verify — not stored or exposed here
+    delete o.delivery_otp_plain;
   }
 
   res.json({ orders });
