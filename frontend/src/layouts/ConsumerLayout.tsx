@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-do
 import { useAuth } from '../contexts/AuthContext';
 import { Home, ShoppingBag, User, Menu, X, ShoppingCart, LogOut, MapPin, ChevronRight } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import RollingNumber from '../components/RollingNumber';
 
 export default function ConsumerLayout() {
   const { consumer, consumerLogout } = useAuth();
@@ -11,6 +12,8 @@ export default function ConsumerLayout() {
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [cartCount,  setCartCount]  = useState(0);
   const [scrolled,   setScrolled]   = useState(false);
+  const [cartIconBounce, setCartIconBounce] = useState(false);
+  const prevCartCountRef = useRef(0);
   const isShopPage = location.pathname === '/shop';
 
   // Close menu on route change
@@ -22,6 +25,16 @@ export default function ConsumerLayout() {
     window.addEventListener('cart-count', handler);
     return () => window.removeEventListener('cart-count', handler);
   }, []);
+
+  useEffect(() => {
+    if (cartCount > prevCartCountRef.current) {
+      setCartIconBounce(true);
+      const timer = setTimeout(() => setCartIconBounce(false), 420);
+      prevCartCountRef.current = cartCount;
+      return () => clearTimeout(timer);
+    }
+    prevCartCountRef.current = cartCount;
+  }, [cartCount]);
 
   // Scroll detection for bell→cart swap
   useEffect(() => {
@@ -79,11 +92,11 @@ export default function ConsumerLayout() {
                   scrolled && cartCount > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
                 }`}
               >
-                <div className="relative">
+                <div className={`relative ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
                   <ShoppingCart size={20} className="text-gray-700" />
                   {cartCount > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                      {cartCount > 9 ? '9+' : cartCount}
+                      <RollingNumber value={cartCount > 9 ? '9+' : cartCount} />
                     </span>
                   )}
                 </div>

@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import RollingNumber from '../../components/RollingNumber';
 import {
   ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag,
   Check, ChevronDown,
@@ -39,6 +40,8 @@ export default function Shop() {
   const [discountPct,setDiscountPct]= useState<number>(0);
   const [justAdded,  setJustAdded]  = useState<Set<number>>(new Set());
   const [shakingId,  setShakingId]  = useState<number | null>(null);
+  const [cartIconBounce, setCartIconBounce] = useState(false);
+  const prevCartCountRef = useRef(0);
 
   // Pre-fill cart from "order again" (set in Orders.tsx)
   useEffect(() => {
@@ -84,30 +87,46 @@ export default function Shop() {
   }, []);
 
   /* ── Cart helpers ─────────────────────────────────────────────────── */
+  const triggerQtyBounce = (id: number) => {
+    setJustAdded(s => new Set([...s, id]));
+    setTimeout(() => {
+      setJustAdded(s => {
+        const n = new Set(s);
+        n.delete(id);
+        return n;
+      });
+    }, 520);
+  };
+
   const addToCart = (product: Product) => {
     if (product.stock === 0) {
       setShakingId(product.id);
       setTimeout(() => setShakingId(null), 450);
       return;
     }
+    let changed = false;
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
       if (existing) {
         if (existing.quantity >= product.stock) return prev;
+        changed = true;
         return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      // Trigger bounce animation on first add
-      setJustAdded(s => new Set([...s, product.id]));
-      setTimeout(() => setJustAdded(s => { const n = new Set(s); n.delete(product.id); return n; }), 550);
+      changed = true;
       return [...prev, { product, quantity: 1 }];
     });
+    if (changed) triggerQtyBounce(product.id);
   };
 
   const updateQty = (id: number, qty: number) => {
     if (qty < 1) { removeFromCart(id); return; }
     const product = cart.find(i => i.product.id === id)?.product;
     if (product && qty > product.stock) return;
+    let changed = false;
     setCart(prev => prev.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
+    const currentQty = cart.find(i => i.product.id === id)?.quantity;
+    if (currentQty !== qty) changed = true;
+    if (changed) triggerQtyBounce(id);
   };
 
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
@@ -119,6 +138,16 @@ export default function Shop() {
   // Broadcast cart count to header
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('cart-count', { detail: cartCount }));
+  }, [cartCount]);
+
+  useEffect(() => {
+    if (cartCount > prevCartCountRef.current) {
+      setCartIconBounce(true);
+      const timer = setTimeout(() => setCartIconBounce(false), 420);
+      prevCartCountRef.current = cartCount;
+      return () => clearTimeout(timer);
+    }
+    prevCartCountRef.current = cartCount;
   }, [cartCount]);
 
   // Open cart from header cart button
@@ -148,12 +177,12 @@ export default function Shop() {
         </div>
         <button
           onClick={() => setCartOpen(true)}
-          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors"
+          className={`relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors ${cartIconBounce ? 'animate-drop-bounce' : ''}`}
         >
           <ShoppingCart size={18} />
           {cartCount > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-              {cartCount > 9 ? '9+' : cartCount}
+              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} />
             </span>
           )}
         </button>
@@ -245,42 +274,40 @@ export default function Shop() {
                       <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                       <p className="text-xs text-slate-400">per {p.unit}</p>
                     </div>
-                    {/* Add button (only when not in cart) */}
-                    {inCart === 0 && (
-                      <button
-                        onClick={() => addToCart(p)}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                          outOfStock
-                            ? `bg-red-50 text-red-400 ${shakingId === p.id ? 'animate-shake' : ''}`
-                            : 'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white'
-                        }`}
-                      >
-                        <Plus size={16} />
-                      </button>
-                    )}
-                  </div>
-                  {/* Qty controls — own row so price never overlaps */}
-                  {inCart > 0 && (
-                    <div className="flex items-center justify-between mt-2">
-                      <div className={`flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
-                        <button
-                          onClick={() => updateQty(p.id, inCart - 1)}
-                          className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="flex items-center gap-0.5 px-2 text-xs font-bold text-brand-700">
-                          <Check size={10} strokeWidth={3} />{inCart}
-                        </span>
+                    <div className={`relative flex-shrink-0 h-9 transition-all duration-300 ease-out ${inCart > 0 ? 'w-[116px]' : 'w-9'}`}>
+                      {inCart === 0 ? (
                         <button
                           onClick={() => addToCart(p)}
-                          className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
+                          className={`absolute inset-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                            outOfStock
+                              ? `bg-red-50 text-red-400 ${shakingId === p.id ? 'animate-shake' : ''}`
+                              : 'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white active:animate-drop-bounce'
+                          }`}
                         >
-                          <Plus size={12} />
+                          <Plus size={16} />
                         </button>
-                      </div>
+                      ) : (
+                        <div className={`absolute inset-0 flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
+                          <button
+                            onClick={() => updateQty(p.id, inCart - 1)}
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="flex items-center gap-0.5 px-2 text-xs font-bold text-brand-700 min-w-[3ch] justify-center">
+                            <Check size={10} strokeWidth={3} />
+                            <RollingNumber value={inCart} />
+                          </span>
+                          <button
+                            onClick={() => addToCart(p)}
+                            className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:animate-drop-bounce transition-transform"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             );
