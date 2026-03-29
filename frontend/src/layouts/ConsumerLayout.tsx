@@ -1,17 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, ShoppingBag, User, Menu, X, Bell, ShoppingCart, LogOut, MapPin, ChevronRight } from 'lucide-react';
+import { Home, ShoppingBag, User, Menu, X, ShoppingCart, LogOut, MapPin, ChevronRight } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 export default function ConsumerLayout() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen,   setMenuOpen]   = useState(false);
+  const [cartCount,  setCartCount]  = useState(0);
+  const [scrolled,   setScrolled]   = useState(false);
+  const isShopPage = location.pathname === '/shop';
 
   // Close menu on route change
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  // Listen for cart count from Shop.tsx
+  useEffect(() => {
+    const handler = (e: Event) => setCartCount((e as CustomEvent).detail);
+    window.addEventListener('cart-count', handler);
+    return () => window.removeEventListener('cart-count', handler);
+  }, []);
+
+  // Scroll detection for bell→cart swap
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -46,9 +63,32 @@ export default function ConsumerLayout() {
             <span className="font-bold text-base text-gray-900 tracking-tight">Sanathana Tattva</span>
           </Link>
 
-          {/* Right: notification bell */}
-          <div className="flex items-center gap-1">
-            {consumer && <NotificationBell variant="consumer" />}
+          {/* Right: bell or cart (swaps on scroll when on shop page) */}
+          <div className="flex items-center gap-1 relative w-10 h-10">
+            {/* Bell — fades out when scrolled on shop page with items in cart */}
+            <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
+              isShopPage && scrolled && cartCount > 0 ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
+            }`}>
+              {consumer && <NotificationBell variant="consumer" />}
+            </div>
+            {/* Cart icon — fades in when scrolled on shop page */}
+            {isShopPage && (
+              <button
+                onClick={() => window.dispatchEvent(new Event('open-cart'))}
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
+                  scrolled && cartCount > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+                }`}
+              >
+                <div className="relative">
+                  <ShoppingCart size={20} className="text-gray-700" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {cartCount > 9 ? '9+' : cartCount}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </header>

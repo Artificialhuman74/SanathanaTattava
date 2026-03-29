@@ -116,6 +116,18 @@ export default function Shop() {
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartInProduct = (id: number) => cart.find(i => i.product.id === id)?.quantity ?? 0;
 
+  // Broadcast cart count to header
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('cart-count', { detail: cartCount }));
+  }, [cartCount]);
+
+  // Open cart from header cart button
+  useEffect(() => {
+    const handler = () => setCartOpen(true);
+    window.addEventListener('open-cart', handler);
+    return () => window.removeEventListener('open-cart', handler);
+  }, []);
+
   const goToCheckout = () => {
     if (cart.length === 0) { toast.error('Your cart is empty'); return; }
     setCartOpen(false);
@@ -227,35 +239,14 @@ export default function Shop() {
                     <Tag size={10} />{p.category}
                   </span>
                   <p className="font-bold text-slate-900 mt-1 leading-snug line-clamp-2 text-sm flex-1">{p.name}</p>
+                  {/* Price row */}
                   <div className="flex items-center justify-between mt-2 gap-1">
                     <div className="min-w-0">
                       <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                       <p className="text-xs text-slate-400">per {p.unit}</p>
                     </div>
-
-                    {/* Cart button area */}
-                    {inCart > 0 ? (
-                      /* Qty controls: [−] [✓ n] [+] */
-                      <div className="flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 flex-shrink-0">
-                        <button
-                          onClick={() => updateQty(p.id, inCart - 1)}
-                          className="w-6 h-6 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
-                        >
-                          <Minus size={11} />
-                        </button>
-                        <span className={`flex items-center gap-0.5 px-1 text-xs font-bold text-brand-700 min-w-[1.75rem] justify-center ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
-                          <Check size={10} strokeWidth={3} />
-                          {inCart}
-                        </span>
-                        <button
-                          onClick={() => addToCart(p)}
-                          className="w-6 h-6 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
-                        >
-                          <Plus size={11} />
-                        </button>
-                      </div>
-                    ) : (
-                      /* Add button */
+                    {/* Add button (only when not in cart) */}
+                    {inCart === 0 && (
                       <button
                         onClick={() => addToCart(p)}
                         className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
@@ -268,6 +259,28 @@ export default function Shop() {
                       </button>
                     )}
                   </div>
+                  {/* Qty controls — own row so price never overlaps */}
+                  {inCart > 0 && (
+                    <div className="flex items-center justify-between mt-2">
+                      <div className={`flex items-center gap-1 bg-brand-50 rounded-xl px-1 py-1 ${justAdded.has(p.id) ? 'animate-drop-bounce' : ''}`}>
+                        <button
+                          onClick={() => updateQty(p.id, inCart - 1)}
+                          className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="flex items-center gap-0.5 px-2 text-xs font-bold text-brand-700">
+                          <Check size={10} strokeWidth={3} />{inCart}
+                        </span>
+                        <button
+                          onClick={() => addToCart(p)}
+                          className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm text-brand-600 active:scale-90 transition-transform"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
