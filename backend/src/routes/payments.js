@@ -7,10 +7,9 @@ const { createNotification } = require('../services/notificationService');
 
 const router = express.Router();
 
-const razorpay = new Razorpay({
-  key_id:     process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const razorpay = process.env.RAZORPAY_KEY_ID
+  ? new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET })
+  : null;
 
 /* ── Consumer auth (same inline pattern as notifications.js) ─────────── */
 const authConsumer = (req, res, next) => {
@@ -44,6 +43,8 @@ router.post('/create-order', authConsumer, async (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (order.payment_status === 'paid')
     return res.status(400).json({ error: 'Order is already paid' });
+
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
 
   try {
     const rzpOrder = await razorpay.orders.create({
