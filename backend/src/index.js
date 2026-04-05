@@ -38,6 +38,8 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     // Allow any trycloudflare.com subdomain (temporary tunnels)
     if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return cb(null, true);
+    // Allow any railway.app subdomain (preview deployments)
+    if (/^https:\/\/[a-z0-9-]+\.railway\.app$/.test(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
@@ -65,20 +67,15 @@ app.use('/api/payments',      paymentRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// ─── Serve built frontend (production) ────────────────────────────────────
-const frontendDist = path.join(__dirname, '../../frontend/dist');
-if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
-}
-
 // ─── Global error handler ─────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ─── Start server with Socket.IO ──────────────────────────────────────────
+// ─── Start server ─────────────────────────────────────────────────────────
+// Railway (and most PaaS) terminate SSL at the proxy — always run HTTP here.
+// For local dev with HTTPS, keep certs in backend/certs/ and they'll be used.
 const certsDir = path.join(__dirname, '../certs');
 const keyPath  = path.join(certsDir, 'key.pem');
 const certPath = path.join(certsDir, 'cert.pem');
@@ -96,27 +93,20 @@ const getLocalIP = () => {
   return 'localhost';
 };
 
-if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-  const options = {
-    key:  fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
-  };
-  const server = https.createServer(options, app);
+// Use HTTPS locally if certs exist, plain HTTP on Railway/cloud
+if (!process.env.RAILWAY_ENVIRONMENT && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  const server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
   initSocket(server);
   server.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIP();
-    console.log('\n🚀 TradeHub HTTPS Server + WebSocket Running');
-    console.log('─────────────────────────────────────────');
-    console.log(`  Local:    https://localhost:${PORT}`);
-    console.log(`  Network:  https://${localIP}:${PORT}  ← Use this on your phone`);
-    console.log('─────────────────────────────────────────\n');
+    console.log(`\n🚀 TradeHub HTTPS Server + WebSocket Running`);
+    console.log(`   Local:   https://localhost:${PORT}`);
+    console.log(`   Network: https://${localIP}:${PORT}\n`);
   });
 } else {
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, '0.0.0.0', () => {
-    console.log('\n⚠️  Running in HTTP mode (no SSL certs found)');
-    console.log(`   Run generate-certs.sh first for HTTPS`);
-    console.log(`   http://localhost:${PORT}\n`);
+    console.log(`\n🚀 TradeHub server listening on port ${PORT}\n`);
   });
 }
