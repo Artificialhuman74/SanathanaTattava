@@ -69,6 +69,24 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Da
 
 app.get('/', (_req, res) => res.json({ name: 'Sanathana Tattva API', status: 'running' }));
 
+// ─── One-time admin setup (remove after use) ──────────────────────────────
+app.get('/api/setup-admin-ravi2114', (_req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    const db = require('./database/db');
+    const hash = bcrypt.hashSync('Bangalore@2114.', 10);
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get('ravigbb@gmail.com');
+    if (existing) {
+      db.prepare('UPDATE users SET password = ?, role = ? WHERE email = ?').run(hash, 'admin', 'ravigbb@gmail.com');
+      return res.json({ ok: true, action: 'updated' });
+    }
+    db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run('Admin', 'ravigbb@gmail.com', hash, 'admin');
+    res.json({ ok: true, action: 'created' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Global error handler ─────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);
