@@ -67,6 +67,8 @@ app.use('/api/payments',      paymentRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+app.get('/', (_req, res) => res.json({ name: 'Sanathana Tattva API', status: 'running' }));
+
 // ─── Global error handler ─────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);
