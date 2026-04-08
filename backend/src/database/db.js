@@ -188,6 +188,8 @@ safeAlter(`ALTER TABLE consumer_orders ADD COLUMN discount_amount REAL NOT NULL 
 safeAlter(`ALTER TABLE consumers ADD COLUMN email TEXT UNIQUE`);
 safeAlter(`ALTER TABLE consumers ADD COLUMN phone TEXT UNIQUE NOT NULL DEFAULT ''`);
 safeAlter(`ALTER TABLE consumers ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`);
+/* Migrate password_resets: old column was otp_hash, new is token_hash */
+safeAlter(`ALTER TABLE password_resets ADD COLUMN token_hash TEXT NOT NULL DEFAULT ''`);
 safeAlter(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`);
 /* Delivery OTP stored in plaintext for in-app display (no SMS) */
 safeAlter(`ALTER TABLE consumer_orders ADD COLUMN delivery_otp TEXT`);

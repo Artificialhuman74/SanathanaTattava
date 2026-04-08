@@ -205,7 +205,14 @@ router.post('/consumer/register', [
   `).run(name, email, hash, usedCode, linkedDealerId);
 
   const rawToken = createVerificationToken(email);
-  const mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+
+  let mailResult = { dev: true };
+  try {
+    mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+  } catch (mailErr) {
+    console.error('[register] email send failed:', mailErr.message);
+    // Account is created even if email fails; user can resend
+  }
 
   const response = { success: true, message: 'Account created. Please verify your email.' };
   if (mailResult.dev) response.dev_token = rawToken;
@@ -253,8 +260,13 @@ router.post('/consumer/resend-verification', [
   `).get(email).c;
   if (recentCount >= 3) return res.status(429).json({ error: 'Too many resend attempts. Please wait 10 minutes.' });
 
-  const rawToken   = createVerificationToken(email);
-  const mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+  const rawToken = createVerificationToken(email);
+  let mailResult = { dev: true };
+  try {
+    mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+  } catch (mailErr) {
+    console.error('[resend] email send failed:', mailErr.message);
+  }
 
   const response = { success: true };
   if (mailResult.dev) response.dev_token = rawToken;
@@ -311,7 +323,12 @@ router.post('/forgot-password', [
 
   const base     = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
   const resetUrl = `${base}/reset-password?token=${raw}`;
-  const mailResult = await sendPasswordResetEmail(email, resetUrl);
+  let mailResult = { dev: true };
+  try {
+    mailResult = await sendPasswordResetEmail(email, resetUrl);
+  } catch (mailErr) {
+    console.error('[forgot-password] email send failed:', mailErr.message);
+  }
 
   const response = { success: true };
   if (mailResult.dev) response.dev_token = raw;
