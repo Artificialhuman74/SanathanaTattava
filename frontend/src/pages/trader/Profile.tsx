@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import {
   UserCircle, MapPin, Phone, Mail, Star, Truck, Package,
   Shield, QrCode, Users, Copy, Check, Navigation,
-  Edit2, Save, X, Loader2, RefreshCw, AlertTriangle,
+  Edit2, Save, X, Loader2, RefreshCw, AlertTriangle, KeyRound,
 } from 'lucide-react';
 
 interface ProfileData {
@@ -31,6 +31,10 @@ export default function TraderProfile() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', address: '', pincode: '' });
+
+  // Change password states
+  const [pwStep,    setPwStep]    = useState<'idle'|'otp'>('idle');
+  const [pwLoading, setPwLoading] = useState(false);
 
   // GPS location update states
   const [gpsUpdating, setGpsUpdating] = useState(false);
@@ -422,6 +426,47 @@ export default function TraderProfile() {
             <span className="text-slate-700 font-medium">Commission Rate</span>
             <span className="text-2xl font-extrabold text-emerald-700">{user.commission_rate}%</span>
           </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="card p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <KeyRound size={14} /> Change Password
+          </h3>
+          {pwStep === 'idle' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">A password reset link will be sent to <strong>{user.email}</strong>.</p>
+              <button
+                onClick={async () => {
+                  setPwLoading(true);
+                  try {
+                    await api.post('/auth/forgot-password', { email: user.email });
+                    toast.success('Reset link sent to your email!');
+                    setPwStep('otp'); // reuse state to show "sent" message
+                  } catch { toast.error('Failed to send reset email'); }
+                  finally { setPwLoading(false); }
+                }}
+                disabled={pwLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+              >
+                {pwLoading ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
+                Send Password Reset Link
+              </button>
+            </div>
+          )}
+          {pwStep === 'otp' && (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2.5 border border-emerald-100">
+                Reset link sent to <strong>{user.email}</strong>. Click the link in the email to set a new password.
+              </p>
+              <button
+                onClick={() => setPwStep('idle')}
+                className="w-full py-2.5 text-sm text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Parent Dealer (Tier 2) */}

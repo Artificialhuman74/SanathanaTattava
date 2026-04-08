@@ -6,7 +6,7 @@ const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
 const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
-const { sendDeliveryOtp, checkDeliveryOtp } = require('../services/smsService');
+// No SMS — delivery OTP is generated locally and shown in the consumer's app
 
 const router = express.Router();
 
@@ -247,34 +247,26 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
       return res.status(400).json({ error: `Cannot start delivery with delivery_status '${order.delivery_status}'. Must be 'packed'.` });
     }
 
-    if (!order.otp_phone) {
-      return res.status(400).json({ error: 'No phone number on file for this delivery address. Cannot send OTP.' });
-    }
-
-    // Send OTP via Twilio Verify — Twilio generates and sends the code
-    const smsResult = await sendDeliveryOtp(order.otp_phone);
-    if (!smsResult.sent && !smsResult.dev) {
-      return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
-    }
-
+    // Generate OTP locally — consumer will see it in their app
+    const otp = generateOTP();
     const now = new Date().toISOString();
     db.prepare(`
       UPDATE consumer_orders
       SET delivery_status = 'out_for_delivery',
           delivery_started_at = ?,
-          delivery_otp_plain = NULL,
+          delivery_otp = ?,
           status = 'shipped',
           updated_at = ?
       WHERE id = ?
-    `).run(now, now, order.id);
+    `).run(now, otp, now, order.id);
 
-    // Notify consumer in-app (no OTP in notification — they receive it via SMS)
+    // Notify consumer — include OTP so they see it in the notification + order page
     if (order.consumer_id) {
       notifyConsumer(
         order.consumer_id,
         `Your delivery is on the way — ${order.order_number}`,
-        `Your order is out for delivery. You will receive an OTP via SMS. None of our delivery agents will ask for money.`,
-        { orderNumber: order.order_number, delivery_status: 'out_for_delivery' }
+        `Your order is out for delivery. Your delivery code is: ${otp}. Show this to the delivery agent.`,
+        { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp }
       );
     }
 
@@ -283,10 +275,9 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
       status: 'shipped', deliveryStatus: 'out_for_delivery',
       consumerId: order.consumer_id, linkedDealerId: order.linked_dealer_id,
       deliveryDealerId: order.delivery_dealer_id,
-      extra: { otpSent: true },
     });
 
-    res.json({ success: true, message: 'Delivery started. OTP sent to consumer via SMS.' });
+    res.json({ success: true, message: 'Delivery started. Consumer has been notified with their delivery code.' });
   } catch (err) {
     console.error('POST /delivery/orders/:id/start-delivery error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -312,11 +303,9 @@ router.post(
         return res.status(400).json({ error: `Cannot verify OTP with delivery_status '${order.delivery_status}'. Must be 'out_for_delivery'.` });
       }
 
-      // Verify OTP via Twilio (or dev fallback: "000000")
-      const { approved, error: checkError } = await checkDeliveryOtp(order.otp_phone, req.body.otp);
-
-      if (!approved) {
-        return res.status(400).json({ error: checkError || 'Invalid OTP. Please try again.' });
+      // Verify OTP against the code stored in the order
+      if (!order.delivery_otp || String(req.body.otp) !== String(order.delivery_otp)) {
+        return res.status(400).json({ error: 'Invalid OTP. Please try again.' });
       }
 
       // OTP correct — mark delivered
@@ -325,7 +314,7 @@ router.post(
         UPDATE consumer_orders
         SET delivery_status = 'delivered',
             delivery_verified_at = ?,
-            delivery_otp_plain = NULL,
+            delivery_otp = NULL,
             status = 'delivered',
             updated_at = ?
         WHERE id = ?
@@ -371,27 +360,22 @@ router.post('/orders/:id/resend-otp', param('id').isInt(), async (req, res) => {
       return res.status(400).json({ error: 'Order is not out for delivery' });
     }
 
-    if (!order.otp_phone) {
-      return res.status(400).json({ error: 'No phone number on file for this delivery address.' });
-    }
+    // Generate a fresh OTP and update the order
+    const newOtp = generateOTP();
+    const now2   = new Date().toISOString();
+    db.prepare('UPDATE consumer_orders SET delivery_otp = ?, updated_at = ? WHERE id = ?')
+      .run(newOtp, now2, order.id);
 
-    // Twilio Verify handles rate limiting and resend automatically
-    const smsResult = await sendDeliveryOtp(order.otp_phone);
-    if (!smsResult.sent && !smsResult.dev) {
-      return res.status(502).json({ error: `Failed to send OTP: ${smsResult.error}` });
-    }
-
-    // In-app notification (no OTP in text — consumer receives it via SMS)
     if (order.consumer_id) {
       notifyConsumer(
         order.consumer_id,
-        `Delivery OTP resent — ${order.order_number}`,
-        `A new OTP has been sent to your registered phone number. None of our delivery agents will ask for money.`,
-        { orderNumber: order.order_number, delivery_status: 'out_for_delivery' }
+        `New delivery code — ${order.order_number}`,
+        `Your new delivery code is: ${newOtp}. Show this to the delivery agent.`,
+        { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp: newOtp }
       );
     }
 
-    res.json({ success: true, message: 'OTP resent to customer via SMS' });
+    res.json({ success: true, message: 'New delivery code sent to consumer in-app' });
   } catch (err) {
     console.error('POST /delivery/orders/:id/resend-otp error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });

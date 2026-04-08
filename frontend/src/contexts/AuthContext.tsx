@@ -22,8 +22,8 @@ export interface User {
 export interface Consumer {
   id: number;
   name: string;
-  email?: string;
-  phone: string;
+  email: string;
+  phone?: string;
   address?: string;
   pincode?: string;
   referral_code_used?: string;
@@ -42,27 +42,6 @@ interface RegisterData {
   willDeliver?: boolean;
 }
 
-/* ── OTP-based consumer auth types ───────────────────────────────────── */
-export interface OtpSendResult {
-  success: boolean;
-  is_new_user: boolean;
-  email_masked: string;
-  dev_otp?: string;   // only present in dev mode (NODE_ENV=development)
-}
-
-export interface OtpVerifyResult {
-  /** true if phone exists → returned token+consumer, false if new → needs_registration */
-  logged_in: boolean;
-  /** set when logged_in=true */
-  token?: string;
-  consumer?: Consumer;
-  /** set when logged_in=false (new user) */
-  needs_registration?: boolean;
-  phone_verified_token?: string;
-  email?: string;
-  phone?: string;
-}
-
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -73,12 +52,11 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  /* Consumer OTP auth */
-  consumerSendOtp: (phone: string, email?: string) => Promise<OtpSendResult>;
-  consumerVerifyOtp: (phone: string, otp: string) => Promise<OtpVerifyResult>;
-  consumerCompleteRegistration: (phoneVerifiedToken: string, name: string, referralCode?: string, address?: string, pincode?: string) => Promise<void>;
+  /* Consumer email+password auth */
+  consumerLogin: (email: string, password: string) => Promise<void>;
+  consumerRegister: (name: string, email: string, password: string, referralCode?: string) => Promise<void>;
+  consumerLoginWithToken: (token: string, consumer: Consumer) => void;
   consumerLogout: () => void;
-  /** Re-fetch consumer profile from server and update local state + localStorage */
   refreshConsumer: () => Promise<void>;
   /* Convenience flags */
   isAdmin: boolean;
@@ -156,57 +134,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.dispatchEvent(new Event('tradehub-auth-changed'));
   }, []);
 
-  /* ── Consumer OTP Auth ───────────────────────────────────────────────── */
+  /* ── Consumer Email+Password Auth ───────────────────────────────────── */
 
-  /**
-   * Step 1: Request an OTP.
-   * For login: pass phone only (email is fetched from existing account).
-   * For registration: pass both phone + email.
-   */
-  const consumerSendOtp = useCallback(async (phone: string, email?: string): Promise<OtpSendResult> => {
-    const { data } = await api.post('/auth/consumer/send-otp', { phone, email });
-    return data as OtpSendResult;
-  }, []);
-
-  /**
-   * Step 2: Submit the OTP.
-   * Returns { logged_in: true, token, consumer } for existing users.
-   * Returns { logged_in: false, needs_registration: true, phone_verified_token, email, phone } for new users.
-   */
-  const consumerVerifyOtp = useCallback(async (phone: string, otp: string): Promise<OtpVerifyResult> => {
-    const { data } = await api.post('/auth/consumer/verify-otp', { phone, otp });
-    if (data.token && data.consumer) {
-      persistConsumer(data.token, data.consumer);
-      return { logged_in: true, token: data.token, consumer: data.consumer };
-    }
-    // New user
-    return {
-      logged_in: false,
-      needs_registration: true,
-      phone_verified_token: data.phone_verified_token,
-      email: data.email,
-      phone: data.phone,
-    };
-  }, []);
-
-  /**
-   * Step 3 (new users only): Complete registration with name + optional referral code.
-   */
-  const consumerCompleteRegistration = useCallback(async (
-    phoneVerifiedToken: string,
-    name: string,
-    referralCode?: string,
-    address?: string,
-    pincode?: string,
-  ) => {
-    const { data } = await api.post('/auth/consumer/complete-registration', {
-      phone_verified_token: phoneVerifiedToken,
-      name,
-      referral_code: referralCode || undefined,
-      address: address || undefined,
-      pincode: pincode || undefined,
-    });
+  const consumerLogin = useCallback(async (email: string, password: string) => {
+    const { data } = await api.post('/auth/consumer/login', { email, password });
     persistConsumer(data.token, data.consumer);
+  }, []);
+
+  const consumerRegister = useCallback(async (name: string, email: string, password: string, referralCode?: string) => {
+    await api.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined });
+    // Account created but not yet verified — do NOT log in yet
+  }, []);
+
+  const consumerLoginWithToken = useCallback((token: string, consumer: Consumer) => {
+    persistConsumer(token, consumer);
   }, []);
 
   const consumerLogout = useCallback(() => {
@@ -233,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       user, token, consumer, consumerToken, loading,
       login, register, logout,
-      consumerSendOtp, consumerVerifyOtp, consumerCompleteRegistration, consumerLogout, refreshConsumer,
+      consumerLogin, consumerRegister, consumerLoginWithToken, consumerLogout, refreshConsumer,
       isAdmin:    user?.role === 'admin',
       isTrader:   user?.role === 'trader',
       isTier1:    user?.role === 'trader' && user.tier === 1,

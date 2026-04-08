@@ -187,6 +187,30 @@ safeAlter(`ALTER TABLE consumer_orders ADD COLUMN discount_amount REAL NOT NULL 
 /* OTP table — added in v2 */
 safeAlter(`ALTER TABLE consumers ADD COLUMN email TEXT UNIQUE`);
 safeAlter(`ALTER TABLE consumers ADD COLUMN phone TEXT UNIQUE NOT NULL DEFAULT ''`);
+safeAlter(`ALTER TABLE consumers ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`);
+safeAlter(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`);
+/* Delivery OTP stored in plaintext for in-app display (no SMS) */
+safeAlter(`ALTER TABLE consumer_orders ADD COLUMN delivery_otp TEXT`);
+
+/* Email verification tokens (consumers + users) */
+db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT    NOT NULL,
+  token_hash TEXT    NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used       INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+/* Password reset tokens */
+db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT    NOT NULL,
+  token_hash TEXT    NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used       INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
 /* Seed default settings if missing */
 db.prepare(`INSERT OR IGNORE INTO settings (key,value) VALUES ('referral_discount_percent','10')`).run();

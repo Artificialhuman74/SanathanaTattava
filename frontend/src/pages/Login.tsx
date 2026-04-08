@@ -10,11 +10,12 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [tab,      setTab]      = useState<Tab>('trader');
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [showPw,   setShowPw]   = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [tab,         setTab]         = useState<Tab>('trader');
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [showPw,      setShowPw]      = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [showForgot,  setShowForgot]  = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +29,9 @@ export default function Login() {
         navigate(stored.role === 'admin' ? '/admin' : '/trader', { replace: true });
       }, 100);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      const msg = err.response?.data?.error || 'Login failed. Please check your credentials.';
+      toast.error(msg);
+      if (err.response?.status === 401) setShowForgot(true);
     } finally {
       setLoading(false);
     }
@@ -115,10 +118,24 @@ export default function Login() {
               </div>
             </div>
 
+            {showForgot && (
+              <div className="text-center">
+                <Link to="/forgot-password" className="text-sm text-brand-600 hover:text-brand-700 font-medium">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base mt-2 flex items-center justify-center gap-2">
               {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+
+            <div className="text-center">
+              <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-brand-600 transition-colors">
+                Forgot password?
+              </Link>
+            </div>
           </form>
 
           {tab === 'trader' && (

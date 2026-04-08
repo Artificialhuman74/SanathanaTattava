@@ -4,9 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 
-import Landing    from './pages/Landing';
-import Login      from './pages/Login';
-import Register   from './pages/Register';
+import Landing         from './pages/Landing';
+import Login           from './pages/Login';
+import Register        from './pages/Register';
+import ForgotPassword  from './pages/ForgotPassword';
+import ResetPassword   from './pages/ResetPassword';
 
 import AdminLayout  from './layouts/AdminLayout';
 import TraderLayout from './layouts/TraderLayout';
@@ -32,13 +34,15 @@ import TraderCommissions   from './pages/trader/Commissions';
 import TraderProfile       from './pages/trader/Profile';
 import TraderInventory     from './pages/trader/Inventory';
 
-import Shop           from './pages/consumer/Shop';
-import ConsumerLogin  from './pages/consumer/Login';
-import ConsumerRegister from './pages/consumer/Register';
-import ConsumerOrders    from './pages/consumer/Orders';
-import ConsumerAddresses from './pages/consumer/Addresses';
-import ConsumerCheckout  from './pages/consumer/Checkout';
-import ConsumerProfile   from './pages/consumer/Profile';
+import Shop                from './pages/consumer/Shop';
+import ConsumerLogin       from './pages/consumer/Login';
+import ConsumerRegister    from './pages/consumer/Register';
+import ConsumerOrders      from './pages/consumer/Orders';
+import ConsumerAddresses   from './pages/consumer/Addresses';
+import ConsumerCheckout    from './pages/consumer/Checkout';
+import ConsumerProfile     from './pages/consumer/Profile';
+import VerifyEmail         from './pages/consumer/VerifyEmail';
+import VerifyPending       from './pages/consumer/VerifyPending';
 
 import DeliveryLogin     from './pages/delivery/Login';
 import DeliveryDashboard from './pages/delivery/Dashboard';
@@ -98,8 +102,10 @@ const AppRoutes = () => {
       />
       <Routes>
         <Route path="/"         element={<Landing />} />
-        <Route path="/login"    element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/trader" /> : <Register />} />
+        <Route path="/login"           element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} /> : <Login />} />
+        <Route path="/register"        element={user ? <Navigate to="/trader" /> : <Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password"  element={<ResetPassword />} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<PrivateRoute role="admin"><AdminLayout /></PrivateRoute>}>
@@ -131,8 +137,11 @@ const AppRoutes = () => {
         {/* Consumer / Shop routes */}
         <Route path="/shop" element={<ConsumerLayout />}>
           <Route index element={<Shop />} />
-          <Route path="login"    element={<ConsumerLogin />} />
-          <Route path="register" element={<ConsumerRegister />} />
+          <Route path="login"           element={<ConsumerLogin />} />
+          <Route path="register"        element={<ConsumerRegister />} />
+          <Route path="verify-email"    element={<VerifyEmail />} />
+          <Route path="verify-pending"  element={<VerifyPending />} />
+          <Route path="resend-verification" element={<VerifyPending />} />
           <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />
           <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
           <Route path="checkout"  element={<ConsumerCheckout />} />

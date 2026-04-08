@@ -5,7 +5,7 @@ const crypto  = require('crypto');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate } = require('../middleware/auth');
-const { sendOtpEmail, DEV_MODE } = require('../services/emailService');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -134,26 +134,16 @@ router.get('/validate-referral/:code', (req, res) => {
 router.get('/me', authenticate, (req, res) => res.json({ user: req.user }));
 
 /* ══════════════════════════════════════════════════════════════
-   CONSUMER AUTH  — OTP-based (no passwords)
+   CONSUMER AUTH — Email + Password with email verification
    Flow:
-     Register: POST /consumer/send-otp (with name, email)
-               POST /consumer/verify-otp  → { needs_registration, phone_verified_token }
-               POST /consumer/complete-registration (new users only)
-     Login:    POST /consumer/send-otp (phone only)
-               POST /consumer/verify-otp  → { token, consumer }
+     Register: POST /consumer/register  → creates account, sends verification email
+               GET  /consumer/verify-email?token=xxx → marks email as verified
+               POST /consumer/resend-verification → resend verification email
+     Login:    POST /consumer/login → { email, password } → { token, consumer }
 ══════════════════════════════════════════════════════════════ */
-
-/* ── Helpers ──────────────────────────────────────────────── */
-function generateOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 
 function signConsumerToken(id) {
   return jwt.sign({ id, role: 'consumer' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-}
-
-function signPhoneVerifiedToken(phone, email) {
-  return jwt.sign({ phone, email: email || null, type: 'phone_verified' }, process.env.JWT_SECRET, { expiresIn: '15m' });
 }
 
 function safeConsumer(c) {
@@ -162,150 +152,133 @@ function safeConsumer(c) {
   return obj;
 }
 
-/* ── POST /consumer/send-otp ──────────────────────────────── */
-router.post('/consumer/send-otp', [
-  body('phone').trim().notEmpty().withMessage('Phone number is required'),
-  body('email').optional({ nullable: true }).isEmail().normalizeEmail().withMessage('Valid email required if provided'),
-], async (req, res) => {
-  const errs = validationResult(req);
-  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+/** Generate a raw token and store its SHA-256 hash in email_verifications */
+function createVerificationToken(email) {
+  const raw  = crypto.randomBytes(32).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  db.prepare('UPDATE email_verifications SET used = 1 WHERE email = ?').run(email);
+  db.prepare('INSERT INTO email_verifications (email, token_hash, expires_at) VALUES (?, ?, ?)').run(email, hash, expires);
+  return raw;
+}
 
-  const phone = req.body.phone.trim();
-  let email   = req.body.email || null;
+/** Build the verification URL sent in emails */
+function verifyUrl(rawToken) {
+  const base = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+  return `${base}/shop/verify-email?token=${rawToken}`;
+}
 
-  // Look up existing consumer
-  const existing = db.prepare('SELECT * FROM consumers WHERE phone = ?').get(phone);
-
-  if (existing) {
-    // Login path — use stored email if available
-    email = existing.email || email || null;
-    if (!email && !DEV_MODE) return res.status(400).json({ error: 'No email on file. Please register again.' });
-  } else {
-    // Registration path — email is optional (dev mode shows OTP on screen; prod uses SMS)
-    if (email) {
-      const emailTaken = db.prepare('SELECT id FROM consumers WHERE email = ? AND phone != ?').get(email, phone);
-      if (emailTaken) return res.status(409).json({ error: 'Email already in use by another account.' });
-    }
-    if (!email && !DEV_MODE) {
-      return res.status(400).json({ error: 'Email is required for registration in production mode.' });
-    }
-  }
-
-  // Rate limit: max 3 OTPs per phone in last 10 minutes
-  const recentCount = db.prepare(`
-    SELECT COUNT(*) as c FROM consumer_otps
-    WHERE phone = ? AND created_at > datetime('now', '-10 minutes')
-  `).get(phone).c;
-  if (recentCount >= 3) {
-    return res.status(429).json({ error: 'Too many OTP requests. Please wait 10 minutes.' });
-  }
-
-  const otp     = generateOtp();
-  const otpHash = await bcrypt.hash(otp, 10);
-  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-  // Store empty string when no email (NOT NULL column, email is optional in dev mode)
-  db.prepare(`INSERT INTO consumer_otps (phone, email, otp_hash, expires_at) VALUES (?, ?, ?, ?)`)
-    .run(phone, email || '', otpHash, expires);
-
-  const result = email ? await sendOtpEmail(email, phone, otp) : { dev: true };
-
-  const response = { success: true, is_new_user: !existing };
-  if (email) response.email_masked = email.replace(/(.{2}).+(@.+)/, '$1***$2');
-  if (result.dev || DEV_MODE) response.dev_otp = otp;
-
-  res.json(response);
-});
-
-/* ── POST /consumer/verify-otp ────────────────────────────── */
-router.post('/consumer/verify-otp', [
-  body('phone').trim().notEmpty().withMessage('Phone is required'),
-  body('otp').trim().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
-], async (req, res) => {
-  const errs = validationResult(req);
-  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
-
-  const phone = req.body.phone.trim();
-  const otp   = req.body.otp.trim();
-
-  // Find the most recent valid, unused OTP for this phone
-  const record = db.prepare(`
-    SELECT * FROM consumer_otps
-    WHERE phone = ? AND used = 0 AND expires_at > datetime('now')
-    ORDER BY created_at DESC LIMIT 1
-  `).get(phone);
-
-  if (!record) return res.status(400).json({ error: 'OTP expired or not found. Please request a new one.' });
-
-  // Prevent brute force — max 5 attempts per OTP record
-  if (record.attempts >= 5) {
-    db.prepare(`UPDATE consumer_otps SET used = 1 WHERE id = ?`).run(record.id);
-    return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
-  }
-
-  const valid = await bcrypt.compare(otp, record.otp_hash);
-  if (!valid) {
-    db.prepare(`UPDATE consumer_otps SET attempts = attempts + 1 WHERE id = ?`).run(record.id);
-    return res.status(400).json({ error: 'Incorrect OTP. Please try again.' });
-  }
-
-  // Mark OTP as used
-  db.prepare(`UPDATE consumer_otps SET used = 1 WHERE id = ?`).run(record.id);
-
-  // Check if consumer exists
-  const consumer = db.prepare('SELECT * FROM consumers WHERE phone = ?').get(phone);
-
-  if (consumer) {
-    if (consumer.status !== 'active') return res.status(403).json({ error: 'Account suspended.' });
-    return res.json({ token: signConsumerToken(consumer.id), consumer: safeConsumer(consumer) });
-  }
-
-  // New user — return a short-lived token to complete registration
-  const phoneVerifiedToken = signPhoneVerifiedToken(phone, record.email);
-  res.json({ needs_registration: true, phone_verified_token: phoneVerifiedToken, email: record.email, phone });
-});
-
-/* ── POST /consumer/complete-registration ─────────────────── */
-router.post('/consumer/complete-registration', [
-  body('phone_verified_token').notEmpty().withMessage('Verification token required'),
+/* ── POST /consumer/register ──────────────────────────────── */
+router.post('/consumer/register', [
   body('name').trim().notEmpty().withMessage('Name is required'),
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('referral_code').optional({ nullable: true }).trim(),
-  body('address').optional({ nullable: true }).trim(),
-  body('pincode').optional({ nullable: true }).trim(),
 ], async (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
 
-  let payload;
-  try {
-    payload = jwt.verify(req.body.phone_verified_token, process.env.JWT_SECRET);
-  } catch {
-    return res.status(401).json({ error: 'Verification token expired or invalid. Please resend OTP.' });
-  }
-  if (payload.type !== 'phone_verified') return res.status(401).json({ error: 'Invalid token type.' });
+  const { name, email, password, referral_code } = req.body;
 
-  const { phone, email } = payload;
-  const { name, referral_code, address, pincode } = req.body;
+  if (db.prepare('SELECT id FROM consumers WHERE email = ?').get(email))
+    return res.status(409).json({ error: 'Email already registered. Please log in.' });
 
-  // Double-check not already registered (race condition guard)
-  if (db.prepare('SELECT id FROM consumers WHERE phone = ?').get(phone))
-    return res.status(409).json({ error: 'Phone already registered. Please log in.' });
+  // Rate limit: max 5 registrations per email per hour
+  const recentCount = db.prepare(`
+    SELECT COUNT(*) as c FROM email_verifications
+    WHERE email = ? AND created_at > datetime('now', '-1 hour')
+  `).get(email).c;
+  if (recentCount >= 5) return res.status(429).json({ error: 'Too many attempts. Please wait an hour.' });
 
   let linkedDealerId = null, usedCode = null;
   if (referral_code && referral_code.trim()) {
     const dealer = db.prepare(`SELECT * FROM users WHERE referral_code = ? AND role='trader' AND status='active'`).get(referral_code.trim().toUpperCase());
     if (!dealer) return res.status(400).json({ error: 'Invalid referral code.' });
     linkedDealerId = dealer.id;
-    usedCode       = referral_code.trim().toUpperCase();
+    usedCode = referral_code.trim().toUpperCase();
   }
 
-  const result = db.prepare(`
-    INSERT INTO consumers (name, email, phone, address, pincode, referral_code_used, linked_dealer_id, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-  `).run(name, email || null, phone, address || null, pincode || null, usedCode, linkedDealerId);
+  const hash = await bcrypt.hash(password, 10);
+  db.prepare(`
+    INSERT INTO consumers (name, email, password, phone, referral_code_used, linked_dealer_id, email_verified, status)
+    VALUES (?, ?, ?, '', ?, ?, 0, 'active')
+  `).run(name, email, hash, usedCode, linkedDealerId);
 
-  const consumer = db.prepare('SELECT * FROM consumers WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json({ token: signConsumerToken(consumer.id), consumer: safeConsumer(consumer) });
+  const rawToken = createVerificationToken(email);
+  const mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+
+  const response = { success: true, message: 'Account created. Please verify your email.' };
+  if (mailResult.dev) response.dev_token = rawToken;
+  res.status(201).json(response);
+});
+
+/* ── GET /consumer/verify-email ───────────────────────────── */
+router.get('/consumer/verify-email', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+
+  const hash   = crypto.createHash('sha256').update(String(token)).digest('hex');
+  const record = db.prepare(`
+    SELECT * FROM email_verifications
+    WHERE token_hash = ? AND used = 0 AND expires_at > datetime('now')
+  `).get(hash);
+
+  if (!record) return res.status(400).json({ error: 'Invalid or expired verification link. Please request a new one.' });
+
+  db.prepare('UPDATE email_verifications SET used = 1 WHERE id = ?').run(record.id);
+  db.prepare('UPDATE consumers SET email_verified = 1 WHERE email = ?').run(record.email);
+
+  const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(record.email);
+  if (!consumer) return res.status(404).json({ error: 'Account not found.' });
+
+  res.json({ success: true, token: signConsumerToken(consumer.id), consumer: safeConsumer(consumer) });
+});
+
+/* ── POST /consumer/resend-verification ───────────────────── */
+router.post('/consumer/resend-verification', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  const { email } = req.body;
+  const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(email);
+  if (!consumer) return res.status(404).json({ error: 'No account found with this email.' });
+  if (consumer.email_verified) return res.status(400).json({ error: 'Email is already verified.' });
+
+  // Rate limit
+  const recentCount = db.prepare(`
+    SELECT COUNT(*) as c FROM email_verifications
+    WHERE email = ? AND created_at > datetime('now', '-10 minutes')
+  `).get(email).c;
+  if (recentCount >= 3) return res.status(429).json({ error: 'Too many resend attempts. Please wait 10 minutes.' });
+
+  const rawToken   = createVerificationToken(email);
+  const mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
+
+  const response = { success: true };
+  if (mailResult.dev) response.dev_token = rawToken;
+  res.json(response);
+});
+
+/* ── POST /consumer/login ─────────────────────────────────── */
+router.post('/consumer/login', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('password').notEmpty().withMessage('Password is required'),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  const { email, password } = req.body;
+  const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(email);
+  if (!consumer) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (consumer.status !== 'active') return res.status(403).json({ error: 'Account suspended.' });
+  if (!consumer.email_verified) return res.status(403).json({ error: 'Please verify your email before logging in.', code: 'EMAIL_NOT_VERIFIED' });
+
+  const valid = await bcrypt.compare(password, consumer.password);
+  if (!valid) return res.status(401).json({ error: 'Invalid email or password.' });
+
+  res.json({ token: signConsumerToken(consumer.id), consumer: safeConsumer(consumer) });
 });
 
 /* ── GET /consumer/validate-dealer/:code ──────────────────── */
@@ -313,6 +286,63 @@ router.get('/consumer/validate-dealer/:code', (req, res) => {
   const dealer = db.prepare(`SELECT id, name, tier FROM users WHERE referral_code = ? AND role='trader' AND status='active'`).get(req.params.code.toUpperCase());
   if (!dealer) return res.json({ valid: false });
   res.json({ valid: true, dealerName: dealer.name, tier: dealer.tier });
+});
+
+/* ── POST /forgot-password ─────────────────────────────────────────────── */
+/* Works for traders/admin (users table) and consumers (consumers table)    */
+router.post('/forgot-password', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  const { email } = req.body;
+  const user     = db.prepare('SELECT id FROM users     WHERE email = ?').get(email);
+  const consumer = db.prepare('SELECT id FROM consumers WHERE email = ?').get(email);
+  // Don't reveal whether email exists
+  if (!user && !consumer) return res.json({ success: true });
+
+  const raw    = crypto.randomBytes(32).toString('hex');
+  const hashed = crypto.createHash('sha256').update(raw).digest('hex');
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  db.prepare('UPDATE password_resets SET used = 1 WHERE email = ?').run(email);
+  db.prepare('INSERT INTO password_resets (email, token_hash, expires_at) VALUES (?, ?, ?)').run(email, hashed, expires);
+
+  const base     = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+  const resetUrl = `${base}/reset-password?token=${raw}`;
+  const mailResult = await sendPasswordResetEmail(email, resetUrl);
+
+  const response = { success: true };
+  if (mailResult.dev) response.dev_token = raw;
+  res.json(response);
+});
+
+/* ── POST /reset-password ──────────────────────────────────────────────── */
+router.post('/reset-password', [
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('new_password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  const { token, new_password } = req.body;
+  const hashed = crypto.createHash('sha256').update(String(token)).digest('hex');
+
+  const record = db.prepare(`
+    SELECT * FROM password_resets
+    WHERE token_hash = ? AND used = 0 AND expires_at > datetime('now')
+  `).get(hashed);
+
+  if (!record) return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+
+  db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(record.id);
+
+  const newHash = await bcrypt.hash(new_password, 10);
+  db.prepare('UPDATE users     SET password = ? WHERE email = ?').run(newHash, record.email);
+  db.prepare('UPDATE consumers SET password = ? WHERE email = ?').run(newHash, record.email);
+
+  res.json({ success: true });
 });
 
 module.exports = router;
