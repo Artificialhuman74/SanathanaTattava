@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
-  TrendingUp, Mail, Lock, Eye, EyeOff, User, Hash,
+  TrendingUp, Mail, Lock, Eye, EyeOff, User, Hash, Phone,
   ArrowLeft, ShoppingCart, CheckCircle2, AlertCircle, Tag,
 } from 'lucide-react';
 
@@ -14,6 +14,7 @@ export default function ConsumerRegister() {
 
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
+  const [phone,    setPhone]    = useState('');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
   const [refCode,  setRefCode]  = useState('');
@@ -44,7 +45,7 @@ export default function ConsumerRegister() {
 
     setLoading(true);
     try {
-      await consumerRegister(name.trim(), email.trim(), password, refCode.trim() || undefined);
+      await consumerRegister(name.trim(), email.trim(), password, refCode.trim() || undefined, phone.trim() || undefined);
       toast.success('Account created! Check your email to verify.');
       navigate('/shop/verify-pending', { state: { email } });
     } catch (err: any) {
@@ -90,6 +91,14 @@ export default function ConsumerRegister() {
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="form-input pl-10" placeholder="you@example.com" autoComplete="email" required />
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label">Phone Number <span className="text-slate-400 font-normal text-xs">(optional, for delivery)</span></label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="form-input pl-10" placeholder="e.g. 9876543210" autoComplete="tel" />
               </div>
             </div>
 

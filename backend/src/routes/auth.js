@@ -174,11 +174,12 @@ router.post('/consumer/register', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('referral_code').optional({ nullable: true }).trim(),
+  body('phone').optional({ nullable: true }).trim(),
 ], async (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
 
-  const { name, email, password, referral_code } = req.body;
+  const { name, email, password, referral_code, phone } = req.body;
 
   if (db.prepare('SELECT id FROM consumers WHERE email = ?').get(email))
     return res.status(409).json({ error: 'Email already registered. Please log in.' });
@@ -200,9 +201,9 @@ router.post('/consumer/register', [
 
   const hash = await bcrypt.hash(password, 10);
   db.prepare(`
-    INSERT INTO consumers (name, email, password, referral_code_used, linked_dealer_id, email_verified, status)
-    VALUES (?, ?, ?, ?, ?, 0, 'active')
-  `).run(name, email, hash, usedCode, linkedDealerId);
+    INSERT INTO consumers (name, email, password, phone, referral_code_used, linked_dealer_id, email_verified, status)
+    VALUES (?, ?, ?, ?, ?, ?, 0, 'active')
+  `).run(name, email, hash, phone || null, usedCode, linkedDealerId);
 
   const rawToken = createVerificationToken(email);
 

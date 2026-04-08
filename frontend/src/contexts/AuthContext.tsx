@@ -54,7 +54,7 @@ interface AuthContextType {
   logout: () => void;
   /* Consumer email+password auth */
   consumerLogin: (email: string, password: string) => Promise<void>;
-  consumerRegister: (name: string, email: string, password: string, referralCode?: string) => Promise<void>;
+  consumerRegister: (name: string, email: string, password: string, referralCode?: string, phone?: string) => Promise<void>;
   consumerLoginWithToken: (token: string, consumer: Consumer) => void;
   consumerLogout: () => void;
   refreshConsumer: () => Promise<void>;
@@ -141,8 +141,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     persistConsumer(data.token, data.consumer);
   }, []);
 
-  const consumerRegister = useCallback(async (name: string, email: string, password: string, referralCode?: string) => {
-    await api.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined });
+  const consumerRegister = useCallback(async (name: string, email: string, password: string, referralCode?: string, phone?: string) => {
+    await api.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined, phone: phone || undefined });
     // Account created but not yet verified — do NOT log in yet
   }, []);
 
