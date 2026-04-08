@@ -2,12 +2,13 @@
  * Email Service — Gmail SMTP via Nodemailer
  *
  * Required env vars (set in Railway / .env):
- *   EMAIL_USER  — Gmail address (e.g. yourapp@gmail.com)
- *   EMAIL_PASS  — Gmail App Password (NOT your login password)
- *                 Generate at: myaccount.google.com → Security → 2-Step Verification → App passwords
+ *   EMAIL_USER  — your email address (e.g. hello@yourdomain.com)
+ *   EMAIL_PASS  — your email password
+ *   EMAIL_HOST  — SMTP host (default: smtp.titan.email)
+ *   EMAIL_PORT  — SMTP port (default: 587)
  *
  * Dev mode (EMAIL_USER not set):
- *   Emails are NOT sent. Token/OTP is returned in the API response as `dev_token` / `dev_otp`.
+ *   Emails are NOT sent. Token is returned in the API response as `dev_token`.
  */
 
 const nodemailer = require('nodemailer');
@@ -15,10 +16,12 @@ const nodemailer = require('nodemailer');
 const DEV_MODE = !process.env.EMAIL_USER;
 
 function getTransporter() {
+  const port   = parseInt(process.env.EMAIL_PORT || '587');
+  const secure = port === 465;
   return nodemailer.createTransport({
-    host:   'smtp.gmail.com',
-    port:   587,
-    secure: false, // STARTTLS
+    host:   process.env.EMAIL_HOST || 'smtp.titan.email',
+    port,
+    secure,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
