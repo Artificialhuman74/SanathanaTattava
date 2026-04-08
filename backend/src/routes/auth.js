@@ -200,8 +200,8 @@ router.post('/consumer/register', [
 
   const hash = await bcrypt.hash(password, 10);
   db.prepare(`
-    INSERT INTO consumers (name, email, password, phone, referral_code_used, linked_dealer_id, email_verified, status)
-    VALUES (?, ?, ?, '', ?, ?, 0, 'active')
+    INSERT INTO consumers (name, email, password, referral_code_used, linked_dealer_id, email_verified, status)
+    VALUES (?, ?, ?, ?, ?, 0, 'active')
   `).run(name, email, hash, usedCode, linkedDealerId);
 
   const rawToken = createVerificationToken(email);

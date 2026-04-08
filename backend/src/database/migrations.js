@@ -284,6 +284,49 @@ function runMigrations(db) {
     )
   `);
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration 9:  Make consumers.phone nullable
+   *
+   * The original schema had phone TEXT UNIQUE NOT NULL, which breaks
+   * email-only registrations. Recreate the table with phone nullable.
+   * ═══════════════════════════════════════════════════════════════════ */
+  const phoneInfo = db.pragma('table_info(consumers)').find(c => c.name === 'phone');
+  if (phoneInfo && phoneInfo.notnull === 1) {
+    db.exec(`PRAGMA foreign_keys = OFF`);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS consumers_v2 (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        name               TEXT NOT NULL,
+        email              TEXT UNIQUE,
+        password           TEXT,
+        phone              TEXT UNIQUE,
+        address            TEXT,
+        pincode            TEXT,
+        referral_code_used TEXT,
+        linked_dealer_id   INTEGER REFERENCES users(id),
+        status             TEXT NOT NULL DEFAULT 'active',
+        email_verified     INTEGER NOT NULL DEFAULT 0,
+        created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec(`
+      INSERT OR IGNORE INTO consumers_v2
+        (id, name, email, password, phone, address, pincode,
+         referral_code_used, linked_dealer_id, status, email_verified, created_at)
+      SELECT id, name, email, password,
+             CASE WHEN phone = '' THEN NULL ELSE phone END,
+             address, pincode, referral_code_used, linked_dealer_id,
+             status,
+             COALESCE(email_verified, 0),
+             created_at
+      FROM consumers
+    `);
+    db.exec(`DROP TABLE consumers`);
+    db.exec(`ALTER TABLE consumers_v2 RENAME TO consumers`);
+    db.exec(`PRAGMA foreign_keys = ON`);
+    console.log('[migration] consumers: phone is now nullable');
+  }
+
   console.log('[migration] all migrations applied');
 }
 
