@@ -69,12 +69,20 @@ export default function Landing() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Logo grows from small card → full background as scrollY goes 0 → 500
-  const progress   = Math.min(scrollY / 500, 1);
-  const logoSize   = 112 + progress * (Math.max(window.innerWidth, window.innerHeight) - 112);
-  const logoRadius = 24 * (1 - progress);
-  const logoOpacity = progress < 0.6 ? 1 : 1 - (progress - 0.6) / 0.4 * 0.85; // fade to 0.15
-  const textOpacity = Math.max(0, 1 - progress * 3);
+  // progress: 0 → 1 over first 400px of scroll
+  const progress    = Math.min(scrollY / 400, 1);
+
+  // Logo starts at 75vh tall, expands to 100vh
+  const logoHeightVh = 75 + progress * 25;
+
+  // Bottom corners round from 24px → 0 as it expands edge-to-edge
+  const logoRadius   = 24 * Math.max(0, 1 - progress * 2);
+
+  // Logo fades to a subtle background after 50% scroll
+  const logoOpacity  = progress < 0.5 ? 1 : Math.max(0.13, 1 - (progress - 0.5) * 2 * 0.87);
+
+  // Text below logo fades out in the first 35% of scroll
+  const textOpacity  = Math.max(0, 1 - progress / 0.35);
 
   return (
     <div className="bg-white overflow-x-hidden">
@@ -85,61 +93,54 @@ export default function Landing() {
         className="relative h-[180vh]"
         style={{ background: 'linear-gradient(160deg, #f0fdf4 0%, #dcfce7 60%, #f0fdf4 100%)' }}
       >
-        {/* Sticky inner — stays in viewport while scrolling through hero */}
-        <div className="sticky top-0 h-screen flex flex-col items-center justify-center overflow-hidden">
+        {/* Sticky viewport — stays fixed while user scrolls through the 180vh block */}
+        <div className="sticky top-0 h-screen overflow-hidden flex flex-col">
 
-          {/* Growing logo */}
+          {/* Logo — fills top 75% initially, expands to full screen on scroll */}
           <div
-            className="absolute"
             style={{
-              width:  logoSize,
-              height: logoSize,
-              borderRadius: logoRadius,
-              overflow: 'hidden',
-              opacity: logoOpacity,
-              transition: 'none',
-              pointerEvents: 'none',
-              boxShadow: progress < 0.3 ? '0 20px 60px rgba(0,0,0,0.12)' : 'none',
+              height:        `${logoHeightVh}vh`,
+              flexShrink:    0,
+              overflow:      'hidden',
+              opacity:       logoOpacity,
+              borderRadius:  `0 0 ${logoRadius}px ${logoRadius}px`,
             }}
           >
             <img
               src="/Gemini_Generated_Image_agra6kagra6kagra.png"
               alt="Sanathana Tattva"
               className="w-full h-full object-cover"
+              style={{ objectPosition: 'center center' }}
             />
           </div>
 
-          {/* Foreground content — fades out as logo grows */}
+          {/* Text — sits naturally below the logo in the remaining 25vh */}
           <div
-            className="relative z-10 flex flex-col items-center text-center px-6 pointer-events-none"
+            className="flex-1 flex flex-col items-center justify-center px-6 pb-4"
             style={{ opacity: textOpacity }}
           >
-            {/* Spacer so text sits below the logo card */}
-            <div style={{ height: 140 }} />
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-4 mb-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1 text-center">
               Sanathana Tattva
             </h1>
-            <p className="text-slate-500 text-base max-w-xs mb-10">
+            <p className="text-slate-500 text-sm text-center max-w-xs mb-6">
               Cold pressed oils crafted the traditional way, delivered to your doorstep.
             </p>
-
-            {/* CTAs — pointer events restored */}
-            <div className="pointer-events-auto w-full max-w-xs space-y-3">
+            <div className="w-full max-w-xs space-y-2.5">
               <button
                 onClick={() => navigate('/shop/login')}
-                className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl text-base transition-colors shadow-md"
+                className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl text-sm transition-colors shadow-md"
               >
                 Sign In
               </button>
               <button
                 onClick={() => navigate('/shop/register')}
-                className="w-full py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl text-base border border-slate-200 transition-colors shadow-sm"
+                className="w-full py-3 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-2xl text-sm border border-slate-200 transition-colors shadow-sm"
               >
                 Create Account
               </button>
               <button
                 onClick={() => navigate('/shop')}
-                className="w-full py-3 text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors"
+                className="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-medium transition-colors"
               >
                 Continue as Guest →
               </button>
@@ -148,11 +149,11 @@ export default function Landing() {
 
           {/* Scroll hint */}
           <div
-            className="absolute bottom-8 flex flex-col items-center gap-1"
-            style={{ opacity: Math.max(0, 1 - progress * 5) }}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
+            style={{ opacity: Math.max(0, 1 - progress * 6) }}
           >
             <span className="text-xs text-slate-400">Scroll to explore</span>
-            <ChevronDown size={16} className="text-slate-300 animate-bounce" />
+            <ChevronDown size={14} className="text-slate-300 animate-bounce" />
           </div>
         </div>
       </div>
