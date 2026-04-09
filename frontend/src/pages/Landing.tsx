@@ -2,6 +2,70 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Leaf, Droplets, Heart, Zap, Shield, Users, ArrowRight, ChevronDown } from 'lucide-react';
 
+/** Fires `visible` once when the element enters the viewport */
+function useReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return { ref, visible };
+}
+
+/** Grid that tracks when it enters the viewport and marks itself visible */
+function RevealGrid({ children, className }: { children: React.ReactNode; className?: string }) {
+  const { ref, visible } = useReveal();
+  return (
+    <div ref={ref} className={className} data-visible={visible ? 'true' : 'false'}>
+      {children}
+    </div>
+  );
+}
+
+/** Individual card that reads `data-visible` from its parent grid and animates in */
+function AnimCard({ children, index, className }: { children: React.ReactNode; index: number; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Watch the parent RevealGrid's data-visible attribute
+    const parent = el.closest('[data-visible]') as HTMLElement | null;
+    if (!parent) return;
+    if (parent.dataset.visible === 'true') { setTimeout(() => setShow(true), index * 80); return; }
+    const obs = new MutationObserver(() => {
+      if (parent.dataset.visible === 'true') {
+        setTimeout(() => setShow(true), index * 80);
+        obs.disconnect();
+      }
+    });
+    obs.observe(parent, { attributes: true, attributeFilter: ['data-visible'] });
+    return () => obs.disconnect();
+  }, [index]);
+
+  return (
+    <div
+      ref={ref}
+      className={`p-6 rounded-2xl border border-slate-100 hover:border-brand-200 hover:shadow-md transition-all group ${className ?? ''}`}
+      style={{
+        opacity:    show ? 1 : 0,
+        transform:  show ? 'translateY(0)' : 'translateY(28px)',
+        transition: 'opacity 0.5s ease, transform 0.5s ease',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 const BENEFITS = [
   {
     icon: Leaf,
@@ -173,17 +237,17 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {BENEFITS.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="p-6 rounded-2xl border border-slate-100 hover:border-brand-200 hover:shadow-md transition-all group">
+          <RevealGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {BENEFITS.map(({ icon: Icon, title, desc }, i) => (
+              <AnimCard key={title} index={i}>
                 <div className="w-11 h-11 bg-brand-50 group-hover:bg-brand-100 rounded-xl flex items-center justify-center mb-4 transition-colors">
                   <Icon className="w-5 h-5 text-brand-600" />
                 </div>
                 <h3 className="font-bold text-slate-900 mb-2">{title}</h3>
                 <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
-              </div>
+              </AnimCard>
             ))}
-          </div>
+          </RevealGrid>
 
           <div className="text-center mt-12">
             <button
@@ -229,19 +293,21 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
-            {TRADER_STEPS.map(({ num, title, desc }) => (
-              <div key={num} className="bg-white p-6 rounded-2xl border border-slate-100 flex gap-5">
-                <div className="text-3xl font-extrabold text-brand-100 leading-none flex-shrink-0 select-none">
-                  {num}
+          <RevealGrid className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+            {TRADER_STEPS.map(({ num, title, desc }, i) => (
+              <AnimCard key={num} index={i}>
+                <div className="flex gap-5">
+                  <div className="text-3xl font-extrabold text-brand-100 leading-none flex-shrink-0 select-none">
+                    {num}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 mb-1.5">{title}</h3>
+                    <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-1.5">{title}</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
-                </div>
-              </div>
+              </AnimCard>
             ))}
-          </div>
+          </RevealGrid>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-5">
             <div>
