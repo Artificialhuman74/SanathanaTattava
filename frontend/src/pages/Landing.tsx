@@ -66,22 +66,24 @@ export default function Landing() {
     <div className="min-h-screen bg-white overflow-x-hidden">
       {/* Navbar — consumer-focused */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg" alt="Sanathana Tattva" />
-            <span className="font-bold text-base text-slate-900 leading-tight">Sanathana Tattva</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
+          <div className="flex items-center gap-2.5 cursor-pointer min-w-0" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 flex-shrink-0 object-contain rounded-lg" alt="Sanathana Tattva" />
+            <span className="font-bold text-base text-slate-900 leading-tight hidden sm:block">Sanathana Tattva</span>
           </div>
           <div className="flex-1" />
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
             <button onClick={() => navigate('/shop')} className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
-              <ShoppingCart size={15} />
-              Shop
+              <ShoppingCart size={15} /> Shop
             </button>
-            <button onClick={() => navigate('/shop/login')} className="btn-ghost text-slate-700 text-sm">
+            <button onClick={() => navigate('/shop/login')} className="hidden sm:flex btn-ghost text-slate-700 text-sm">
               Sign In
             </button>
-            <button onClick={() => navigate('/shop/register')} className="btn-primary text-sm px-4 py-2">
-              Register <ArrowRight size={14} />
+            <button onClick={() => navigate('/shop/login')} className="flex sm:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors" aria-label="Sign In">
+              <ShoppingCart size={18} />
+            </button>
+            <button onClick={() => navigate('/shop/register')} className="btn-primary text-sm px-3 py-2 sm:px-4">
+              <span className="hidden sm:inline">Register </span><ArrowRight size={14} />
             </button>
           </div>
         </div>
@@ -143,22 +145,22 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Hero Image */}
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 mt-16">
-          <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50">
+        {/* Hero Logo */}
+        <div className="relative max-w-xs mx-auto px-4 sm:px-6 mt-12 flex flex-col items-center">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 rounded-3xl overflow-hidden border-4 border-white/20 shadow-2xl shadow-black/50">
             <img
-              src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&q=80"
-              alt="TradeHub marketplace preview"
-              className="w-full object-cover h-48 sm:h-72 md:h-96"
+              src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+              alt="Sanathana Tattva"
+              className="w-full h-full object-contain bg-white/5 p-2"
             />
           </div>
-          <div className="absolute -bottom-4 -right-2 sm:right-8 bg-white rounded-xl p-3 sm:p-4 shadow-xl border border-slate-100 flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <Truck className="w-5 h-5 text-emerald-600" />
+          <div className="mt-6 flex items-center gap-3 bg-white rounded-xl px-4 py-3 shadow-xl border border-slate-100">
+            <div className="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Truck className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium">Delivered to your door</p>
-              <p className="text-base font-bold text-slate-900">Fast & Free</p>
+              <p className="text-sm font-bold text-slate-900">Fast & Local</p>
             </div>
           </div>
         </div>

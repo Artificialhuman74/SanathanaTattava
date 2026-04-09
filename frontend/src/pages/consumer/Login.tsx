@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { TrendingUp, Mail, Lock, Eye, EyeOff, ShoppingBag, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ShoppingBag, ShoppingCart, ArrowLeft } from 'lucide-react';
 
 export default function ConsumerLogin() {
   const { consumerLogin } = useAuth();
@@ -45,11 +45,9 @@ export default function ConsumerLogin() {
         </div>
 
         <div className="text-center mb-8">
-          <Link to="/shop" className="inline-flex items-center gap-2 justify-center">
-            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-2xl font-extrabold text-slate-900">TradeHub</span>
+          <Link to="/shop" className="inline-flex items-center gap-2.5 justify-center">
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-10 w-10 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <span className="text-xl font-extrabold text-slate-900 leading-tight">Sanathana Tattva</span>
           </Link>
           <p className="text-slate-500 mt-2 text-sm">Sign in to your account</p>
         </div>
