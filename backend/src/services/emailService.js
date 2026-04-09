@@ -1,39 +1,16 @@
 /**
- * Email Service — Gmail SMTP via Nodemailer
+ * Email Service — Resend HTTP API
  *
- * Required env vars (set in Railway / .env):
- *   EMAIL_USER  — your email address (e.g. hello@yourdomain.com)
- *   EMAIL_PASS  — your email password
- *   EMAIL_HOST  — SMTP host (default: smtp.titan.email)
- *   EMAIL_PORT  — SMTP port (default: 587)
+ * Required env vars:
+ *   RESEND_API_KEY  — API key from resend.com
  *
- * Dev mode (EMAIL_USER not set):
- *   Emails are NOT sent. Token is returned in the API response as `dev_token`.
+ * Dev mode (RESEND_API_KEY not set):
+ *   Emails are NOT sent. OTP is returned in the API response as `dev_otp`.
  */
 
-const nodemailer = require('nodemailer');
+const DEV_MODE = !process.env.RESEND_API_KEY;
 
-const DEV_MODE = !process.env.EMAIL_USER;
-
-function getTransporter() {
-  const port   = parseInt(process.env.EMAIL_PORT || '465');
-  const secure = port === 465;
-  return nodemailer.createTransport({
-    host:              process.env.EMAIL_HOST || 'smtp.titan.email',
-    port,
-    secure,
-    connectionTimeout: 10000,
-    greetingTimeout:   10000,
-    socketTimeout:     15000,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    tls: { rejectUnauthorized: false },
-  });
-}
-
-const FROM = process.env.EMAIL_FROM || `Sanathana Tattva <${process.env.EMAIL_USER}>`;
+const FROM = process.env.EMAIL_FROM || 'Sanathana Tattva <namaste@sanathanatattva.shop>';
 
 /* ── Generic send helper ──────────────────────────────────────────────── */
 async function sendMail({ to, subject, text, html }) {
@@ -41,8 +18,21 @@ async function sendMail({ to, subject, text, html }) {
     console.log(`\n📧 [EMAIL DEV] To: ${to} | Subject: ${subject}\n`);
     return { dev: true };
   }
-  const transporter = getTransporter();
-  await transporter.sendMail({ from: FROM, to, subject, text, html });
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: FROM, to, subject, text, html }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resend API error ${res.status}: ${err}`);
+  }
+
   return { dev: false };
 }
 
