@@ -133,41 +133,74 @@ export default function Landing() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // progress: 0 → 1 over first 400px of scroll
-  const progress    = Math.min(scrollY / 400, 1);
+  // progress: 0 → 1 over first 500px of scroll
+  const progress = Math.min(scrollY / 500, 1);
 
-  // Logo starts at 75vh tall, expands to 100vh
-  const logoHeightVh = 75 + progress * 25;
+  // Logo: starts at 37vh (50% smaller than before), expands to 100vh
+  const logoHeightVh = 37 + progress * 63;
 
-  // Bottom corners round from 24px → 0 as it expands edge-to-edge
-  const logoRadius   = 24 * Math.max(0, 1 - progress * 2);
+  // Bottom corners soften to 0 as logo fills edge-to-edge
+  const logoRadius = 20 * Math.max(0, 1 - progress * 2.5);
 
-  // Logo fades to a subtle background after 50% scroll
-  const logoOpacity  = progress < 0.5 ? 1 : Math.max(0.13, 1 - (progress - 0.5) * 2 * 0.87);
+  // Logo fades to subtle bg after 55% progress
+  const logoOpacity = progress < 0.55 ? 1 : Math.max(0.12, 1 - (progress - 0.55) / 0.45 * 0.88);
 
-  // Text below logo fades out in the first 35% of scroll
-  const textOpacity  = Math.max(0, 1 - progress / 0.35);
+  // Hero text fades out in first 25% of scroll
+  const textOpacity = Math.max(0, 1 - progress / 0.25);
+
+  // Sticky nav fades in after 120px scroll
+  const navOpacity = Math.min(Math.max(0, (scrollY - 120) / 80), 1);
+  const navVisible = scrollY > 120;
 
   return (
     <div className="bg-white overflow-x-hidden">
 
+      {/* ── Sticky top nav — fades in on scroll ───────────────── */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-b border-slate-100 shadow-sm"
+        style={{
+          opacity:        navOpacity,
+          pointerEvents:  navVisible ? 'auto' : 'none',
+          transform:      `translateY(${navVisible ? 0 : -6}px)`,
+          transition:     'transform 0.3s ease',
+        }}
+      >
+        <div className="max-w-lg mx-auto px-5 h-14 flex items-center gap-3">
+          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 rounded-lg object-contain flex-shrink-0" alt="logo" />
+          <span className="font-bold text-slate-900 text-sm flex-1 truncate">Sanathana Tattva</span>
+          <button
+            onClick={() => navigate('/shop/register')}
+            className="text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors px-2 hidden sm:block"
+          >
+            Register
+          </button>
+          <button
+            onClick={() => navigate('/shop/login')}
+            className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+
       {/* ── Hero ──────────────────────────────────────────────── */}
       <div
         ref={heroRef}
-        className="relative h-[180vh]"
+        className="relative h-[200vh]"
         style={{ background: 'linear-gradient(160deg, #f0fdf4 0%, #dcfce7 60%, #f0fdf4 100%)' }}
       >
-        {/* Sticky viewport — stays fixed while user scrolls through the 180vh block */}
+        {/* Sticky viewport */}
         <div className="sticky top-0 h-screen overflow-hidden flex flex-col">
 
-          {/* Logo — fills top 75% initially, expands to full screen on scroll */}
+          {/* Logo — starts at 37vh, expands to fill screen on scroll */}
           <div
             style={{
-              height:        `${logoHeightVh}vh`,
-              flexShrink:    0,
-              overflow:      'hidden',
-              opacity:       logoOpacity,
-              borderRadius:  `0 0 ${logoRadius}px ${logoRadius}px`,
+              height:       `${logoHeightVh}vh`,
+              flexShrink:   0,
+              overflow:     'hidden',
+              opacity:      logoOpacity,
+              borderRadius: `0 0 ${logoRadius}px ${logoRadius}px`,
+              transition:   'border-radius 0.05s linear',
             }}
           >
             <img
@@ -178,15 +211,15 @@ export default function Landing() {
             />
           </div>
 
-          {/* Text — sits naturally below the logo in the remaining 25vh */}
+          {/* Text — fills remaining space below logo */}
           <div
-            className="flex-1 flex flex-col items-center justify-center px-6 pb-4"
-            style={{ opacity: textOpacity }}
+            className="flex-1 flex flex-col items-center justify-center px-6"
+            style={{ opacity: textOpacity, pointerEvents: textOpacity > 0.1 ? 'auto' : 'none' }}
           >
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1 text-center">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1.5 text-center">
               Sanathana Tattva
             </h1>
-            <p className="text-slate-500 text-sm text-center max-w-xs mb-6">
+            <p className="text-slate-500 text-sm text-center max-w-xs mb-7 leading-relaxed">
               Cold pressed oils crafted the traditional way, delivered to your doorstep.
             </p>
             <div className="w-full max-w-xs space-y-2.5">
@@ -209,15 +242,15 @@ export default function Landing() {
                 Continue as Guest →
               </button>
             </div>
-          </div>
 
-          {/* Scroll hint */}
-          <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
-            style={{ opacity: Math.max(0, 1 - progress * 6) }}
-          >
-            <span className="text-xs text-slate-400">Scroll to explore</span>
-            <ChevronDown size={14} className="text-slate-300 animate-bounce" />
+            {/* Scroll hint — only before first scroll */}
+            <div
+              className="mt-6 flex flex-col items-center gap-1"
+              style={{ opacity: scrollY < 20 ? 1 : 0, transition: 'opacity 0.4s ease' }}
+            >
+              <span className="text-xs text-slate-300">Scroll to explore</span>
+              <ChevronDown size={13} className="text-slate-200 animate-bounce" />
+            </div>
           </div>
         </div>
       </div>
