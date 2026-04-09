@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import api from '../../api/axios';
+import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   Mail, Lock, Eye, EyeOff, User, Hash, Phone,
@@ -29,7 +28,7 @@ export default function ConsumerRegister() {
     const code = refCode.trim().toUpperCase();
     if (code.length < 5) { setCodeValid(null); setDealerName(''); return; }
     const t = setTimeout(() => {
-      api.get(`/auth/consumer/validate-dealer/${code}`)
+      consumerApi.get(`/auth/consumer/validate-dealer/${code}`)
         .then(r => { setCodeValid(r.data.valid); setDealerName(r.data.dealerName || ''); })
         .catch(() => setCodeValid(false));
     }, 350);
