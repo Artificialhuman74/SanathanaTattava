@@ -7,30 +7,41 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Deep forest green — extracted from the Sanathana Tattva logo
         brand: {
-          50:  '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
-          950: '#052e16',
+          50:  '#f2f7f3',
+          100: '#d9ece0',
+          200: '#b0d6be',
+          300: '#7db89a',
+          400: '#4e9874',
+          500: '#297a4d',
+          600: '#1a6b2e',  // primary action (buttons, links)
+          700: '#14532d',  // hover state
+          800: '#0f3d1a',  // deep dark (sidebars, headers)
+          900: '#092510',
+          950: '#040f07',
         },
+        // Warm amber gold — the lettering and drop colour from the logo
         gold: {
-          50:  '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
+          50:  '#fdf8ee',
+          100: '#f8edcc',
+          200: '#f0d898',
+          300: '#e8c164',
+          400: '#e8b86d',  // light gold
+          500: '#c8963c',  // main gold
+          600: '#a87830',
+          700: '#885c24',
+          800: '#6a4219',
+          900: '#4e2e0f',
+        },
+        // Warm parchment/cream — the burlap background from the logo
+        parchment: {
+          50:  '#fdfaf5',
+          100: '#fdf8f0',  // main page background
+          200: '#f5ede0',  // alternate sections
+          300: '#ede3d0',
+          400: '#e0d0b8',
+          500: '#c8b898',
         },
       },
       backgroundImage: {

@@ -42,7 +42,7 @@ export default function DeliveryLayout() {
   ];
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
+    <div className="flex flex-col h-screen bg-parchment-100">
       <LocationPrompt />
 
       {/* Top Header */}

@@ -6,13 +6,15 @@
   * { @apply box-border; }
   html { @apply scroll-smooth; }
   body {
-    @apply font-sans text-slate-900 bg-slate-50 antialiased;
+    @apply font-sans antialiased;
+    background-color: #fdf8f0;
+    color: #1c1a14;
     -webkit-tap-highlight-color: transparent;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-slate-100; }
-  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400; }
+  ::-webkit-scrollbar-track { background: #f5ede0; }
+  ::-webkit-scrollbar-thumb { background: #c8b898; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a87830; }
 }
 
 @layer components {
@@ -45,16 +47,19 @@
            transition-all duration-200;
   }
   .card {
-    @apply bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden;
+    @apply bg-white rounded-2xl shadow-card overflow-hidden;
+    border: 1px solid #e8dcc8;
   }
   .form-input {
-    @apply w-full px-4 py-3 rounded-xl border border-slate-200
-           text-slate-900 placeholder-slate-400 text-sm
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-           transition-all duration-200 bg-white;
+    @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 bg-white;
+    border: 1px solid #e8dcc8;
+    color: #1c1a14;
   }
+  .form-input::placeholder { color: #a89880; }
+  .form-input:focus { border-color: transparent; box-shadow: 0 0 0 2px #1a6b2e; }
   .form-label {
-    @apply block text-sm font-medium text-slate-700 mb-1.5;
+    @apply block text-sm font-medium mb-1.5;
+    color: #5c3d1a;
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
@@ -74,10 +79,11 @@
     @apply overflow-x-auto -mx-4 sm:mx-0;
   }
   table { @apply w-full text-sm; }
-  thead tr { @apply bg-slate-50 border-b border-slate-100; }
-  thead th { @apply px-4 py-3 text-left font-semibold text-slate-600 whitespace-nowrap; }
-  tbody tr { @apply border-b border-slate-50 hover:bg-slate-50/80 transition-colors; }
-  tbody td { @apply px-4 py-3.5 text-slate-700; }
+  thead tr { border-bottom: 1px solid #e8dcc8; background: #fdf8f0; }
+  thead th { @apply px-4 py-3 text-left font-semibold whitespace-nowrap; color: #5c3d1a; }
+  tbody tr { border-bottom: 1px solid #f5ede0; transition: background 0.15s; }
+  tbody tr:hover { background: #fdf8f0; }
+  tbody td { @apply px-4 py-3.5; color: #3d2e1a; }
 }
 
 @layer utilities {
