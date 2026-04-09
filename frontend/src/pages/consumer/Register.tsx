@@ -40,13 +40,14 @@ export default function ConsumerRegister() {
     e.preventDefault();
     if (!name.trim())  { toast.error('Please enter your name'); return; }
     if (!email.trim()) { toast.error('Please enter your email'); return; }
+    if (!phone.trim()) { toast.error('Please enter your phone number'); return; }
     if (password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
     if (password !== confirm) { toast.error('Passwords do not match'); return; }
     if (refCode && codeValid === false) { toast.error('Invalid referral code'); return; }
 
     setLoading(true);
     try {
-      await consumerRegister(name.trim(), email.trim(), password, refCode.trim() || undefined, phone.trim() || undefined);
+      await consumerRegister(name.trim(), email.trim(), password, refCode.trim() || undefined, phone.trim());
       toast.success('Account created! Check your email to verify.');
       navigate('/shop/verify-pending', { state: { email } });
     } catch (err: any) {
@@ -94,10 +95,10 @@ export default function ConsumerRegister() {
             </div>
 
             <div>
-              <label className="form-label">Phone Number <span className="text-slate-400 font-normal text-xs">(optional, for delivery)</span></label>
+              <label className="form-label">Phone Number <span className="text-red-500">*</span></label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="form-input pl-10" placeholder="e.g. 9876543210" autoComplete="tel" />
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="form-input pl-10" placeholder="e.g. 9876543210" autoComplete="tel" required />
               </div>
             </div>
 
