@@ -276,7 +276,7 @@ router.post('/consumer/login', [
 
   const { email, password } = req.body;
   const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(email);
-  if (!consumer) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!consumer) return res.status(401).json({ error: 'No account found with this email.', code: 'EMAIL_NOT_FOUND' });
   if (consumer.status !== 'active') return res.status(403).json({ error: 'Account suspended.' });
   if (!consumer.email_verified) return res.status(403).json({ error: 'Please verify your email before logging in.', code: 'EMAIL_NOT_VERIFIED' });
 

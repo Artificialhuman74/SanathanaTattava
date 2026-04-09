@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
-  TrendingUp, Mail, Lock, Eye, EyeOff, User, Hash, Phone,
+  Mail, Lock, Eye, EyeOff, User, Hash, Phone,
   ArrowLeft, ShoppingCart, CheckCircle2, AlertCircle, Tag,
 } from 'lucide-react';
 
 export default function ConsumerRegister() {
   const { consumerRegister } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [name,     setName]     = useState('');
-  const [email,    setEmail]    = useState('');
+  const [email,    setEmail]    = useState((location.state as any)?.email || '');
   const [phone,    setPhone]    = useState('');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
@@ -65,13 +66,11 @@ export default function ConsumerRegister() {
         </div>
 
         <div className="text-center mb-6">
-          <Link to="/shop" className="inline-flex items-center gap-2 justify-center">
-            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-2xl font-extrabold text-slate-900">TradeHub</span>
+          <Link to="/" className="inline-flex items-center gap-2.5 justify-center">
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-10 w-10 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <span className="text-xl font-extrabold text-slate-900 leading-tight">Sanathana Tattva</span>
           </Link>
-          <p className="text-slate-500 mt-2 text-sm">Create your shopping account</p>
+          <p className="text-slate-500 mt-2 text-sm">Create your account</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sm:p-8">

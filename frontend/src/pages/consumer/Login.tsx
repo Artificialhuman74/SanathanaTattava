@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, ShoppingBag, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function ConsumerLogin() {
   const { consumerLogin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [email,    setEmail]    = useState('');
+  const [email,    setEmail]    = useState((location.state as any)?.email || '');
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [loading,  setLoading]  = useState(false);
@@ -19,16 +20,17 @@ export default function ConsumerLogin() {
     setLoading(true);
     try {
       await consumerLogin(email, password);
-      toast.success('Welcome back!');
       navigate('/shop', { replace: true });
     } catch (err: any) {
       const code = err.response?.data?.code;
-      const msg  = err.response?.data?.error || 'Login failed';
-      if (code === 'EMAIL_NOT_VERIFIED') {
+      if (code === 'EMAIL_NOT_FOUND') {
+        // No account — take them straight to register with email pre-filled
+        navigate('/shop/register', { state: { email } });
+      } else if (code === 'EMAIL_NOT_VERIFIED') {
         toast.error('Please verify your email first.');
         navigate('/shop/resend-verification', { state: { email } });
       } else {
-        toast.error(msg);
+        toast.error(err.response?.data?.error || 'Login failed');
       }
     } finally {
       setLoading(false);
@@ -36,31 +38,30 @@ export default function ConsumerLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-brand-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
-          <Link to="/shop" className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm">
-            <ArrowLeft size={14} /> Continue as Guest
-          </Link>
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
+      style={{ background: 'linear-gradient(160deg, #f0fdf4 0%, #dcfce7 50%, #f0fdf4 100%)' }}>
 
-        <div className="text-center mb-8">
-          <Link to="/shop" className="inline-flex items-center gap-2.5 justify-center">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-10 w-10 object-contain rounded-xl" alt="Sanathana Tattva" />
-            <span className="text-xl font-extrabold text-slate-900 leading-tight">Sanathana Tattva</span>
-          </Link>
-          <p className="text-slate-500 mt-2 text-sm">Sign in to your account</p>
-        </div>
+      <div className="w-full max-w-sm">
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sm:p-8">
-          <div className="flex items-center justify-center gap-2 mb-6 p-3 bg-brand-50 rounded-xl">
-            <ShoppingBag size={18} className="text-brand-600" />
-            <span className="text-brand-700 font-semibold text-sm">Consumer Login</span>
+        {/* Back */}
+        <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-600 text-sm mb-8 transition-colors">
+          <ArrowLeft size={14} /> Back
+        </button>
+
+        {/* Logo + brand */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-md mb-3">
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="w-full h-full object-contain bg-white p-1" alt="Sanathana Tattva" />
           </div>
+          <h1 className="text-xl font-extrabold text-slate-900">Sanathana Tattva</h1>
+          <p className="text-slate-500 text-sm mt-1">Sign in to your account</p>
+        </div>
 
+        {/* Form */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="form-label">Email Address</label>
+              <label className="form-label">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <input
@@ -77,7 +78,10 @@ export default function ConsumerLogin() {
             </div>
 
             <div>
-              <label className="form-label">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="form-label mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-brand-600 hover:text-brand-700">Forgot?</Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <input
@@ -95,30 +99,25 @@ export default function ConsumerLogin() {
               </div>
             </div>
 
-            <div className="text-right">
-              <Link to="/forgot-password" className="text-xs text-brand-600 hover:text-brand-700">
-                Forgot password?
-              </Link>
-            </div>
-
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2">
               {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-slate-100 text-center space-y-3">
-            <p className="text-sm text-slate-500">
-              New here?{' '}
-              <Link to="/shop/register" className="text-brand-600 font-semibold hover:text-brand-700">
-                Create an account
-              </Link>
-            </p>
-            <Link to="/shop" className="flex items-center justify-center gap-2 text-sm text-slate-400 hover:text-slate-600">
-              <ShoppingCart size={14} /> Continue as guest
+          <p className="text-center text-sm text-slate-500 mt-5">
+            No account?{' '}
+            <Link to="/shop/register" state={{ email }} className="text-brand-600 font-semibold hover:text-brand-700">
+              Create one
             </Link>
-          </div>
+          </p>
         </div>
+
+        <p className="text-center mt-5">
+          <button onClick={() => navigate('/shop')} className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+            Continue as guest →
+          </button>
+        </p>
       </div>
     </div>
   );
