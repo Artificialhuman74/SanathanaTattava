@@ -88,8 +88,8 @@ router.patch('/me', authConsumer, (req, res) => {
   if (name  !== undefined) { updates.push('name = ?');  params.push(String(name).trim()); }
   if (phone !== undefined) { updates.push('phone = ?'); params.push(phone ? String(phone).trim() : null); }
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
-  params.push(new Date().toISOString(), req.consumer.id);
-  db.prepare(`UPDATE consumers SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`).run(...params);
+  params.push(req.consumer.id);
+  db.prepare(`UPDATE consumers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   const updated = db.prepare('SELECT * FROM consumers WHERE id = ?').get(req.consumer.id);
   res.json({ consumer: updated });
 });
@@ -103,7 +103,7 @@ router.post('/change-password', authConsumer, async (req, res) => {
   const valid = await bcrypt.compare(old_password, consumer.password);
   if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
   const hash = await bcrypt.hash(new_password, 10);
-  db.prepare('UPDATE consumers SET password = ?, updated_at = ? WHERE id = ?').run(hash, new Date().toISOString(), req.consumer.id);
+  db.prepare('UPDATE consumers SET password = ? WHERE id = ?').run(hash, req.consumer.id);
   res.json({ success: true });
 });
 
