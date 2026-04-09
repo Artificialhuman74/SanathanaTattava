@@ -72,7 +72,7 @@ export default function AdminConsumerOrders() {
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState('');
   const [statusFilter,  setStatusFilter]  = useState('');
-  const [payFilter,     setPayFilter]     = useState('');
+  const [payFilter,     setPayFilter]     = useState('paid');
   const [selected,      setSelected]      = useState<ConsumerOrder | null>(null);
   const [updatingId,    setUpdatingId]    = useState<number | null>(null);
 
