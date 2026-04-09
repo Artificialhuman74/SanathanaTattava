@@ -6,7 +6,7 @@ const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
 const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
-// No SMS — delivery OTP is generated locally and shown in the consumer's app
+const { sendDeliveryOtpEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ function generateOTP() {
 /** Load an order assigned to the current delivery dealer */
 function getAssignedOrder(orderId, dealerId) {
   const order = db.prepare(`
-    SELECT co.*, c.phone AS consumer_phone
+    SELECT co.*, c.phone AS consumer_phone, c.email AS consumer_email, c.name AS consumer_name
     FROM consumer_orders co
     LEFT JOIN consumers c ON c.id = co.consumer_id
     WHERE co.id = ? AND co.delivery_dealer_id = ?
@@ -260,7 +260,7 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
       WHERE id = ?
     `).run(now, otp, now, order.id);
 
-    // Notify consumer — include OTP so they see it in the notification + order page
+    // Notify consumer — in-app notification + email with OTP
     if (order.consumer_id) {
       notifyConsumer(
         order.consumer_id,
@@ -268,6 +268,10 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
         `Your order is out for delivery. Your delivery code is: ${otp}. Show this to the delivery agent.`,
         { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp }
       );
+    }
+    if (order.consumer_email) {
+      sendDeliveryOtpEmail(order.consumer_email, order.consumer_name, otp, order.order_number)
+        .catch(err => console.error('[delivery] OTP email failed:', err.message));
     }
 
     emitOrderUpdate({

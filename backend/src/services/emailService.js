@@ -127,4 +127,31 @@ function buildEmailHtml({ title, preheader, body, footer }) {
 </html>`.trim();
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, DEV_MODE };
+/* ── Delivery OTP ─────────────────────────────────────────────────────── */
+async function sendDeliveryOtpEmail(toEmail, consumerName, otp, orderNumber) {
+  const subject = `Your delivery code — Order ${orderNumber}`;
+  const text    = `Your delivery is on the way!\n\nDelivery code: ${otp}\n\nShow this code to the delivery agent to confirm receipt of Order ${orderNumber}.`;
+  const html    = buildEmailHtml({
+    title:    'Your Order Is On The Way',
+    preheader: `Delivery code for order ${orderNumber}: ${otp}`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},<br/>
+        Your order <strong>#${orderNumber}</strong> is out for delivery. Show the code below to the delivery agent to confirm receipt.
+      </p>
+      <div style="text-align:center;margin:0 0 24px;">
+        <div style="display:inline-block;background:#fdf8f0;border:2px dashed #c8963c;border-radius:16px;padding:20px 40px;">
+          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;">Delivery Code</p>
+          <p style="margin:0;color:#14532d;font-size:44px;font-weight:800;letter-spacing:0.3em;font-family:monospace;">${otp}</p>
+        </div>
+      </div>
+      <p style="margin:0;color:#64748b;font-size:13px;text-align:center;">
+        Do not share this code with anyone other than your delivery agent.
+      </p>
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, DEV_MODE };

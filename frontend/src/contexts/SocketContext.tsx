@@ -40,12 +40,22 @@ function getAuthToken(): string | null {
 }
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const socketRef   = useRef<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+
+  // Subscription registry: survives socket instance replacement on reconnect
+  // Map<event, Set<handler>> — re-registered on every new socket
+  const subsRef = useRef<Map<string, Set<(...args: any[]) => void>>>(new Map());
+
+  /** Attach all registered subscriptions to the given socket instance */
+  function rehydrate(sock: Socket) {
+    subsRef.current.forEach((handlers, event) => {
+      handlers.forEach(handler => sock.on(event, handler));
+    });
+  }
 
   /** Create a fresh socket with the current token. Tears down any existing one. */
   const initSocket = useCallback(() => {
-    // Tear down existing socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -80,8 +90,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setConnected(false);
     });
 
+    // Re-attach all subscriptions that were registered before this socket existed
+    rehydrate(sock);
+
     socketRef.current = sock;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial connect on mount
   useEffect(() => {
@@ -110,10 +123,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [initSocket]);
 
   const on = useCallback((event: string, handler: (...args: any[]) => void) => {
+    // Register in the persistent registry
+    if (!subsRef.current.has(event)) subsRef.current.set(event, new Set());
+    subsRef.current.get(event)!.add(handler);
+    // Also attach to the live socket if it exists
     socketRef.current?.on(event, handler);
   }, []);
 
   const off = useCallback((event: string, handler: (...args: any[]) => void) => {
+    // Remove from the persistent registry
+    subsRef.current.get(event)?.delete(handler);
+    // Detach from the live socket
     socketRef.current?.off(event, handler);
   }, []);
 

@@ -38,23 +38,30 @@ export default function ConsumerLogin() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
-      style={{ background: 'linear-gradient(160deg, #f0fdf4 0%, #dcfce7 50%, #f0fdf4 100%)' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
+      {/* Logo as background */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+          className="w-full h-full object-cover"
+          alt=""
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0" style={{ background: 'rgba(253,248,240,0.82)' }} />
+      </div>
 
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm relative z-10">
 
         {/* Back */}
-        <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-slate-400 hover:text-slate-600 text-sm mb-8 transition-colors">
+        <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm mb-8 transition-colors">
           <ArrowLeft size={14} /> Back
         </button>
 
-        {/* Logo + brand */}
+        {/* Logo only — no text */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-md mb-3">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="w-full h-full object-contain bg-white p-1" alt="Sanathana Tattva" />
+          <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg mb-0">
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="w-full h-full object-contain bg-white/60 p-1" alt="Sanathana Tattva" />
           </div>
-          <h1 className="text-xl font-extrabold text-slate-900">Sanathana Tattva</h1>
-          <p className="text-slate-500 text-sm mt-1">Sign in to your account</p>
         </div>
 
         {/* Form */}

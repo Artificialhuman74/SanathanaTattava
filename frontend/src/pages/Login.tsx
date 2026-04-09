@@ -37,16 +37,6 @@ export default function Login() {
     }
   };
 
-  const fillDemo = (type: 'admin' | 'tier1' | 'tier2') => {
-    const creds = {
-      admin: { email: 'admin@tradehub.com', password: 'Admin@123' },
-      tier1: { email: 'alex@tradehub.com',  password: 'Trader@123' },
-      tier2: { email: 'sarah@tradehub.com', password: 'Trader@123' },
-    };
-    setEmail(creds[type].email);
-    setPassword(creds[type].password);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] via-[#14532d] to-[#0d1f10] flex flex-col items-center justify-center p-4">
       <div className="absolute inset-0 hero-pattern" />
@@ -160,26 +150,6 @@ export default function Login() {
             </Link>
           </div>
 
-          {/* Demo credentials */}
-          <div className="mt-5 pt-5 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center mb-3 font-medium uppercase tracking-wider">Quick Demo Fill</p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {tab === 'admin' ? (
-                <button onClick={() => fillDemo('admin')} className="px-3 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-600 rounded-lg text-xs font-medium transition-colors">
-                  Admin
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => fillDemo('tier1')} className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 rounded-lg text-xs font-medium transition-colors">
-                    Tier 1 Dealer
-                  </button>
-                  <button onClick={() => fillDemo('tier2')} className="px-3 py-1.5 bg-slate-100 hover:bg-purple-50 hover:text-purple-700 text-slate-600 rounded-lg text-xs font-medium transition-colors">
-                    Sub-Dealer
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>
