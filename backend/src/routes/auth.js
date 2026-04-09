@@ -152,20 +152,14 @@ function safeConsumer(c) {
   return obj;
 }
 
-/** Generate a raw token and store its SHA-256 hash in email_verifications */
-function createVerificationToken(email) {
-  const raw  = crypto.randomBytes(32).toString('hex');
-  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+/** Generate a 6-digit OTP and store its SHA-256 hash in email_verifications */
+function createVerificationOtp(email) {
+  const otp  = String(Math.floor(100000 + Math.random() * 900000));
+  const hash = crypto.createHash('sha256').update(otp).digest('hex');
   const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   db.prepare('UPDATE email_verifications SET used = 1 WHERE email = ?').run(email);
   db.prepare('INSERT INTO email_verifications (email, token_hash, expires_at) VALUES (?, ?, ?)').run(email, hash, expires);
-  return raw;
-}
-
-/** Build the verification URL sent in emails */
-function verifyUrl(rawToken) {
-  const base = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
-  return `${base}/shop/verify-email?token=${rawToken}`;
+  return otp;
 }
 
 /* ── POST /consumer/register ──────────────────────────────── */
@@ -205,35 +199,38 @@ router.post('/consumer/register', [
     VALUES (?, ?, ?, ?, ?, ?, 0, 'active')
   `).run(name, email, hash, phone || null, usedCode, linkedDealerId);
 
-  const rawToken = createVerificationToken(email);
+  const otp = createVerificationOtp(email);
 
-  // Respond immediately — send email in background so SMTP latency never blocks the request
   const response = { success: true, message: 'Account created. Please verify your email.' };
-  if (!process.env.EMAIL_USER) response.dev_token = rawToken;
+  if (!process.env.EMAIL_USER) response.dev_otp = otp;
   res.status(201).json(response);
 
-  sendVerificationEmail(email, verifyUrl(rawToken)).catch(err =>
+  sendVerificationEmail(email, otp).catch(err =>
     console.error('[register] email send failed:', err.message)
   );
 });
 
-/* ── GET /consumer/verify-email ───────────────────────────── */
-router.get('/consumer/verify-email', async (req, res) => {
-  const { token } = req.query;
-  if (!token) return res.status(400).json({ error: 'Token is required' });
+/* ── POST /consumer/verify-otp ────────────────────────────── */
+router.post('/consumer/verify-otp', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('otp').notEmpty().withMessage('OTP is required'),
+], (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
 
-  const hash   = crypto.createHash('sha256').update(String(token)).digest('hex');
+  const { email, otp } = req.body;
+  const hash = crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
   const record = db.prepare(`
     SELECT * FROM email_verifications
-    WHERE token_hash = ? AND used = 0 AND expires_at > datetime('now')
-  `).get(hash);
+    WHERE email = ? AND token_hash = ? AND used = 0 AND expires_at > datetime('now')
+  `).get(email, hash);
 
-  if (!record) return res.status(400).json({ error: 'Invalid or expired verification link. Please request a new one.' });
+  if (!record) return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new one.' });
 
   db.prepare('UPDATE email_verifications SET used = 1 WHERE id = ?').run(record.id);
-  db.prepare('UPDATE consumers SET email_verified = 1 WHERE email = ?').run(record.email);
+  db.prepare('UPDATE consumers SET email_verified = 1 WHERE email = ?').run(email);
 
-  const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(record.email);
+  const consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(email);
   if (!consumer) return res.status(404).json({ error: 'Account not found.' });
 
   res.json({ success: true, token: signConsumerToken(consumer.id), consumer: safeConsumer(consumer) });
@@ -258,13 +255,13 @@ router.post('/consumer/resend-verification', [
   `).get(email).c;
   if (recentCount >= 3) return res.status(429).json({ error: 'Too many resend attempts. Please wait 10 minutes.' });
 
-  const rawToken = createVerificationToken(email);
+  const otp = createVerificationOtp(email);
 
   const response = { success: true };
-  if (!process.env.EMAIL_USER) response.dev_token = rawToken;
+  if (!process.env.EMAIL_USER) response.dev_otp = otp;
   res.json(response);
 
-  sendVerificationEmail(email, verifyUrl(rawToken)).catch(err =>
+  sendVerificationEmail(email, otp).catch(err =>
     console.error('[resend] email send failed:', err.message)
   );
 });

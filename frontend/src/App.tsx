@@ -41,7 +41,6 @@ import ConsumerOrders      from './pages/consumer/Orders';
 import ConsumerAddresses   from './pages/consumer/Addresses';
 import ConsumerCheckout    from './pages/consumer/Checkout';
 import ConsumerProfile     from './pages/consumer/Profile';
-import VerifyEmail         from './pages/consumer/VerifyEmail';
 import VerifyPending       from './pages/consumer/VerifyPending';
 
 import DeliveryLogin     from './pages/delivery/Login';
@@ -139,7 +138,6 @@ const AppRoutes = () => {
           <Route index element={<Shop />} />
           <Route path="login"           element={<ConsumerLogin />} />
           <Route path="register"        element={<ConsumerRegister />} />
-          <Route path="verify-email"    element={<VerifyEmail />} />
           <Route path="verify-pending"  element={<VerifyPending />} />
           <Route path="resend-verification" element={<VerifyPending />} />
           <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />

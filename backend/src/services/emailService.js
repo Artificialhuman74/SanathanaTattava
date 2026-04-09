@@ -47,27 +47,24 @@ async function sendMail({ to, subject, text, html }) {
 }
 
 /* ── Email verification ───────────────────────────────────────────────── */
-async function sendVerificationEmail(toEmail, verifyUrl) {
-  const subject = 'Verify your Sanathana Tattva account';
-  const text    = `Please verify your email by visiting: ${verifyUrl}\n\nThis link expires in 15 minutes.`;
+async function sendVerificationEmail(toEmail, otp) {
+  const subject = 'Your Sanathana Tattva verification code';
+  const text    = `Your verification code is: ${otp}\n\nThis code expires in 15 minutes.`;
   const html    = buildEmailHtml({
     title:    'Verify Your Email',
-    preheader: 'One click to activate your account',
+    preheader: `Your verification code: ${otp}`,
     body: `
       <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
-        Thanks for signing up! Click the button below to verify your email address and activate your account.
+        Thanks for signing up! Enter the code below in the app to verify your email address.
       </p>
       <div style="text-align:center;margin:0 0 24px;">
-        <a href="${verifyUrl}"
-           style="display:inline-block;background:linear-gradient(135deg,#16a34a,#15803d);color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 32px;border-radius:12px;">
-          Verify Email Address
-        </a>
+        <div style="display:inline-block;background:#f0fdf4;border:2px dashed #16a34a;border-radius:16px;padding:20px 40px;">
+          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;">Verification Code</p>
+          <p style="margin:0;color:#15803d;font-size:40px;font-weight:800;letter-spacing:0.25em;font-family:monospace;">${otp}</p>
+        </div>
       </div>
-      <p style="margin:0 0 8px;color:#64748b;font-size:13px;text-align:center;">
-        ⏱ This link expires in <strong>15 minutes</strong>.
-      </p>
-      <p style="margin:0;color:#64748b;font-size:12px;text-align:center;word-break:break-all;">
-        Or copy this link: <a href="${verifyUrl}" style="color:#16a34a;">${verifyUrl}</a>
+      <p style="margin:0;color:#64748b;font-size:13px;text-align:center;">
+        ⏱ This code expires in <strong>15 minutes</strong>. Do not share it with anyone.
       </p>
     `,
     footer: "If you didn't create an account, you can safely ignore this email.",
