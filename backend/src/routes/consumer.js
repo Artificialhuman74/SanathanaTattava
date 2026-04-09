@@ -1,5 +1,6 @@
-const express = require('express');
-const jwt     = require('jsonwebtoken');
+const express  = require('express');
+const jwt      = require('jsonwebtoken');
+const bcrypt   = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 
@@ -74,6 +75,36 @@ router.get('/me', authConsumer, (req, res) => {
     }
   }
   res.json({ consumer });
+});
+
+/* ── PATCH /me — update name / phone ─────────────────────────────────── */
+router.patch('/me', authConsumer, (req, res) => {
+  const { name, phone } = req.body;
+  if (name !== undefined && !String(name).trim()) {
+    return res.status(400).json({ error: 'Name cannot be empty' });
+  }
+  const updates = [];
+  const params  = [];
+  if (name  !== undefined) { updates.push('name = ?');  params.push(String(name).trim()); }
+  if (phone !== undefined) { updates.push('phone = ?'); params.push(phone ? String(phone).trim() : null); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+  params.push(new Date().toISOString(), req.consumer.id);
+  db.prepare(`UPDATE consumers SET ${updates.join(', ')}, updated_at = ? WHERE id = ?`).run(...params);
+  const updated = db.prepare('SELECT * FROM consumers WHERE id = ?').get(req.consumer.id);
+  res.json({ consumer: updated });
+});
+
+/* ── POST /change-password ────────────────────────────────────────────── */
+router.post('/change-password', authConsumer, async (req, res) => {
+  const { old_password, new_password } = req.body;
+  if (!old_password || !new_password) return res.status(400).json({ error: 'Both passwords required' });
+  if (new_password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  const consumer = db.prepare('SELECT * FROM consumers WHERE id = ?').get(req.consumer.id);
+  const valid = await bcrypt.compare(old_password, consumer.password);
+  if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+  const hash = await bcrypt.hash(new_password, 10);
+  db.prepare('UPDATE consumers SET password = ?, updated_at = ? WHERE id = ?').run(hash, new Date().toISOString(), req.consumer.id);
+  res.json({ success: true });
 });
 
 /* ── Auth: Saved Addresses ────────────────────────────────────────────── */

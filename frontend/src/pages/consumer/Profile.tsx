@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import api from '../../api/axios';
+import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { User, MapPin, ShoppingBag, LogOut, ChevronRight, Tag } from 'lucide-react';
 
 export default function ConsumerProfile() {
@@ -10,7 +9,7 @@ export default function ConsumerProfile() {
   const [discountPct, setDiscountPct] = useState(0);
 
   useEffect(() => {
-    api.get('/consumer/settings')
+    consumerApi.get('/admin/settings')
       .then(r => setDiscountPct(parseFloat(r.data.referral_discount_percent) || 0))
       .catch(() => {});
   }, []);
