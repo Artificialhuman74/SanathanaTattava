@@ -137,12 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /* ── Consumer Email+Password Auth ───────────────────────────────────── */
 
   const consumerLogin = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post('/auth/consumer/login', { email, password });
+    const { data } = await consumerApi.post('/auth/consumer/login', { email, password });
     persistConsumer(data.token, data.consumer);
   }, []);
 
   const consumerRegister = useCallback(async (name: string, email: string, password: string, referralCode?: string, phone?: string) => {
-    await api.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined, phone: phone || undefined });
+    await consumerApi.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined, phone: phone || undefined });
     // Account created but not yet verified — do NOT log in yet
   }, []);
 
