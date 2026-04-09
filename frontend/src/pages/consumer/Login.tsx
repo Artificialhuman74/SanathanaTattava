@@ -39,16 +39,16 @@ export default function ConsumerLogin() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
-      {/* Logo as background */}
-      <div className="absolute inset-0 z-0">
+      {/* Logo as background — contained so full text is visible */}
+      <div className="absolute inset-0 z-0 flex items-center justify-center">
         <img
           src="/Gemini_Generated_Image_agra6kagra6kagra.png"
-          className="w-full h-full object-cover"
+          className="w-4/5 max-w-xs object-contain opacity-20"
           alt=""
           aria-hidden="true"
         />
-        <div className="absolute inset-0" style={{ background: 'rgba(253,248,240,0.82)' }} />
       </div>
+      <div className="absolute inset-0 z-0" style={{ background: 'rgba(253,248,240,0.55)' }} />
 
       <div className="w-full max-w-sm relative z-10">
 
@@ -56,13 +56,6 @@ export default function ConsumerLogin() {
         <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-sm mb-8 transition-colors">
           <ArrowLeft size={14} /> Back
         </button>
-
-        {/* Logo only — no text */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg mb-0">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="w-full h-full object-contain bg-white/60 p-1" alt="Sanathana Tattva" />
-          </div>
-        </div>
 
         {/* Form */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
