@@ -207,17 +207,14 @@ router.post('/consumer/register', [
 
   const rawToken = createVerificationToken(email);
 
-  let mailResult = { dev: true };
-  try {
-    mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
-  } catch (mailErr) {
-    console.error('[register] email send failed:', mailErr.message);
-    // Account is created even if email fails; user can resend
-  }
-
+  // Respond immediately — send email in background so SMTP latency never blocks the request
   const response = { success: true, message: 'Account created. Please verify your email.' };
-  if (mailResult.dev) response.dev_token = rawToken;
+  if (!process.env.EMAIL_USER) response.dev_token = rawToken;
   res.status(201).json(response);
+
+  sendVerificationEmail(email, verifyUrl(rawToken)).catch(err =>
+    console.error('[register] email send failed:', err.message)
+  );
 });
 
 /* ── GET /consumer/verify-email ───────────────────────────── */
@@ -262,16 +259,14 @@ router.post('/consumer/resend-verification', [
   if (recentCount >= 3) return res.status(429).json({ error: 'Too many resend attempts. Please wait 10 minutes.' });
 
   const rawToken = createVerificationToken(email);
-  let mailResult = { dev: true };
-  try {
-    mailResult = await sendVerificationEmail(email, verifyUrl(rawToken));
-  } catch (mailErr) {
-    console.error('[resend] email send failed:', mailErr.message);
-  }
 
   const response = { success: true };
-  if (mailResult.dev) response.dev_token = rawToken;
+  if (!process.env.EMAIL_USER) response.dev_token = rawToken;
   res.json(response);
+
+  sendVerificationEmail(email, verifyUrl(rawToken)).catch(err =>
+    console.error('[resend] email send failed:', err.message)
+  );
 });
 
 /* ── POST /consumer/login ─────────────────────────────────── */
@@ -324,16 +319,14 @@ router.post('/forgot-password', [
 
   const base     = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
   const resetUrl = `${base}/reset-password?token=${raw}`;
-  let mailResult = { dev: true };
-  try {
-    mailResult = await sendPasswordResetEmail(email, resetUrl);
-  } catch (mailErr) {
-    console.error('[forgot-password] email send failed:', mailErr.message);
-  }
 
   const response = { success: true };
-  if (mailResult.dev) response.dev_token = raw;
+  if (!process.env.EMAIL_USER) response.dev_token = raw;
   res.json(response);
+
+  sendPasswordResetEmail(email, resetUrl).catch(err =>
+    console.error('[forgot-password] email send failed:', err.message)
+  );
 });
 
 /* ── POST /reset-password ──────────────────────────────────────────────── */

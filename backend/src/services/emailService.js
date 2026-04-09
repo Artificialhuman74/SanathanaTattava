@@ -16,16 +16,20 @@ const nodemailer = require('nodemailer');
 const DEV_MODE = !process.env.EMAIL_USER;
 
 function getTransporter() {
-  const port   = parseInt(process.env.EMAIL_PORT || '587');
+  const port   = parseInt(process.env.EMAIL_PORT || '465');
   const secure = port === 465;
   return nodemailer.createTransport({
-    host:   process.env.EMAIL_HOST || 'smtp.titan.email',
+    host:              process.env.EMAIL_HOST || 'smtp.titan.email',
     port,
     secure,
+    connectionTimeout: 10000,
+    greetingTimeout:   10000,
+    socketTimeout:     15000,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    tls: { rejectUnauthorized: false },
   });
 }
 
