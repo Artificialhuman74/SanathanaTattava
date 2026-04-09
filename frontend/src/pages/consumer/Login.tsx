@@ -39,16 +39,15 @@ export default function ConsumerLogin() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
-      {/* Logo as background — contained so full text is visible */}
-      <div className="absolute inset-0 z-0 flex items-center justify-center">
-        <img
-          src="/Gemini_Generated_Image_agra6kagra6kagra.png"
-          className="w-4/5 max-w-xs object-contain opacity-20"
-          alt=""
-          aria-hidden="true"
-        />
-      </div>
-      <div className="absolute inset-0 z-0" style={{ background: 'rgba(253,248,240,0.55)' }} />
+      {/* Logo as background */}
+      <img
+        src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+        className="absolute inset-0 z-0 w-full h-full object-cover opacity-15 pointer-events-none"
+        style={{ objectPosition: 'center' }}
+        alt=""
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 z-0" style={{ background: '#fdf8f0cc' }} />
 
       <div className="w-full max-w-sm relative z-10">
 
