@@ -41,6 +41,7 @@ import ConsumerOrders      from './pages/consumer/Orders';
 import ConsumerAddresses   from './pages/consumer/Addresses';
 import ConsumerCheckout    from './pages/consumer/Checkout';
 import ConsumerProfile     from './pages/consumer/Profile';
+import ConsumerSupport     from './pages/consumer/Support';
 import VerifyPending       from './pages/consumer/VerifyPending';
 
 import DeliveryLogin     from './pages/delivery/Login';
@@ -144,6 +145,7 @@ const AppRoutes = () => {
           <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
           <Route path="checkout"  element={<ConsumerCheckout />} />
           <Route path="profile"   element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />
+          <Route path="support"   element={<ConsumerSupport />} />
         </Route>
 
         {/* Delivery Partner routes */}

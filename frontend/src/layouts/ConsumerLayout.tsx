@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, ShoppingBag, User, Menu, X, ShoppingCart, LogOut, MapPin, ChevronRight } from 'lucide-react';
+import { Home, ShoppingBag, User, Menu, X, ShoppingCart, LogOut, MapPin, ChevronRight, HeadphonesIcon } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import RollingNumber from '../components/RollingNumber';
 
@@ -156,6 +156,7 @@ export default function ConsumerLayout() {
                   <NavItem to="/shop/profile" icon={<User size={18} />} label="Profile" onClick={() => setMenuOpen(false)} />
                 </>
               )}
+              <NavItem to="/shop/support" icon={<HeadphonesIcon size={18} />} label="Get Support" onClick={() => setMenuOpen(false)} />
             </nav>
 
             {/* Bottom auth */}
