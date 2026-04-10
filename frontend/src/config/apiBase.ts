@@ -4,7 +4,18 @@ const isBrowser = typeof window !== 'undefined';
 
 function normalizeBaseUrl(raw?: string | null): string {
   if (!raw) return '';
-  return raw.trim().replace(/\/+$/, '');
+  const clean = raw.trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(clean);
+    // People often set VITE_API_URL as ".../api"; this app expects only origin/base.
+    if (url.pathname === '/api' || url.pathname === '/api/') {
+      url.pathname = '';
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    // Keep relative/local values as-is.
+  }
+  return clean;
 }
 
 function unique(values: string[]): string[] {
@@ -78,9 +89,14 @@ export function rotateApiBaseUrl(): string | null {
 export function shouldRotateApiBase(err: any): boolean {
   const status = err?.response?.status;
   const message = String(err?.response?.data?.message || '');
+  const headers = err?.response?.headers || {};
+  const contentType = String(headers['content-type'] || headers['Content-Type'] || '');
+  const body = typeof err?.response?.data === 'string' ? err.response.data : '';
 
   if (!err?.response) return true; // network / DNS / CORS failure
   if ([502, 503, 504].includes(status)) return true;
   if (status === 404 && /Application not found/i.test(message)) return true;
+  // Wrong-host API calls often return HTML 404 pages instead of JSON.
+  if (status === 404 && (contentType.includes('text/html') || /<!doctype html|<html/i.test(body))) return true;
   return false;
 }
