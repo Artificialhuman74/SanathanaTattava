@@ -1,4 +1,14 @@
 require('dotenv').config();
+
+// Express 4 does not catch async errors — Node.js v20 exits on unhandled rejections.
+// Log them and keep the server alive; individual requests will timeout/fail gracefully.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
 const express = require('express');
 const https   = require('https');
 const http    = require('http');
