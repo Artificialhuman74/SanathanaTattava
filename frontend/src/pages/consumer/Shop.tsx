@@ -752,9 +752,9 @@ export default function Shop() {
             </div>
 
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              <div className="h-72 sm:h-80 bg-slate-100 relative" data-product-modal-image={selectedProduct.id}>
+              <div className="h-80 sm:h-96 bg-white relative" data-product-modal-image={selectedProduct.id}>
                 {getProductImages(selectedProduct).length > 0
-                  ? <ProductImageGallery images={getProductImages(selectedProduct)} name={selectedProduct.name} />
+                  ? <ProductImageGallery images={getProductImages(selectedProduct)} name={selectedProduct.name} contain />
                   : <div className="w-full h-full flex items-center justify-center"><Package className="w-14 h-14 text-slate-300" /></div>
                 }
               </div>
@@ -964,7 +964,7 @@ export default function Shop() {
   );
 }
 
-function ProductImageGallery({ images, name }: { images: string[]; name: string }) {
+function ProductImageGallery({ images, name, contain }: { images: string[]; name: string; contain?: boolean }) {
   const [desktopIndex, setDesktopIndex] = useState(0);
   const [mobileIndex, setMobileIndex] = useState(0);
   const mobileTrackRef = useRef<HTMLDivElement | null>(null);
@@ -995,7 +995,7 @@ function ProductImageGallery({ images, name }: { images: string[]; name: string 
         >
           {images.map((img, idx) => (
             <div key={`${img}-${idx}`} className="w-full h-full flex-shrink-0 snap-center">
-              <img src={img} alt={name} className="w-full h-full object-cover" />
+              <img src={img} alt={name} className={`w-full h-full ${contain ? 'object-contain' : 'object-cover'}`} />
             </div>
           ))}
         </div>
@@ -1013,7 +1013,7 @@ function ProductImageGallery({ images, name }: { images: string[]; name: string 
 
       {/* Desktop: image + dots carousel controls */}
       <div className="hidden sm:block h-full relative">
-        <img src={images[desktopIndex] || images[0]} alt={name} className="w-full h-full object-cover" />
+        <img src={images[desktopIndex] || images[0]} alt={name} className={`w-full h-full ${contain ? 'object-contain' : 'object-cover'}`} />
         {images.length > 1 && (
           <div className="absolute bottom-2 inset-x-0 flex items-center justify-center gap-1.5">
             {images.map((_, idx) => (
