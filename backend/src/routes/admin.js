@@ -320,7 +320,7 @@ router.post('/commissions/process-week', (req, res) => {
 router.get('/commissions/payouts', (req, res) => {
   const { status } = req.query;
   let sql = `SELECT wp.*, u.name as dealer_name, u.tier as dealer_tier FROM weekly_payouts wp JOIN users u ON wp.trader_id = u.id WHERE 1=1`;
-  const params: any[] = [];
+  const params = [];
   if (status) { sql += ` AND wp.status = ?`; params.push(status); }
   sql += ` ORDER BY wp.created_at DESC`;
   res.json({ payouts: db.prepare(sql).all(...params) });
