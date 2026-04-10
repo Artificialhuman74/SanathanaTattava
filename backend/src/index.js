@@ -56,6 +56,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.options('*', cors()); // Enable CORS preflight for all routes
 
 app.use(helmet({
   contentSecurityPolicy: false,
