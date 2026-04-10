@@ -281,7 +281,7 @@ router.get('/commissions', (req, res) => {
 
 router.get('/commissions/summary', (req, res) => {
   const summary = db.prepare(`
-    SELECT u.id, u.name, u.tier, u.commission_rate,
+    SELECT u.id as dealer_id, u.name as dealer_name, u.tier as dealer_tier, u.commission_rate,
       COUNT(cm.id) as total_commissions,
       COALESCE(SUM(CASE WHEN cm.status='pending' THEN cm.amount END), 0) as pending_amount,
       COALESCE(SUM(CASE WHEN cm.status='paid'    THEN cm.amount END), 0) as paid_amount,
@@ -318,12 +318,12 @@ router.post('/commissions/process-week', (req, res) => {
 });
 
 router.get('/commissions/payouts', (req, res) => {
-  const payouts = db.prepare(`
-    SELECT wp.*, u.name as trader_name, u.tier as trader_tier
-    FROM weekly_payouts wp JOIN users u ON wp.trader_id = u.id
-    ORDER BY wp.created_at DESC
-  `).all();
-  res.json({ payouts });
+  const { status } = req.query;
+  let sql = `SELECT wp.*, u.name as dealer_name, u.tier as dealer_tier FROM weekly_payouts wp JOIN users u ON wp.trader_id = u.id WHERE 1=1`;
+  const params: any[] = [];
+  if (status) { sql += ` AND wp.status = ?`; params.push(status); }
+  sql += ` ORDER BY wp.created_at DESC`;
+  res.json({ payouts: db.prepare(sql).all(...params) });
 });
 
 router.put('/commissions/payouts/:id/status', (req, res) => {
