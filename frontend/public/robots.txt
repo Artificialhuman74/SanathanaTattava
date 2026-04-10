@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+Allow: /shop
+Allow: /shop/
+
+# Block internal/auth routes from indexing
+Disallow: /admin
+Disallow: /trader
+Disallow: /delivery
+Disallow: /shop/login
+Disallow: /shop/register
+Disallow: /shop/checkout
+Disallow: /shop/orders
+Disallow: /shop/addresses
+Disallow: /shop/profile
+Disallow: /shop/verify-pending
+Disallow: /shop/review
+Disallow: /login
+Disallow: /register
+Disallow: /reset-password
+Disallow: /forgot-password
+
+Sitemap: https://sanathanatattva.shop/sitemap.xml
