@@ -1,47 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, ShoppingBag, User, Menu, X, ShoppingCart, LogOut, MapPin, ChevronRight, HeadphonesIcon } from 'lucide-react';
+import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
-import RollingNumber from '../components/RollingNumber';
 
 export default function ConsumerLayout() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const [cartCount,  setCartCount]  = useState(0);
-  const [scrolled,   setScrolled]   = useState(false);
-  const [cartIconBounce, setCartIconBounce] = useState(false);
-  const prevCartCountRef = useRef(0);
-  const isShopPage = location.pathname === '/shop';
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Close menu on route change
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-
-  // Listen for cart count from Shop.tsx
-  useEffect(() => {
-    const handler = (e: Event) => setCartCount((e as CustomEvent).detail);
-    window.addEventListener('cart-count', handler);
-    return () => window.removeEventListener('cart-count', handler);
-  }, []);
-
-  useEffect(() => {
-    if (cartCount > prevCartCountRef.current) {
-      setCartIconBounce(true);
-      const timer = setTimeout(() => setCartIconBounce(false), 420);
-      prevCartCountRef.current = cartCount;
-      return () => clearTimeout(timer);
-    }
-    prevCartCountRef.current = cartCount;
-  }, [cartCount]);
-
-  // Scroll detection for bell→cart swap
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
-  }, []);
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -75,32 +45,9 @@ export default function ConsumerLayout() {
             <span className="text-base font-semibold tracking-tight text-gray-900" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", letterSpacing: '-0.01em' }}>Sanathana Tattva</span>
           </Link>
 
-          {/* Right: bell or cart (swaps on scroll when on shop page) */}
-          <div className="flex items-center gap-1 relative w-10 h-10">
-            {/* Bell — fades out when scrolled on shop page with items in cart */}
-            <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-              isShopPage && scrolled && cartCount > 0 ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
-            }`}>
-              {consumer && <NotificationBell variant="consumer" />}
-            </div>
-            {/* Cart icon — fades in when scrolled on shop page */}
-            {isShopPage && (
-              <button
-                onClick={() => window.dispatchEvent(new Event('open-cart'))}
-                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-                  scrolled && cartCount > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
-                }`}
-              >
-                <div className="relative">
-                  <ShoppingCart size={20} className="text-gray-700" />
-                  {cartCount > 0 && (
-                    <span className={`absolute -top-1.5 -right-2 min-w-[1.25rem] h-[1.25rem] px-1 bg-brand-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
-                      <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
-                    </span>
-                  )}
-                </div>
-              </button>
-            )}
+          {/* Right: notification bell */}
+          <div className="flex items-center justify-center w-10 h-10">
+            {consumer && <NotificationBell variant="consumer" />}
           </div>
         </div>
       </header>

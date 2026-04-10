@@ -40,6 +40,7 @@ db.exec(`
     stock        INTEGER NOT NULL DEFAULT 0,
     min_stock    INTEGER NOT NULL DEFAULT 10,
     image_url    TEXT,
+    image_urls   TEXT,
     unit         TEXT    NOT NULL DEFAULT 'piece',
     status       TEXT    NOT NULL DEFAULT 'active',
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -184,6 +185,7 @@ safeAlter(`ALTER TABLE users ADD COLUMN commission_rate REAL NOT NULL DEFAULT 10
 safeAlter(`ALTER TABLE consumer_orders ADD COLUMN is_direct INTEGER NOT NULL DEFAULT 0`);
 safeAlter(`ALTER TABLE consumer_orders ADD COLUMN discount_percent REAL NOT NULL DEFAULT 0`);
 safeAlter(`ALTER TABLE consumer_orders ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0`);
+safeAlter(`ALTER TABLE products ADD COLUMN image_urls TEXT`);
 /* OTP table — added in v2 */
 safeAlter(`ALTER TABLE consumers ADD COLUMN email TEXT UNIQUE`);
 safeAlter(`ALTER TABLE consumers ADD COLUMN phone TEXT UNIQUE NOT NULL DEFAULT ''`);

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import { clearCart, loadCart, saveCart } from '../../services/cartStorage';
 import {
   ArrowLeft, MapPin, Tag, CheckCircle2, Package, Home, Briefcase,
   PlusCircle, User, Phone, Star, Hash, ShoppingBag,
@@ -44,7 +45,11 @@ export default function Checkout() {
   const navigate     = useNavigate();
   const location     = useLocation();
 
-  const cart: CartItem[] = (location.state as any)?.cart || [];
+  const navCart: CartItem[] = (location.state as any)?.cart || [];
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (navCart.length) return navCart;
+    return loadCart<CartItem['product']>().map(i => ({ product: i.product, quantity: i.quantity }));
+  });
 
   const [discountPct,        setDiscountPct]        = useState(0);
   const [savedAddresses,     setSavedAddresses]     = useState<SavedAddress[]>([]);
@@ -71,7 +76,18 @@ export default function Checkout() {
   /* Guard: if someone lands here with an empty cart, send them back */
   useEffect(() => {
     if (cart.length === 0) navigate('/shop', { replace: true });
-  }, []); // eslint-disable-line
+  }, [cart.length, navigate]);
+
+  // Keep checkout cart in persistent storage as source of truth.
+  useEffect(() => {
+    if (navCart.length) {
+      saveCart(navCart);
+      return;
+    }
+    if (cart.length) {
+      saveCart(cart);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Fetch discount settings */
   useEffect(() => {
@@ -158,6 +174,8 @@ export default function Checkout() {
 
       if (!consumer) {
         // Guest: no payment, show success immediately
+        clearCart();
+        setCart([]);
         setSuccess({
           orderNumber:        data.order_number || data.order?.order_number,
           message:            data.confirmation?.message,
@@ -195,6 +213,8 @@ export default function Checkout() {
               consumer_order_id:  data.order.id,
             });
             refreshConsumer();
+            clearCart();
+            setCart([]);
             setSuccess({
               orderNumber:        data.order.order_number,
               message:            data.confirmation?.message,

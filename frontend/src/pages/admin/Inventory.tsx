@@ -11,14 +11,62 @@ import {
 interface Product {
   id: number; name: string; description: string; category: string; sku: string;
   price: number; cost_price: number; stock: number; min_stock: number;
-  image_url: string; unit: string; status: string; created_at: string;
+  image_url: string; image_urls?: string | null; unit: string; status: string; created_at: string;
 }
 
 const UNITS = ['piece','kg','litre','set','pair','box','bottle','tin','pack'];
 const EMPTY: Partial<Product> = {
   name: '', description: '', category: '', sku: '', price: 0,
-  cost_price: 0, stock: 0, min_stock: 10, image_url: '', unit: 'piece', status: 'active',
+  cost_price: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', status: 'active',
 };
+
+function parseImageUrls(raw?: string | null): string[] {
+  if (!raw) return [];
+  const text = String(raw).trim();
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map(v => String(v || '').trim())
+        .filter(Boolean);
+    }
+  } catch {
+    // Not JSON, fallback to line/comma parsing.
+  }
+
+  if (text.includes('\n')) {
+    return text.split('\n').map(v => v.trim()).filter(Boolean);
+  }
+  if (!text.startsWith('data:') && text.includes(',')) {
+    return text.split(',').map(v => v.trim()).filter(Boolean);
+  }
+  return [text];
+}
+
+function dedupeImages(images: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  images.forEach((img) => {
+    const v = img.trim();
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    out.push(v);
+  });
+  return out;
+}
+
+function getProductImages(p?: Partial<Product> | null): string[] {
+  if (!p) return [];
+  const fromList = parseImageUrls(p.image_urls || '');
+  const list = dedupeImages([p.image_url || '', ...fromList]);
+  return list;
+}
+
+function getPrimaryImage(p?: Partial<Product> | null): string {
+  return getProductImages(p)[0] || '';
+}
 
 export default function AdminInventory() {
   const [products,   setProducts]   = useState<Product[]>([]);
@@ -31,6 +79,7 @@ export default function AdminInventory() {
   const [form,       setForm]       = useState<Partial<Product>>(EMPTY);
   const [saving,     setSaving]     = useState(false);
   const [deleting,   setDeleting]   = useState<number | null>(null);
+  const [additionalImageUrls, setAdditionalImageUrls] = useState('');
 
   // Image crop state
   const [cropSrc,        setCropSrc]        = useState<string | null>(null);
@@ -52,9 +101,26 @@ export default function AdminInventory() {
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  const openNew  = () => { setEditing(null); setForm(EMPTY); setShowModal(true); };
-  const openEdit = (p: Product) => { setEditing(p); setForm({ ...p }); setShowModal(true); };
-  const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY); setCropSrc(null); };
+  const openNew  = () => {
+    setEditing(null);
+    setForm(EMPTY);
+    setAdditionalImageUrls('');
+    setShowModal(true);
+  };
+  const openEdit = (p: Product) => {
+    setEditing(p);
+    const images = getProductImages(p);
+    setForm({ ...p, image_url: images[0] || '', image_urls: p.image_urls || '' });
+    setAdditionalImageUrls(images.slice(1).join('\n'));
+    setShowModal(true);
+  };
+  const closeModal = () => {
+    setShowModal(false);
+    setEditing(null);
+    setForm(EMPTY);
+    setAdditionalImageUrls('');
+    setCropSrc(null);
+  };
 
   const set = (k: keyof Product) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: ['price','cost_price','stock','min_stock'].includes(k) ? Number(e.target.value) : e.target.value }));
@@ -120,11 +186,19 @@ export default function AdminInventory() {
     }
     setSaving(true);
     try {
+      const extraImages = parseImageUrls(additionalImageUrls);
+      const allImages = dedupeImages([String(form.image_url || '').trim(), ...extraImages]).slice(0, 12);
+      const payload = {
+        ...form,
+        image_url: allImages[0] || null,
+        image_urls: allImages.length ? JSON.stringify(allImages) : null,
+      };
+
       if (editing) {
-        await api.put(`/admin/products/${editing.id}`, form);
+        await api.put(`/admin/products/${editing.id}`, payload);
         toast.success('Product updated');
       } else {
-        await api.post('/admin/products', form);
+        await api.post('/admin/products', payload);
         toast.success('Product created');
       }
       closeModal(); fetchProducts();
@@ -205,8 +279,8 @@ export default function AdminInventory() {
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden">
-                          {p.image_url
-                            ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                          {getPrimaryImage(p)
+                            ? <img src={getPrimaryImage(p)} alt={p.name} className="w-full h-full object-cover" />
                             : <Package className="w-5 h-5 text-slate-400 m-auto mt-2.5" />
                           }
                         </div>
@@ -306,8 +380,8 @@ export default function AdminInventory() {
                 <div className="flex gap-4 items-start">
                   {/* Preview */}
                   <div className="w-28 h-28 rounded-xl bg-slate-100 flex-shrink-0 overflow-hidden border-2 border-dashed border-slate-200 flex items-center justify-center">
-                    {form.image_url
-                      ? <img src={form.image_url} alt="Preview" className="w-full h-full object-cover" />
+                    {getPrimaryImage(form)
+                      ? <img src={getPrimaryImage(form)} alt="Preview" className="w-full h-full object-cover" />
                       : <div className="flex flex-col items-center gap-1 text-slate-300">
                           <ImageIcon size={28} />
                           <span className="text-xs">No image</span>
@@ -345,6 +419,19 @@ export default function AdminInventory() {
                       </button>
                     )}
                   </div>
+                </div>
+                <div className="mt-3">
+                  <label className="form-label">Additional Images (optional)</label>
+                  <textarea
+                    value={additionalImageUrls}
+                    onChange={(e) => setAdditionalImageUrls(e.target.value)}
+                    className="form-input resize-none"
+                    rows={3}
+                    placeholder={'Paste one image URL per line.\nThese are used for product gallery in the shop.'}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    First image is from upload/preview. Extra images can be added as URLs.
+                  </p>
                 </div>
               </div>
 

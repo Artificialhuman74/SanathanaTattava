@@ -4,6 +4,7 @@ import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import toast from 'react-hot-toast';
 import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw } from 'lucide-react';
+import { getCartCount } from '../../services/cartStorage';
 
 interface ConsumerOrder {
   id: number;
@@ -65,6 +66,7 @@ export default function ConsumerOrders() {
   const [orders,   setOrders]   = useState<ConsumerOrder[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState<ConsumerOrder | null>(null);
+  const [cartCount, setCartCount] = useState(0);
 
   const fetchOrders = useCallback(() => {
     if (!consumer) { navigate('/shop/login', { replace: true }); return; }
@@ -84,6 +86,26 @@ export default function ConsumerOrders() {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
   useOrderUpdates(() => { fetchOrders(); });
 
+  useEffect(() => {
+    const sync = (e?: Event) => {
+      const detail = (e as CustomEvent | undefined)?.detail;
+      if (typeof detail === 'number') {
+        setCartCount(detail);
+      } else {
+        setCartCount(getCartCount());
+      }
+    };
+    sync();
+    window.addEventListener('cart-count', sync);
+    window.addEventListener('cart-updated', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('cart-count', sync);
+      window.removeEventListener('cart-updated', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
   const handleOrderAgain = (order: ConsumerOrder, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!order.items?.length) { navigate('/shop'); return; }
@@ -102,7 +124,21 @@ export default function ConsumerOrders() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5">
-      <h1 className="text-xl font-bold text-gray-900 mb-4">Order History</h1>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h1 className="text-xl font-bold text-gray-900">Order History</h1>
+        {cartCount > 0 && (
+          <button
+            onClick={() => {
+              navigate('/shop');
+              setTimeout(() => window.dispatchEvent(new Event('open-cart')), 40);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-600 text-white text-xs sm:text-sm font-semibold"
+          >
+            <ShoppingBag size={14} />
+            Go to Cart ({cartCount})
+          </button>
+        )}
+      </div>
 
       {orders.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">

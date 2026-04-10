@@ -71,26 +71,26 @@ router.post('/products', [
 ], (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
-  const { name, description, category, sku, price, cost_price, stock, min_stock, image_url, unit } = req.body;
+  const { name, description, category, sku, price, cost_price, stock, min_stock, image_url, image_urls, unit } = req.body;
   if (db.prepare(`SELECT id FROM products WHERE sku = ?`).get(sku)) return res.status(409).json({ error: 'SKU already exists' });
   const result = db.prepare(`
-    INSERT INTO products (name,description,category,sku,price,cost_price,stock,min_stock,image_url,unit,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,'active')
-  `).run(name, description||null, category, sku, price, cost_price||null, stock||0, min_stock||10, image_url||null, unit||'piece');
+    INSERT INTO products (name,description,category,sku,price,cost_price,stock,min_stock,image_url,image_urls,unit,status)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,'active')
+  `).run(name, description||null, category, sku, price, cost_price||null, stock||0, min_stock||10, image_url||null, image_urls||null, unit||'piece');
   res.status(201).json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(result.lastInsertRowid) });
 });
 
 router.put('/products/:id', (req, res) => {
   const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
-  const { name, description, category, sku, price, cost_price, stock, min_stock, image_url, unit, status } = req.body;
+  const { name, description, category, sku, price, cost_price, stock, min_stock, image_url, image_urls, unit, status } = req.body;
   if (sku && sku !== product.sku && db.prepare(`SELECT id FROM products WHERE sku = ? AND id != ?`).get(sku, product.id))
     return res.status(409).json({ error: 'SKU already in use' });
   db.prepare(`
-    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,stock=?,min_stock=?,image_url=?,unit=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,stock=?,min_stock=?,image_url=?,image_urls=?,unit=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
   `).run(name??product.name, description??product.description, category??product.category, sku??product.sku,
          price??product.price, cost_price??product.cost_price, stock??product.stock, min_stock??product.min_stock,
-         image_url??product.image_url, unit??product.unit, status??product.status, product.id);
+         image_url??product.image_url, image_urls??product.image_urls, unit??product.unit, status??product.status, product.id);
   res.json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(product.id) });
 });
 
