@@ -283,10 +283,14 @@ export default function Shop() {
                     <Tag size={10} />{p.category}
                   </span>
                   <p className="font-bold text-slate-900 mt-1 leading-snug line-clamp-2 text-sm flex-1">{p.name}</p>
+                  {/* Low stock warning */}
+                  {p.stock > 0 && p.stock <= 10 && (
+                    <p className="text-xs font-semibold text-amber-600 mt-1">Only {p.stock} {p.stock === 1 ? 'can' : 'cans'} left!</p>
+                  )}
                   {/* Price row */}
                   <div className="mt-2">
                     <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
-                    <p className="text-xs text-slate-400">per {p.unit}</p>
+                    <p className="text-xs text-slate-400">per can</p>
                   </div>
                 </div>
               </div>
@@ -334,7 +338,7 @@ export default function Shop() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
-                    <p className="text-xs text-brand-600 font-semibold">₹{product.price.toFixed(2)}/{product.unit}</p>
+                    <p className="text-xs text-brand-600 font-semibold">₹{product.price.toFixed(2)}/can</p>
                     <div className="flex items-center gap-2 mt-2">
                       <button
                         onClick={() => updateQty(product.id, quantity - 1)}
