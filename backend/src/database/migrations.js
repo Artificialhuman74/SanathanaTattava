@@ -344,6 +344,42 @@ function runMigrations(db) {
     )
   `);
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration 11: Product reviews + review tokens
+   * ═══════════════════════════════════════════════════════════════════ */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_reviews (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id     INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      consumer_id    INTEGER NOT NULL REFERENCES consumers(id) ON DELETE CASCADE,
+      consumer_name  TEXT    NOT NULL,
+      rating         INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+      body           TEXT,
+      images         TEXT,
+      verified_buyer INTEGER NOT NULL DEFAULT 0,
+      created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(product_id, consumer_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_tokens (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      consumer_id INTEGER NOT NULL REFERENCES consumers(id),
+      product_id  INTEGER NOT NULL REFERENCES products(id),
+      order_id    INTEGER NOT NULL REFERENCES consumer_orders(id),
+      token       TEXT    UNIQUE NOT NULL,
+      expires_at  DATETIME NOT NULL,
+      used        INTEGER NOT NULL DEFAULT 0,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  if (!hasColumn('consumer_orders', 'review_email_sent')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN review_email_sent INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_orders: added review_email_sent');
+  }
+
   console.log('[migration] all migrations applied');
 }
 

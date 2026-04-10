@@ -154,4 +154,33 @@ async function sendDeliveryOtpEmail(toEmail, consumerName, otp, orderNumber) {
   return sendMail({ to: toEmail, subject, text, html });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, DEV_MODE };
+/* ── Review request ───────────────────────────────────────────────────── */
+async function sendReviewRequestEmail(toEmail, consumerName, productName, reviewUrl) {
+  const subject = `How was your ${productName}? Leave a review`;
+  const text    = `Hi ${consumerName || 'there'},\n\nWe hope you're enjoying your ${productName}. We'd love to hear what you think!\n\nLeave your review here: ${reviewUrl}\n\nThank you for shopping with Sanathana Tattva.`;
+  const html    = buildEmailHtml({
+    title:    'How Was Your Order?',
+    preheader: `Share your experience with ${productName}`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        We hope you're loving your <strong>${productName}</strong>! Your feedback helps other customers and helps us improve.
+      </p>
+      <div style="text-align:center;margin:0 0 28px;">
+        <a href="${reviewUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#14532d 0%,#16a34a 100%);color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 36px;border-radius:12px;">
+          ⭐ Leave a Review
+        </a>
+      </div>
+      <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">
+        Takes less than a minute. Your review link is valid for 30 days.
+      </p>
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail, DEV_MODE };

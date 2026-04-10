@@ -584,4 +584,115 @@ router.get('/orders/:id', authConsumer, (req, res) => {
   res.json({ order, items });
 });
 
+/* ══════════════════════════════════════════════════════════════════════
+ * REVIEWS
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* GET /consumer/products/:id/reviews — public */
+router.get('/products/:id/reviews', (req, res) => {
+  const reviews = db.prepare(`
+    SELECT id, consumer_name, rating, body, images, verified_buyer, created_at
+    FROM product_reviews
+    WHERE product_id = ?
+    ORDER BY verified_buyer DESC, created_at DESC
+  `).all(req.params.id);
+  const avg = reviews.length
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    : null;
+  res.json({ reviews, average_rating: avg ? parseFloat(avg) : null, count: reviews.length });
+});
+
+/* POST /consumer/products/:id/reviews — requires consumer auth or review token */
+router.post('/products/:id/reviews', async (req, res) => {
+  const { rating, body: reviewBody, images, token } = req.body;
+  if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1–5' });
+
+  let consumer = null;
+  let verifiedBuyer = false;
+
+  if (token) {
+    // Token-based auth (from email link)
+    const row = db.prepare(`
+      SELECT rt.*, c.id as cid, c.name as cname
+      FROM review_tokens rt JOIN consumers c ON c.id = rt.consumer_id
+      WHERE rt.token = ? AND rt.product_id = ? AND rt.used = 0
+        AND rt.expires_at > datetime('now')
+    `).get(token, req.params.id);
+    if (!row) return res.status(401).json({ error: 'Invalid or expired review link' });
+    consumer = { id: row.cid, name: row.cname };
+    verifiedBuyer = true;
+    db.prepare('UPDATE review_tokens SET used = 1 WHERE token = ?').run(token);
+  } else {
+    // Consumer JWT auth
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required' });
+    try {
+      const decoded = require('jsonwebtoken').verify(header.split(' ')[1], process.env.JWT_SECRET);
+      if (decoded.role !== 'consumer') return res.status(403).json({ error: 'Consumer access only' });
+      consumer = db.prepare('SELECT id, name FROM consumers WHERE id=? AND status=?').get(decoded.id, 'active');
+      if (!consumer) return res.status(401).json({ error: 'Consumer not found' });
+      // Check verified buyer
+      const bought = db.prepare(`
+        SELECT 1 FROM consumer_order_items oi
+        JOIN consumer_orders co ON co.id = oi.order_id
+        WHERE co.consumer_id = ? AND oi.product_id = ? AND co.status = 'delivered'
+        LIMIT 1
+      `).get(consumer.id, req.params.id);
+      verifiedBuyer = !!bought;
+    } catch { return res.status(401).json({ error: 'Invalid token' }); }
+  }
+
+  if (!verifiedBuyer) return res.status(403).json({ error: 'You can only review products you have purchased and received' });
+
+  try {
+    db.prepare(`
+      INSERT INTO product_reviews (product_id, consumer_id, consumer_name, rating, body, images, verified_buyer)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+      ON CONFLICT(product_id, consumer_id) DO UPDATE SET
+        rating = excluded.rating, body = excluded.body,
+        images = excluded.images, created_at = CURRENT_TIMESTAMP
+    `).run(req.params.id, consumer.id, consumer.name, rating, reviewBody || null, images ? JSON.stringify(images) : null);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('POST /consumer/products/:id/reviews error:', err);
+    res.status(500).json({ error: 'Failed to save review' });
+  }
+});
+
+/* GET /consumer/review/validate?token=xxx&pid=xxx — validate token, return product+consumer info */
+router.get('/review/validate', (req, res) => {
+  const { token, pid } = req.query;
+  if (!token || !pid) return res.status(400).json({ error: 'token and pid required' });
+  const row = db.prepare(`
+    SELECT rt.consumer_id, rt.product_id, rt.used,
+           c.name as consumer_name, c.email as consumer_email,
+           p.name as product_name, p.image_url, p.category
+    FROM review_tokens rt
+    JOIN consumers c ON c.id = rt.consumer_id
+    JOIN products p ON p.id = rt.product_id
+    WHERE rt.token = ? AND rt.product_id = ? AND rt.expires_at > datetime('now')
+  `).get(token, pid);
+  if (!row) return res.status(404).json({ error: 'Invalid or expired review link' });
+  res.json({
+    valid: !row.used,
+    already_reviewed: !!row.used,
+    consumer_name: row.consumer_name,
+    product: { id: row.product_id, name: row.product_name, image_url: row.image_url, category: row.category },
+  });
+});
+
+/* GET /consumer/review/check?pid=xxx — check if logged-in consumer can review (has purchased) */
+router.get('/review/check', authConsumer, (req, res) => {
+  const { pid } = req.query;
+  if (!pid) return res.status(400).json({ error: 'pid required' });
+  const bought = db.prepare(`
+    SELECT 1 FROM consumer_order_items oi
+    JOIN consumer_orders co ON co.id = oi.order_id
+    WHERE co.consumer_id = ? AND oi.product_id = ? AND co.status = 'delivered'
+    LIMIT 1
+  `).get(req.consumer.id, pid);
+  const existing = db.prepare('SELECT id FROM product_reviews WHERE product_id=? AND consumer_id=?').get(pid, req.consumer.id);
+  res.json({ can_review: !!bought, already_reviewed: !!existing });
+});
+
 module.exports = router;

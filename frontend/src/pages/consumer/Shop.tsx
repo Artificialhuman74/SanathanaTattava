@@ -5,9 +5,11 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import RollingNumber from '../../components/RollingNumber';
 import { loadCart, saveCart } from '../../services/cartStorage';
+import { Link } from 'react-router-dom';
 import {
-  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, ChevronDown, Info,
+  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, ChevronDown, Info, Star, MessageSquare,
 } from 'lucide-react';
+import { consumerApi } from '../../contexts/AuthContext';
 
 interface Product {
   id: number;
@@ -777,7 +779,11 @@ export default function Shop() {
                   {selectedProduct.description?.trim() || 'No description added for this product yet.'}
                 </p>
               </div>
+
+              {/* Reviews section */}
+              <ProductReviews productId={selectedProduct.id} consumer={consumer} />
             </div>
+
 
             <div className="border-t border-slate-100 p-3 sm:p-4 bg-white">
               {selectedQty === 0 ? (
@@ -958,6 +964,132 @@ export default function Shop() {
               </div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Star rating display ─────────────────────────────────────────────── */
+function StarRow({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1,2,3,4,5].map(n => (
+        <Star key={n} size={size} className={n <= rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200 fill-slate-200'} />
+      ))}
+    </div>
+  );
+}
+
+/* ── Product reviews section ─────────────────────────────────────────── */
+function ProductReviews({ productId, consumer }: { productId: number; consumer: any }) {
+  const navigate = useNavigate();
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [avg, setAvg] = useState<number | null>(null);
+  const [canReview, setCanReview] = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    consumerApi.get(`/consumer/products/${productId}/reviews`)
+      .then(r => {
+        setReviews(r.data.reviews || []);
+        setAvg(r.data.average_rating);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+
+    if (consumer) {
+      consumerApi.get(`/consumer/review/check?pid=${productId}`)
+        .then(r => {
+          setCanReview(r.data.can_review);
+          setAlreadyReviewed(r.data.already_reviewed);
+        })
+        .catch(() => {});
+    }
+  }, [productId, consumer]);
+
+  return (
+    <div className="border-t border-slate-100 px-4 sm:px-5 pb-4 sm:pb-5 pt-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <MessageSquare size={15} className="text-slate-500" />
+          <span className="font-semibold text-slate-800 text-sm">
+            Reviews {reviews.length > 0 && `(${reviews.length})`}
+          </span>
+          {avg !== null && (
+            <div className="flex items-center gap-1">
+              <StarRow rating={Math.round(avg)} size={12} />
+              <span className="text-xs text-slate-500">{avg.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
+        {consumer && canReview && !alreadyReviewed && (
+          <button
+            onClick={() => navigate(`/shop/review?pid=${productId}`)}
+            className="text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Write a Review
+          </button>
+        )}
+        {consumer && alreadyReviewed && (
+          <span className="text-xs text-slate-400 italic">You reviewed this</span>
+        )}
+      </div>
+
+      {loading && <p className="text-xs text-slate-400 py-2">Loading reviews…</p>}
+
+      {!loading && reviews.length === 0 && (
+        <p className="text-xs text-slate-400 py-2">No reviews yet. Be the first!</p>
+      )}
+
+      {/* Review list */}
+      <div className="space-y-4">
+        {reviews.map(r => {
+          const imgs: string[] = (() => { try { return r.images ? JSON.parse(r.images) : []; } catch { return []; } })();
+          return (
+            <div key={r.id} className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-xs flex-shrink-0">
+                  {r.consumer_name?.[0]?.toUpperCase() || '?'}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-slate-800 truncate">{r.consumer_name}</span>
+                    {r.verified_buyer === 1 && (
+                      <span className="text-[10px] text-brand-600 font-medium bg-brand-50 px-1.5 py-0.5 rounded">Verified</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <StarRow rating={r.rating} size={11} />
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {r.body && <p className="text-xs text-slate-600 leading-5 ml-9">{r.body}</p>}
+              {imgs.length > 0 && (
+                <div className="flex gap-2 ml-9 flex-wrap">
+                  {imgs.map((img, i) => (
+                    <button key={i} onClick={() => setLightboxImg(img)} className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                      <img src={img} alt="Review" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Image lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-4" onClick={() => setLightboxImg(null)}>
+          <img src={lightboxImg} alt="Review photo" className="max-w-full max-h-full rounded-xl object-contain" />
         </div>
       )}
     </div>

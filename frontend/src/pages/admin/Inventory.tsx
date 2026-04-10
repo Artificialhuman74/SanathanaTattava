@@ -5,7 +5,7 @@ import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import {
   Plus, Search, Edit2, Trash2, Package, AlertTriangle, X,
-  Upload, ChevronDown, CheckCircle2, ImageIcon, CropIcon,
+  Upload, ChevronDown, CheckCircle2, CropIcon,
 } from 'lucide-react';
 
 interface Product {
@@ -79,7 +79,7 @@ export default function AdminInventory() {
   const [form,       setForm]       = useState<Partial<Product>>(EMPTY);
   const [saving,     setSaving]     = useState(false);
   const [deleting,   setDeleting]   = useState<number | null>(null);
-  const [additionalImageUrls, setAdditionalImageUrls] = useState('');
+  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
 
   // Image crop state
   const [cropSrc,        setCropSrc]        = useState<string | null>(null);
@@ -88,6 +88,7 @@ export default function AdminInventory() {
   const [croppingActive, setCroppingActive] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cropTargetRef = useRef<'primary' | number>('primary');
 
   const fetchProducts = useCallback(() => {
     setLoading(true);
@@ -104,21 +105,21 @@ export default function AdminInventory() {
   const openNew  = () => {
     setEditing(null);
     setForm(EMPTY);
-    setAdditionalImageUrls('');
+    setAdditionalImages([]);
     setShowModal(true);
   };
   const openEdit = (p: Product) => {
     setEditing(p);
     const images = getProductImages(p);
-    setForm({ ...p, image_url: images[0] || '', image_urls: p.image_urls || '' });
-    setAdditionalImageUrls(images.slice(1).join('\n'));
+    setForm({ ...p, image_url: images[0] || '' });
+    setAdditionalImages(images.slice(1));
     setShowModal(true);
   };
   const closeModal = () => {
     setShowModal(false);
     setEditing(null);
     setForm(EMPTY);
-    setAdditionalImageUrls('');
+    setAdditionalImages([]);
     setCropSrc(null);
   };
 
@@ -126,6 +127,11 @@ export default function AdminInventory() {
     setForm(f => ({ ...f, [k]: ['price','cost_price','stock','min_stock'].includes(k) ? Number(e.target.value) : e.target.value }));
 
   // ── Image upload & crop ───────────────────────────────────────────────────
+  const triggerUpload = (target: 'primary' | number) => {
+    cropTargetRef.current = target;
+    fileInputRef.current?.click();
+  };
+
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -133,44 +139,44 @@ export default function AdminInventory() {
     reader.onload = () => {
       setCropSrc(reader.result as string);
       setCroppingActive(true);
-      // Reset crop to full image
       setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
       setCompletedCrop(null);
     };
     reader.readAsDataURL(file);
-    // Reset input so same file can be re-selected
     e.target.value = '';
   };
 
   const applyCrop = () => {
-    if (!imgRef.current || !completedCrop || completedCrop.width === 0) {
-      // No crop drawn — use full image
-      setForm(f => ({ ...f, image_url: cropSrc! }));
-      setCroppingActive(false);
-      setCropSrc(null);
-      return;
+    const target = cropTargetRef.current;
+    let dataUrl = cropSrc!;
+    if (imgRef.current && completedCrop && completedCrop.width > 0) {
+      const image = imgRef.current;
+      const canvas = document.createElement('canvas');
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
+      canvas.width = 800;
+      canvas.height = 800;
+      canvas.getContext('2d')!.drawImage(
+        image,
+        completedCrop.x * scaleX, completedCrop.y * scaleY,
+        completedCrop.width * scaleX, completedCrop.height * scaleY,
+        0, 0, 800, 800
+      );
+      dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     }
-    const image = imgRef.current;
-    const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    const size = Math.min(completedCrop.width, completedCrop.height); // keep square
-    canvas.width = 800;
-    canvas.height = 800;
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(
-      image,
-      completedCrop.x * scaleX,
-      completedCrop.y * scaleY,
-      completedCrop.width * scaleX,
-      completedCrop.height * scaleY,
-      0, 0, 800, 800
-    );
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    setForm(f => ({ ...f, image_url: dataUrl }));
+    if (target === 'primary') {
+      setForm(f => ({ ...f, image_url: dataUrl }));
+    } else {
+      setAdditionalImages(imgs => {
+        const next = [...imgs];
+        if (target >= next.length) next.push(dataUrl);
+        else next[target] = dataUrl;
+        return next;
+      });
+    }
     setCroppingActive(false);
     setCropSrc(null);
-    toast.success('Image cropped and ready!');
+    toast.success('Image ready!');
   };
 
   const cancelCrop = () => {
@@ -186,8 +192,7 @@ export default function AdminInventory() {
     }
     setSaving(true);
     try {
-      const extraImages = parseImageUrls(additionalImageUrls);
-      const allImages = dedupeImages([String(form.image_url || '').trim(), ...extraImages]).slice(0, 12);
+      const allImages = dedupeImages([String(form.image_url || '').trim(), ...additionalImages.filter(Boolean)]).slice(0, 12);
       const payload = {
         ...form,
         image_url: allImages[0] || null,
@@ -376,63 +381,89 @@ export default function AdminInventory() {
 
               {/* ── Image section ───────────────────────────────────────── */}
               <div>
-                <label className="form-label mb-2">Product Image</label>
-                <div className="flex gap-4 items-start">
-                  {/* Preview */}
-                  <div className="w-28 h-28 rounded-xl bg-slate-100 flex-shrink-0 overflow-hidden border-2 border-dashed border-slate-200 flex items-center justify-center">
-                    {getPrimaryImage(form)
-                      ? <img src={getPrimaryImage(form)} alt="Preview" className="w-full h-full object-cover" />
-                      : <div className="flex flex-col items-center gap-1 text-slate-300">
-                          <ImageIcon size={28} />
-                          <span className="text-xs">No image</span>
-                        </div>
-                    }
-                  </div>
+                <label className="form-label mb-2">Product Images</label>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onFileSelect} className="hidden" />
 
-                  {/* Upload controls */}
-                  <div className="flex-1 space-y-2">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={onFileSelect}
-                      className="hidden"
-                    />
+                {/* Image grid: primary + additional slots */}
+                <div className="flex flex-wrap gap-3">
+                  {/* Primary image slot */}
+                  <div className="flex flex-col items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-brand-300 rounded-xl text-brand-600 font-medium text-sm hover:bg-brand-50 transition-colors"
+                      onClick={() => triggerUpload('primary')}
+                      className="w-24 h-24 rounded-xl bg-slate-100 overflow-hidden border-2 border-dashed border-brand-300 flex items-center justify-center hover:bg-brand-50 transition-colors relative group"
                     >
-                      <Upload size={16} />
-                      Upload & Crop Image
+                      {form.image_url
+                        ? <>
+                            <img src={form.image_url} alt="Primary" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <CropIcon size={18} className="text-white" />
+                            </div>
+                          </>
+                        : <div className="flex flex-col items-center gap-1 text-brand-400">
+                            <Upload size={20} />
+                            <span className="text-[10px] font-medium">Add Photo</span>
+                          </div>
+                      }
                     </button>
-                    <p className="text-xs text-slate-400 text-center">
-                      JPG, PNG, WebP · Square crop recommended
-                    </p>
+                    <span className="text-[10px] text-slate-400">Cover</span>
                     {form.image_url && (
-                      <button
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, image_url: '' }))}
-                        className="w-full text-xs text-red-400 hover:text-red-600 transition-colors"
-                      >
-                        Remove image
-                      </button>
+                      <button type="button" onClick={() => setForm(f => ({ ...f, image_url: '' }))} className="text-[10px] text-red-400 hover:text-red-600">Remove</button>
                     )}
                   </div>
+
+                  {/* Additional image slots */}
+                  {additionalImages.map((img, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => triggerUpload(idx)}
+                        className="w-24 h-24 rounded-xl bg-slate-100 overflow-hidden border-2 border-dashed border-slate-300 flex items-center justify-center hover:bg-slate-200 transition-colors relative group"
+                      >
+                        {img
+                          ? <>
+                              <img src={img} alt={`Image ${idx + 2}`} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <CropIcon size={18} className="text-white" />
+                              </div>
+                            </>
+                          : <div className="flex flex-col items-center gap-1 text-slate-400">
+                              <Upload size={20} />
+                              <span className="text-[10px]">Add Photo</span>
+                            </div>
+                        }
+                      </button>
+                      <span className="text-[10px] text-slate-400">Photo {idx + 2}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdditionalImages(imgs => imgs.filter((_, i) => i !== idx))}
+                        className="text-[10px] text-red-400 hover:text-red-600"
+                      >Remove</button>
+                    </div>
+                  ))}
+
+                  {/* Add another photo button */}
+                  {additionalImages.length < 7 && (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdditionalImages(imgs => [...imgs, '']);
+                          // Trigger upload for the new slot after state updates
+                          setTimeout(() => triggerUpload(additionalImages.length), 50);
+                        }}
+                        className="w-24 h-24 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors text-slate-400"
+                      >
+                        <div className="flex flex-col items-center gap-1">
+                          <Plus size={22} />
+                          <span className="text-[10px]">Add</span>
+                        </div>
+                      </button>
+                      <span className="text-[10px] text-slate-400">More</span>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-3">
-                  <label className="form-label">Additional Images (optional)</label>
-                  <textarea
-                    value={additionalImageUrls}
-                    onChange={(e) => setAdditionalImageUrls(e.target.value)}
-                    className="form-input resize-none"
-                    rows={3}
-                    placeholder={'Paste one image URL per line.\nThese are used for product gallery in the shop.'}
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    First image is from upload/preview. Extra images can be added as URLs.
-                  </p>
-                </div>
+                <p className="text-xs text-slate-400 mt-2">Up to 8 images · JPG, PNG, WebP · Tap any photo to re-crop</p>
               </div>
 
               {/* ── Fields ──────────────────────────────────────────────── */}
