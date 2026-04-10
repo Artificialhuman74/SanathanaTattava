@@ -149,6 +149,15 @@ router.put('/traders/:id/commission-rate', (req, res) => {
   res.json({ success: true });
 });
 
+router.delete('/traders/:id', (req, res) => {
+  const trader = db.prepare(`SELECT id FROM users WHERE id = ? AND role = 'trader'`).get(req.params.id);
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  // Reassign any sub-dealers to have no parent (tier stays 2 but referrer cleared)
+  db.prepare(`UPDATE users SET referred_by_id = NULL WHERE referred_by_id = ?`).run(req.params.id);
+  db.prepare(`DELETE FROM users WHERE id = ?`).run(req.params.id);
+  res.json({ success: true });
+});
+
 /* ── Trader B2B Orders ────────────────────────────────────────────────── */
 router.get('/orders', (req, res) => {
   const { status, search } = req.query;

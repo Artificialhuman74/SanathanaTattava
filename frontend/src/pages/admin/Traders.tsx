@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Users, Search, ChevronDown, Star, UserCheck, UserX, Phone, Mail,
-  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X,
+  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2,
 } from 'lucide-react';
 
 interface Trader {
@@ -34,6 +34,7 @@ export default function AdminTraders() {
   const [statusFilter, setStatusFilter] = useState('');
   const [expanded,     setExpanded]     = useState<Set<number>>(new Set());
   const [editRate,     setEditRate]     = useState<{ id: number; value: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Trader | null>(null);
 
   const fetchTraders = useCallback(() => {
     setLoading(true);
@@ -75,6 +76,15 @@ export default function AdminTraders() {
       ));
       toast.error('Failed to update delivery status');
     }
+  };
+
+  const deleteTrader = async (trader: Trader) => {
+    try {
+      await api.delete(`/admin/traders/${trader.id}`);
+      toast.success(`${trader.name} deleted`);
+      setConfirmDelete(null);
+      fetchTraders();
+    } catch { toast.error('Failed to delete trader'); }
   };
 
   const saveCommissionRate = async (id: number) => {
@@ -192,12 +202,21 @@ export default function AdminTraders() {
           <span className="flex items-center gap-1"><Calendar size={10} />{new Date(t.created_at).toLocaleDateString('en-IN')}</span>
         </td>
         <td>
-          <button
-            onClick={() => toggleStatus(t)}
-            className={`btn-ghost p-2 text-xs font-medium gap-1 ${t.status === 'active' ? 'text-red-500 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-800'}`}
-          >
-            {t.status === 'active' ? <><UserX size={14} />Suspend</> : <><UserCheck size={14} />Activate</>}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => toggleStatus(t)}
+              className={`btn-ghost p-2 text-xs font-medium gap-1 ${t.status === 'active' ? 'text-red-500 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-800'}`}
+            >
+              {t.status === 'active' ? <><UserX size={14} />Suspend</> : <><UserCheck size={14} />Activate</>}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(t)}
+              className="btn-ghost p-2 text-xs font-medium gap-1 text-slate-400 hover:text-red-600"
+              title="Delete trader permanently"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -312,6 +331,40 @@ export default function AdminTraders() {
           </div>
         )}
       </div>
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Delete Trader</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
+              Are you sure you want to permanently delete <span className="font-semibold text-slate-900">{confirmDelete.name}</span>?
+              Their orders and commission history will remain, but the account will be removed.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteTrader(confirmDelete)}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
