@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import axios from 'axios';
+import { getApiHttpBaseUrl, rotateApiBaseUrl, shouldRotateApiBase } from '../config/apiBase';
 
 export interface User {
   id: number;
@@ -69,16 +70,30 @@ const AuthContext = createContext<AuthContextType>(null!);
 
 /* ── Axios instance for consumer calls (uses consumer_token) ──────────── */
 export const consumerApi = axios.create({
-  baseURL: (import.meta.env.VITE_API_URL ?? '') + '/api',
+  baseURL: getApiHttpBaseUrl(),
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
 
 consumerApi.interceptors.request.use((config) => {
+  config.baseURL = getApiHttpBaseUrl();
   const token = localStorage.getItem('consumer_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+consumerApi.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const cfg = err?.config || {};
+    if (!cfg.__apiFailoverRetried && shouldRotateApiBase(err) && rotateApiBaseUrl()) {
+      cfg.__apiFailoverRetried = true;
+      cfg.baseURL = getApiHttpBaseUrl();
+      return consumerApi.request(cfg);
+    }
+    return Promise.reject(err);
+  }
+);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user,          setUser]          = useState<User | null>(null);

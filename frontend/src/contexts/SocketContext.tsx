@@ -15,6 +15,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getApiBaseUrl, rotateApiBaseUrl } from '../config/apiBase';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -36,6 +37,10 @@ const SocketContext = createContext<SocketContextType>({
 });
 
 function getAuthToken(): string | null {
+  const path = window.location.pathname;
+  if (path.startsWith('/shop')) {
+    return localStorage.getItem('consumer_token') || localStorage.getItem('token');
+  }
   return localStorage.getItem('token') || localStorage.getItem('consumer_token');
 }
 
@@ -65,11 +70,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const token = getAuthToken();
     if (!token) return;
 
-    const baseUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const baseUrl = getApiBaseUrl() || window.location.origin;
 
     const sock = io(baseUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -87,6 +92,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
     sock.on('connect_error', (err) => {
       console.warn('[ws] connect error:', err.message);
+      const msg = String(err.message || '');
+      const authFailure = /No auth token|Invalid token|jwt|unauthorized/i.test(msg);
+      if (!authFailure) {
+        const nextBase = rotateApiBaseUrl();
+        if (nextBase) {
+          console.warn('[ws] retrying with next API base:', nextBase);
+          setTimeout(() => initSocket(), 300);
+          return;
+        }
+      }
       setConnected(false);
     });
 

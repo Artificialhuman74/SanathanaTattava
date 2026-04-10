@@ -48,8 +48,10 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     // Allow any trycloudflare.com subdomain (temporary tunnels)
     if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return cb(null, true);
-    // Allow any railway.app subdomain (preview deployments)
-    if (/^https:\/\/[a-z0-9-]+\.railway\.app$/.test(origin)) return cb(null, true);
+    // Allow railway deployments:
+    // - https://foo.railway.app
+    // - https://foo.up.railway.app
+    if (/^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.railway\.app$/.test(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
