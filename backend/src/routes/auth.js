@@ -178,6 +178,9 @@ router.post('/consumer/register', [
   if (db.prepare('SELECT id FROM consumers WHERE email = ?').get(email))
     return res.status(409).json({ error: 'Email already registered. Please log in.' });
 
+  if (phone && phone.trim() && db.prepare('SELECT id FROM consumers WHERE phone = ?').get(phone.trim()))
+    return res.status(409).json({ error: 'Phone number already registered. Please use a different number.' });
+
   // Rate limit: max 5 registrations per email per hour
   const recentCount = db.prepare(`
     SELECT COUNT(*) as c FROM email_verifications
