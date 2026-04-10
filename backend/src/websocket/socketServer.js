@@ -22,7 +22,26 @@ let io = null;
 function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: true,
+      origin: (origin, callback) => {
+        const allowedOrigins = [
+          'https://sanathanatattva.shop',
+          'https://www.sanathanatattva.shop',
+          'http://localhost:3000',
+          'https://localhost:3000',
+          'http://localhost:5001',
+          'https://localhost:5001',
+        ];
+        if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+
+        // Allow requests with no origin (mobile apps, curl)
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        // Allow any trycloudflare.com subdomain (temporary tunnels)
+        if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return callback(null, true);
+        // Allow any railway.app subdomain (preview deployments)
+        if (/^https:\/\/[a-z0-9-]+\.railway\.app$/.test(origin)) return callback(null, true);
+
+        callback(new Error(`WebSocket CORS: origin ${origin} not allowed`));
+      },
       credentials: true,
     },
     pingInterval: 25000,   // keep-alive every 25 s
