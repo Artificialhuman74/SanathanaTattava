@@ -58,12 +58,23 @@ export default function AdminTraders() {
   };
 
   const toggleDelivery = async (trader: Trader) => {
-    const newVal = !trader.delivery_enabled;
+    const isOn = !!(trader.will_deliver && trader.delivery_enabled);
+    const newVal = !isOn;
+    // Optimistic update
+    setTraders(prev => prev.map(t =>
+      t.id === trader.id ? { ...t, will_deliver: newVal as any, delivery_enabled: newVal as any } : t
+    ));
     try {
-      await api.put(`/admin/traders/${trader.id}/delivery`, { delivery_enabled: newVal });
+      await api.put(`/admin/traders/${trader.id}/delivery`, { enabled: newVal });
       toast.success(newVal ? 'Delivery enabled' : 'Delivery disabled');
       fetchTraders();
-    } catch { toast.error('Failed to update delivery setting'); }
+    } catch {
+      // Revert on failure
+      setTraders(prev => prev.map(t =>
+        t.id === trader.id ? { ...t, will_deliver: trader.will_deliver, delivery_enabled: trader.delivery_enabled } : t
+      ));
+      toast.error('Failed to update delivery status');
+    }
   };
 
   const saveCommissionRate = async (id: number) => {
@@ -155,23 +166,21 @@ export default function AdminTraders() {
           )}
         </td>
         <td>
-          {/* Delivery toggle */}
+          {/* Delivery toggle — admin fully controls */}
           <div className="flex flex-col gap-1">
-            <span className={`text-xs ${t.will_deliver ? 'text-emerald-600' : 'text-slate-400'}`}>
-              {t.will_deliver ? 'Will deliver' : 'No delivery'}
+            <span className={`text-xs ${(t.will_deliver && t.delivery_enabled) ? 'text-emerald-600' : 'text-slate-400'}`}>
+              {(t.will_deliver && t.delivery_enabled) ? 'Delivery on' : 'No delivery'}
             </span>
-            {t.will_deliver && (
-              <button
-                onClick={() => toggleDelivery(t)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                  t.delivery_enabled ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-              >
-                <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${
-                  t.delivery_enabled ? 'translate-x-4.5' : 'translate-x-0.5'
-                }`} />
-              </button>
-            )}
+            <button
+              onClick={() => toggleDelivery(t)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                (t.will_deliver && t.delivery_enabled) ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${
+                (t.will_deliver && t.delivery_enabled) ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              }`} />
+            </button>
           </div>
         </td>
         <td>

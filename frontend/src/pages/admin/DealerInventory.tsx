@@ -27,7 +27,7 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
 };
 
 export default function AdminDealerInventory() {
-  const [tab, setTab] = useState<'overview' | 'warehouse' | 'restock' | 'alerts'>('overview');
+  const [tab, setTab] = useState<'overview' | 'warehouse' | 'restock' | 'distribute' | 'alerts'>('overview');
   const [inventory, setInventory] = useState<DealerInvRow[]>([]);
   const [alerts, setAlerts]       = useState<AlertRow[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -39,6 +39,10 @@ export default function AdminDealerInventory() {
   const [selDealer, setSelDealer] = useState<number | ''>('');
   const [restockItems, setRestockItems] = useState<{ product_id: number; quantity: number }[]>([]);
   const [restocking, setRestocking]     = useState(false);
+  // Distribute to multiple dealers
+  const [distProduct, setDistProduct]   = useState<number | ''>('');
+  const [distAllocations, setDistAllocations] = useState<{ dealer_id: number; quantity: number }[]>([]);
+  const [distributing, setDistributing]  = useState(false);
 
   const fetchOverview = useCallback(() => {
     setLoading(true);
@@ -66,8 +70,22 @@ export default function AdminDealerInventory() {
   useEffect(() => { fetchOverview(); }, [fetchOverview]);
   useEffect(() => {
     if (tab === 'warehouse') fetchWarehouse();
-    if (tab === 'restock') fetchDealersAndProducts();
+    if (tab === 'restock' || tab === 'distribute') fetchDealersAndProducts();
   }, [tab]);
+
+  const submitDistribute = async () => {
+    if (!distProduct) return toast.error('Select a product');
+    const valid = distAllocations.filter(a => a.dealer_id > 0 && a.quantity > 0);
+    if (!valid.length) return toast.error('Add at least one dealer allocation');
+    setDistributing(true);
+    try {
+      const r = await api.post('/admin/inventory/distribute', { product_id: distProduct, allocations: valid });
+      toast.success(`Distributed ${r.data.total} units of ${r.data.product_name} to ${r.data.distributed?.length} dealer(s)`);
+      setDistAllocations([]); setDistProduct('');
+      fetchOverview(); fetchDealersAndProducts();
+    } catch (err: any) { toast.error(err.response?.data?.error || 'Distribution failed'); }
+    finally { setDistributing(false); }
+  };
 
   const addRestockItem = () => setRestockItems(p => [...p, { product_id: 0, quantity: 1 }]);
   const removeRestockItem = (idx: number) => setRestockItems(p => p.filter((_, i) => i !== idx));
@@ -106,10 +124,11 @@ export default function AdminDealerInventory() {
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit flex-wrap">
         {([
-          { key: 'overview',  label: 'Dealer Stock',   icon: Package },
-          { key: 'warehouse', label: 'Warehouse',      icon: Warehouse },
-          { key: 'restock',   label: 'Restock Dealer', icon: Truck },
-          { key: 'alerts',    label: `Alerts (${alerts.length})`, icon: AlertTriangle },
+          { key: 'overview',   label: 'Dealer Stock',   icon: Package },
+          { key: 'warehouse',  label: 'Warehouse',      icon: Warehouse },
+          { key: 'distribute', label: 'Distribute',     icon: ArrowRight },
+          { key: 'restock',    label: 'Restock (1:1)',  icon: Truck },
+          { key: 'alerts',     label: `Alerts (${alerts.length})`, icon: AlertTriangle },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors
@@ -199,6 +218,80 @@ export default function AdminDealerInventory() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Distribute to Multiple Dealers ───────────────────────────────── */}
+      {tab === 'distribute' && (
+        <div className="card p-6 space-y-6">
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ArrowRight size={18} className="text-brand-600" /> Distribute One Product to Multiple Dealers</h3>
+
+          <div>
+            <label className="form-label">Product to Distribute</label>
+            <select value={distProduct} onChange={e => { setDistProduct(e.target.value ? Number(e.target.value) : ''); setDistAllocations([]); }} className="form-input max-w-md">
+              <option value="">Choose a product...</option>
+              {products.map(p => <option key={p.id} value={p.id}>{p.name} — {p.warehouse_stock} cans in warehouse</option>)}
+            </select>
+          </div>
+
+          {distProduct !== '' && (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="form-label mb-0">Dealer Allocations</label>
+                  <button
+                    onClick={() => setDistAllocations(p => [...p, { dealer_id: 0, quantity: 1 }])}
+                    className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    <Plus size={12} /> Add Dealer
+                  </button>
+                </div>
+                {distAllocations.map((a, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                    <select
+                      value={a.dealer_id}
+                      onChange={e => setDistAllocations(p => p.map((x, i) => i === idx ? { ...x, dealer_id: Number(e.target.value) } : x))}
+                      className="form-input flex-1"
+                    >
+                      <option value={0}>Select dealer...</option>
+                      {dealers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.tier === 1 ? 'T1' : 'Sub'})</option>)}
+                    </select>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => setDistAllocations(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-100"><Minus size={12} /></button>
+                      <input
+                        type="number" min={1} value={a.quantity}
+                        onChange={e => setDistAllocations(p => p.map((x, i) => i === idx ? { ...x, quantity: Math.max(1, Number(e.target.value)) } : x))}
+                        className="w-16 text-center form-input py-1.5"
+                      />
+                      <button onClick={() => setDistAllocations(p => p.map((x, i) => i === idx ? { ...x, quantity: x.quantity + 1 } : x))} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-100"><Plus size={12} /></button>
+                    </div>
+                    <button onClick={() => setDistAllocations(p => p.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-red-500"><X size={16} /></button>
+                  </div>
+                ))}
+                {distAllocations.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-4">Click "Add Dealer" to add allocations</p>
+                )}
+              </div>
+
+              {distAllocations.length > 0 && (
+                <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Total to distribute</p>
+                    <p className="text-2xl font-extrabold text-brand-600">{distAllocations.reduce((s, a) => s + a.quantity, 0)} cans</p>
+                    <p className="text-xs text-slate-400">across {distAllocations.filter(a => a.dealer_id > 0).length} dealer(s)</p>
+                  </div>
+                  <button
+                    onClick={submitDistribute}
+                    disabled={distributing}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    {distributing && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+                    {distributing ? 'Distributing…' : 'Distribute Stock'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

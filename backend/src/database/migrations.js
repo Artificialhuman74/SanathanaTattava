@@ -327,6 +327,23 @@ function runMigrations(db) {
     console.log('[migration] consumers: phone is now nullable');
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration 10: Stock distribution tracking table
+   * ═══════════════════════════════════════════════════════════════════ */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS distributions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id     INTEGER NOT NULL REFERENCES products(id),
+      dealer_id      INTEGER NOT NULL REFERENCES users(id),
+      allocated_qty  INTEGER NOT NULL,
+      received_qty   INTEGER,
+      status         TEXT    NOT NULL DEFAULT 'pending',
+      notes          TEXT,
+      created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+      received_at    DATETIME
+    )
+  `);
+
   console.log('[migration] all migrations applied');
 }
 

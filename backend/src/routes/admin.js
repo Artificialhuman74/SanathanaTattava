@@ -131,10 +131,12 @@ router.put('/traders/:id/status', (req, res) => {
 });
 
 router.put('/traders/:id/delivery', (req, res) => {
-  const { delivery_enabled } = req.body;
-  if (typeof delivery_enabled === 'undefined') return res.status(400).json({ error: 'delivery_enabled required' });
+  // Accept `enabled` (new) or `delivery_enabled` (legacy)
+  const val = req.body.enabled ?? req.body.delivery_enabled;
+  if (typeof val === 'undefined') return res.status(400).json({ error: 'enabled required' });
   if (!db.prepare(`SELECT id FROM users WHERE id = ? AND role = 'trader'`).get(req.params.id)) return res.status(404).json({ error: 'Trader not found' });
-  db.prepare(`UPDATE users SET delivery_enabled = ? WHERE id = ?`).run(delivery_enabled ? 1 : 0, req.params.id);
+  const flag = val ? 1 : 0;
+  db.prepare(`UPDATE users SET will_deliver = ?, delivery_enabled = ? WHERE id = ?`).run(flag, flag, req.params.id);
   res.json({ success: true });
 });
 
@@ -445,6 +447,84 @@ router.get('/inventory/alerts', (_req, res) => {
     const alerts = getAllLowStockAlerts();
     res.json({ alerts, count: alerts.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ── Distribute Stock to Multiple Dealers ────────────────────────────── */
+router.post('/inventory/distribute', [
+  body('product_id').isInt({ min: 1 }).withMessage('product_id required'),
+  body('allocations').isArray({ min: 1 }).withMessage('At least one allocation required'),
+  body('allocations.*.dealer_id').isInt({ min: 1 }),
+  body('allocations.*.quantity').isInt({ min: 1 }),
+  body('notes').optional().trim(),
+], (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  const { product_id, allocations, notes } = req.body;
+  const totalRequested = allocations.reduce((s, a) => s + a.quantity, 0);
+
+  try {
+    const result = db.transaction(() => {
+      const product = db.prepare(`SELECT id, name, stock FROM products WHERE id = ? AND status = 'active'`).get(product_id);
+      if (!product) throw new Error('Product not found');
+      if (product.stock < totalRequested) {
+        throw new Error(`Insufficient warehouse stock (available: ${product.stock}, requested: ${totalRequested})`);
+      }
+
+      const distributed = [];
+      for (const { dealer_id, quantity } of allocations) {
+        const dealer = db.prepare(`SELECT id, name FROM users WHERE id = ? AND role = 'trader'`).get(dealer_id);
+        if (!dealer) throw new Error(`Dealer #${dealer_id} not found`);
+
+        // Deduct from warehouse
+        db.prepare(`UPDATE products SET stock = stock - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(quantity, product_id);
+
+        // Add to dealer inventory (upsert)
+        db.prepare(`
+          INSERT INTO dealer_inventory (dealer_id, product_id, quantity, last_restocked_at, updated_at)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT(dealer_id, product_id)
+          DO UPDATE SET quantity = quantity + ?, last_restocked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        `).run(dealer_id, product_id, quantity, quantity);
+
+        // Create distribution record
+        db.prepare(`
+          INSERT INTO distributions (product_id, dealer_id, allocated_qty, notes)
+          VALUES (?, ?, ?, ?)
+        `).run(product_id, dealer_id, quantity, notes || null);
+
+        // Log transaction
+        db.prepare(`
+          INSERT INTO inventory_transactions (dealer_id, product_id, quantity, type, notes)
+          VALUES (?, ?, ?, 'restock', ?)
+        `).run(dealer_id, product_id, quantity, notes || `Distributed by admin`);
+
+        distributed.push({ dealer_id, dealer_name: dealer.name, quantity });
+      }
+
+      return { success: true, distributed, product_name: product.name, total: totalRequested };
+    })();
+
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/* ── Distribution History ─────────────────────────────────────────────── */
+router.get('/inventory/distributions', (req, res) => {
+  const { product_id, dealer_id } = req.query;
+  let sql = `
+    SELECT d.*, p.name as product_name, p.sku, u.name as dealer_name, u.tier as dealer_tier
+    FROM distributions d
+    JOIN products p ON d.product_id = p.id
+    JOIN users u ON d.dealer_id = u.id
+    WHERE 1=1
+  `, params = [];
+  if (product_id) { sql += ` AND d.product_id = ?`; params.push(Number(product_id)); }
+  if (dealer_id)  { sql += ` AND d.dealer_id = ?`;  params.push(Number(dealer_id)); }
+  sql += ` ORDER BY d.created_at DESC LIMIT 200`;
+  res.json({ distributions: db.prepare(sql).all(...params) });
 });
 
 /* ── Restock Dealer (Admin → Dealer) ─────────────────────────────────── */
