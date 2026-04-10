@@ -70,10 +70,9 @@ export default function ConsumerLayout() {
             <Menu className="w-5 h-5 text-gray-700" />
           </button>
 
-          {/* Center: logo */}
-          <Link to="/shop" className="flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-7 w-7 object-contain rounded-lg" alt="" />
-            <span className="font-bold text-base text-gray-900 tracking-tight">Sanathana Tattva</span>
+          {/* Center: text only */}
+          <Link to="/shop" className="absolute left-1/2 -translate-x-1/2">
+            <span className="text-base font-semibold tracking-tight text-gray-900" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", letterSpacing: '-0.01em' }}>Sanathana Tattva</span>
           </Link>
 
           {/* Right: bell or cart (swaps on scroll when on shop page) */}
@@ -116,12 +115,9 @@ export default function ConsumerLayout() {
           <div className="relative w-full bg-white flex flex-col animate-slide-up sm:w-80 sm:animate-none sm:slide-in">
             {/* Menu header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 object-contain rounded-lg" alt="" />
-                <div>
-                  <p className="font-bold text-gray-900 text-sm">Sanathana Tattva</p>
-                  <p className="text-xs text-gray-400">Purity of Tradition in Every Drop</p>
-                </div>
+              <div>
+                <p className="font-semibold text-gray-900 text-base" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>Sanathana Tattva</p>
+                <p className="text-xs text-gray-400">Purity of Tradition in Every Drop</p>
               </div>
               <button
                 onClick={() => setMenuOpen(false)}
@@ -237,10 +233,7 @@ export default function ConsumerLayout() {
         {/* Desktop uses the menu overlay above; keep a simple footer */}
         <footer className="bg-gray-900 py-4 mt-auto">
           <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-5 w-5 object-contain rounded" alt="logo" />
-              <span className="font-semibold text-white text-sm">Sanathana Tattva</span>
-            </div>
+            <span className="font-semibold text-white text-sm" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>Sanathana Tattva</span>
             <p className="text-gray-500 text-xs">© {new Date().getFullYear()} Purity of Tradition in Every Drop</p>
             <div className="flex items-center gap-4 text-xs text-gray-500">
               {consumer && (
