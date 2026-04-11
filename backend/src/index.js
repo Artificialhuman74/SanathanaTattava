@@ -1,5 +1,54 @@
 require('dotenv').config();
 
+const fs   = require('fs');
+const path = require('path');
+
+// ─── Persistent file logger ───────────────────────────────────────────────
+// Tees console.log / console.error to a daily rotating file in DATA_DIR/logs/.
+// On Railway, DATA_DIR=/data is a mounted Volume — survives deployments.
+// Locally it falls back to ../../data/logs/ which is git-ignored.
+(function setupFileLogging() {
+  const dataDir  = process.env.DATA_DIR || path.join(__dirname, '../../data');
+  const logsDir  = path.join(dataDir, 'logs');
+  try { fs.mkdirSync(logsDir, { recursive: true }); } catch (_) {}
+
+  let currentDay  = '';
+  let logStream   = null;
+
+  function getStream() {
+    const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    if (day !== currentDay) {
+      if (logStream) try { logStream.end(); } catch (_) {}
+      currentDay = day;
+      const file = path.join(logsDir, `app-${day}.log`);
+      logStream = fs.createWriteStream(file, { flags: 'a' });
+    }
+    return logStream;
+  }
+
+  function write(...args) {
+    const line = `[${new Date().toISOString()}] ${args.map(a =>
+      typeof a === 'string' ? a : JSON.stringify(a)
+    ).join(' ')}\n`;
+    try { getStream().write(line); } catch (_) {}
+  }
+
+  const origLog   = console.log.bind(console);
+  const origError = console.error.bind(console);
+  console.log   = (...args) => { origLog(...args);   write(...args); };
+  console.error = (...args) => { origError(...args); write('[ERROR]', ...args); };
+
+  // Prune log files older than 30 days (runs once at startup)
+  try {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    fs.readdirSync(logsDir).forEach(f => {
+      if (!f.startsWith('app-')) return;
+      const full = path.join(logsDir, f);
+      if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
+    });
+  } catch (_) {}
+})();
+
 // Express 4 does not catch async errors — Node.js v20 exits on unhandled rejections.
 // Log them and keep the server alive; individual requests will timeout/fail gracefully.
 process.on('unhandledRejection', (reason) => {
@@ -12,8 +61,6 @@ process.on('uncaughtException', (err) => {
 const express = require('express');
 const https   = require('https');
 const http    = require('http');
-const fs      = require('fs');
-const path    = require('path');
 const cors    = require('cors');
 const helmet  = require('helmet');
 
