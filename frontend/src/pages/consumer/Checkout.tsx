@@ -574,7 +574,7 @@ export default function Checkout() {
                         value={referralCode}
                         onChange={e => setReferralCode(e.target.value.toUpperCase())}
                         className="form-input pl-10 uppercase tracking-widest font-mono"
-                        placeholder="e.g. A0001"
+                        placeholder=""
                         maxLength={5}
                         autoFocus
                       />

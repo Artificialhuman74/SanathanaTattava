@@ -149,7 +149,7 @@ export default function ConsumerRegister() {
                   className={`form-input uppercase tracking-wider font-mono pr-8 ${
                     codeValid === true ? 'border-emerald-400' : codeValid === false ? 'border-red-400' : ''
                   }`}
-                  placeholder="e.g. A0001"
+                  placeholder=""
                   maxLength={5}
                 />
                 {codeValid === true  && <CheckCircle2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />}

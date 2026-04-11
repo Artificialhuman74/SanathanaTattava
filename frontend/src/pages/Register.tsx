@@ -206,7 +206,7 @@ export default function Register() {
                     refStatus?.valid === true  ? 'border-emerald-400 focus:ring-emerald-400' :
                     refStatus?.valid === false ? 'border-red-400 focus:ring-red-400' : ''
                   }`}
-                  placeholder="e.g. TRD-AJ-001"
+                  placeholder=""
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   {refChecking && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-600 block" />}
