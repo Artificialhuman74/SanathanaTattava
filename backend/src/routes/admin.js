@@ -111,7 +111,7 @@ router.get('/traders', (req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM commissions WHERE trader_id = u.id AND status='pending') as pending_commission
     FROM users u
     LEFT JOIN users r ON u.referred_by_id = r.id
-    WHERE u.role = 'trader'
+    WHERE u.role = 'trader' AND u.status != 'deleted'
   `, params = [];
   if (tier)   { sql += ` AND u.tier = ?`;       params.push(Number(tier)); }
   if (status) { sql += ` AND u.status = ?`;     params.push(status); }
@@ -152,9 +152,10 @@ router.put('/traders/:id/commission-rate', (req, res) => {
 router.delete('/traders/:id', (req, res) => {
   const trader = db.prepare(`SELECT id FROM users WHERE id = ? AND role = 'trader'`).get(req.params.id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
-  // Reassign any sub-dealers to have no parent (tier stays 2 but referrer cleared)
+  // Soft-delete: mark as 'deleted' so all FK-linked history (orders, commissions, etc.) stays intact.
+  // Orphan any sub-dealers so they no longer appear under this trader.
   db.prepare(`UPDATE users SET referred_by_id = NULL WHERE referred_by_id = ?`).run(req.params.id);
-  db.prepare(`DELETE FROM users WHERE id = ?`).run(req.params.id);
+  db.prepare(`UPDATE users SET status = 'deleted' WHERE id = ?`).run(req.params.id);
   res.json({ success: true });
 });
 
