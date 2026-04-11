@@ -270,7 +270,7 @@ export default function Shop() {
     return visible[0];
   };
 
-  const animateFlyToCart = (id: number, durationMs = 870) => {
+  const animateFlyToCart = (id: number, onLand: () => void, durationMs = 870) => {
     const startedAt = performance.now();
 
     const step = (now: number) => {
@@ -279,15 +279,11 @@ export default function Shop() {
         if (item.id !== id) return item;
 
         // Exact quadratic Bezier parabola to cart.
-        const travelT = t;
-        // log2-based deceleration curve (fast start -> smooth slowdown).
-        const decelT = Math.log2(1 + 31 * travelT) / Math.log2(32);
+        const decelT = Math.log2(1 + 31 * t) / Math.log2(32);
         const mt = 1 - decelT;
         const x = mt * mt * item.startX + 2 * mt * decelT * item.controlX + decelT * decelT * item.endX;
         const y = mt * mt * item.startY + 2 * mt * decelT * item.controlY + decelT * decelT * item.endY;
 
-        // Bezier-based trail: evenly spaced dots at prior t-values on the same curve.
-        // Each dot is spaced 0.06 behind in decelT — prevents clustering at slow zones.
         const numDots = 7;
         const tStep = 0.055;
         const trail = Array.from({ length: numDots }, (_, i) => {
@@ -316,6 +312,7 @@ export default function Shop() {
       } else {
         delete flyRafRefs.current[id];
         setFlyItems((prev) => prev.filter((item) => item.id !== id));
+        onLand();
       }
     };
 
@@ -412,7 +409,7 @@ export default function Shop() {
     const startX = launchRect.left + launchRect.width / 2;
     const startY = launchRect.top + launchRect.height / 2;
     const endX = targetRect.left + targetRect.width / 2;
-    const endY = targetRect.top + 6; // aim at the top of the cart icon
+    const endY = targetRect.top - 6; // just above the cart icon
     const dx = endX - startX;
     const peakLift = Math.max(130, Math.abs(dx) * 0.26);
     const controlX = startX + (dx * 0.55);
@@ -490,7 +487,13 @@ export default function Shop() {
     flyStartTimeoutRefs.current[id] = window.setTimeout(() => {
       delete flyStartTimeoutRefs.current[id];
       setFlyItems(prev => [...prev, item]);
-      animateFlyToCart(id);
+      animateFlyToCart(id, () => {
+        // Dot has landed — bounce the cart icon
+        setCartIconBounce(true);
+        setTimeout(() => setCartIconBounce(false), 500);
+        // Also bounce the layout header cart if it's visible
+        window.dispatchEvent(new Event('cart-land'));
+      });
     }, 290);
   };
 
@@ -537,12 +540,6 @@ export default function Shop() {
   }, [cart]);
 
   useEffect(() => {
-    if (cartCount > prevCartCountRef.current) {
-      setCartIconBounce(true);
-      const timer = setTimeout(() => setCartIconBounce(false), 420);
-      prevCartCountRef.current = cartCount;
-      return () => clearTimeout(timer);
-    }
     prevCartCountRef.current = cartCount;
   }, [cartCount]);
 
@@ -564,8 +561,8 @@ export default function Shop() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-      {/* Header — sticky below the layout navbar (h-14 = 56px) */}
-      <div className="sticky top-14 z-30 bg-white/95 backdrop-blur-sm flex items-center justify-between gap-3 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-gray-100/80">
+      {/* Page header — not sticky, scrolls away */}
+      <div className="flex items-center justify-between gap-3">
         <div>
           {consumer
             ? <h1 className="text-xl font-bold text-gray-900">Hi, {consumer.name.split(' ')[0]}!</h1>
@@ -578,11 +575,11 @@ export default function Shop() {
           data-cart-fly-target="shop"
           data-cart-fly-priority="1"
           onClick={() => setCartOpen(true)}
-          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors"
+          className={`relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors ${cartIconBounce ? 'animate-cart-land' : ''}`}
         >
           <ShoppingCart size={18} />
           {cartCount > 0 && (
-            <span className={`absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none ${cartIconBounce ? 'animate-drop-bounce' : ''}`}>
+            <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
               <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
             </span>
           )}
@@ -872,11 +869,11 @@ export default function Shop() {
               );
             })}
             <div
-              className="absolute -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full overflow-hidden border border-brand-200 shadow-lg bg-white"
+              className="absolute w-10 h-10 rounded-full overflow-hidden border border-brand-200 shadow-lg bg-white"
               style={{
                 left: `${item.x}px`,
                 top: `${item.y}px`,
-                transform: `scale(${item.scale})`,
+                transform: `translate(-50%, -50%) scale(${item.scale})`,
                 opacity: item.opacity,
               }}
             >

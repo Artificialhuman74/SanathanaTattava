@@ -54,6 +54,7 @@ export default {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'wiggle':     'wiggle 0.6s ease-in-out',
         'drop-bounce':'dropBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97)',
+        'cart-land':  'cartLand 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97)',
         'shake':      'shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97)',
         'roll-in-from-top':    'rollInFromTop 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)',
         'roll-in-from-bottom': 'rollInFromBottom 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)',
@@ -77,6 +78,14 @@ export default {
           '50%':  { transform: 'scale(0.88)' },
           '70%':  { transform: 'scale(1.1)' },
           '85%':  { transform: 'scale(0.96)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        cartLand: {
+          '0%':   { transform: 'scale(1)' },
+          '20%':  { transform: 'scale(1.18)' },
+          '45%':  { transform: 'scale(0.92)' },
+          '65%':  { transform: 'scale(1.06)' },
+          '82%':  { transform: 'scale(0.97)' },
           '100%': { transform: 'scale(1)' },
         },
         shake: {

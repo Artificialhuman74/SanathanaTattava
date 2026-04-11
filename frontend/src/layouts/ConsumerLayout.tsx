@@ -1,14 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon } from 'lucide-react';
+import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon, ShoppingCart } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import { getCartCount } from '../services/cartStorage';
 
 export default function ConsumerLayout() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [cartCount, setCartCount] = useState(getCartCount());
+  const [cartBounce, setCartBounce] = useState(false);
+
+  // Track scroll to swap bell → cart icon
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Sync cart count from storage events (fired by cartStorage.ts)
+  useEffect(() => {
+    const onCart = (e: Event) => {
+      const count = (e as CustomEvent<number>).detail;
+      setCartCount(count);
+    };
+    window.addEventListener('cart-updated', onCart);
+    return () => window.removeEventListener('cart-updated', onCart);
+  }, []);
+
+  // Bounce the layout cart icon when the fly dot lands
+  const prevCartRef = useRef(cartCount);
+  useEffect(() => { prevCartRef.current = cartCount; }, [cartCount]);
+  useEffect(() => {
+    const onLand = () => {
+      setCartBounce(true);
+      setTimeout(() => setCartBounce(false), 500);
+    };
+    window.addEventListener('cart-land', onLand);
+    return () => window.removeEventListener('cart-land', onLand);
+  }, []);
 
   // Close menu on route change
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
@@ -45,9 +78,25 @@ export default function ConsumerLayout() {
             <span className="text-base font-semibold tracking-tight text-gray-900" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", letterSpacing: '-0.01em' }}>Sanathana Tattva</span>
           </Link>
 
-          {/* Right: notification bell */}
+          {/* Right: cart when scrolled, bell when at top */}
           <div className="flex items-center justify-center w-10 h-10">
-            {consumer && <NotificationBell variant="consumer" />}
+            {scrolled ? (
+              <button
+                data-cart-fly-target="layout"
+                data-cart-fly-priority="2"
+                onClick={() => window.dispatchEvent(new Event('open-cart'))}
+                className={`relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors ${cartBounce ? 'animate-cart-land' : ''}`}
+              >
+                <ShoppingCart size={20} className="text-gray-700" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              consumer ? <NotificationBell variant="consumer" /> : <div className="w-10 h-10" />
+            )}
           </div>
         </div>
       </header>
