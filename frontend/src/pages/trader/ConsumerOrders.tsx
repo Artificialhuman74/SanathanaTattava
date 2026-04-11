@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   ShoppingBag, Search, ChevronDown, X, Phone, MapPin, Package,
-  User, Truck,
+  User, Truck, AlertTriangle, CheckCircle2, ChevronRight,
 } from 'lucide-react';
 
 interface ConsumerOrder {
@@ -71,7 +71,9 @@ export default function TraderConsumerOrders() {
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selected,     setSelected]     = useState<ConsumerOrder | null>(null);
-  const [updatingId,   setUpdatingId]   = useState<number | null>(null);
+  const [updatingId,     setUpdatingId]     = useState<number | null>(null);
+  const [stockWarning,   setStockWarning]   = useState<{ items: any[]; adminPhone: string | null; adminName: string } | null>(null);
+  const [pendingStatus,  setPendingStatus]  = useState<string | null>(null);
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -110,6 +112,56 @@ export default function TraderConsumerOrders() {
       }
     } catch { toast.error('Failed to assign delivery dealer'); }
     finally { setUpdatingId(null); }
+  };
+
+  const updateStatus = async (orderId: number, newStatus: string) => {
+    // Before packing (processing), pre-check dealer stock
+    if (newStatus === 'processing') {
+      try {
+        const [checkRes, contactRes] = await Promise.all([
+          api.get(`/trader/consumer-orders/${orderId}/stock-check`),
+          api.get('/trader/admin-contact'),
+        ]);
+        if (!checkRes.data.canPack) {
+          setStockWarning({
+            items: checkRes.data.items,
+            adminPhone: contactRes.data.phone,
+            adminName: contactRes.data.name,
+          });
+          setPendingStatus(null);
+          return;
+        }
+      } catch {
+        // If pre-check fails, let the server validate and return the error
+      }
+    }
+
+    setUpdatingId(orderId);
+    try {
+      await api.put(`/trader/consumer-orders/${orderId}/status`, { status: newStatus });
+      toast.success(`Order marked as ${newStatus}`);
+      fetchOrders();
+      setSelected(prev => prev ? { ...prev, status: newStatus } : null);
+    } catch (err: any) {
+      const msg = err.response?.data?.error || 'Failed to update status';
+      toast.error(msg);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const NEXT_STATUS: Record<string, string> = {
+    pending:    'confirmed',
+    confirmed:  'processing',
+    processing: 'shipped',
+    shipped:    'delivered',
+  };
+
+  const NEXT_LABEL: Record<string, string> = {
+    pending:    'Accept Order',
+    confirmed:  'Mark as Packing',
+    processing: 'Mark as Shipped',
+    shipped:    'Mark as Delivered',
   };
 
 const totalOrders   = orders.length;
@@ -324,7 +376,91 @@ const totalOrders   = orders.length;
                   )}
                 </div>
               )}
+
+              {/* Status Actions */}
+              {!['delivered', 'cancelled'].includes(selected.status) && (
+                <div className="flex gap-2 pt-1">
+                  {NEXT_STATUS[selected.status] && (
+                    <button
+                      onClick={() => updateStatus(selected.id, NEXT_STATUS[selected.status])}
+                      disabled={updatingId === selected.id}
+                      className="flex-1 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      {updatingId === selected.id
+                        ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        : <><CheckCircle2 size={15} />{NEXT_LABEL[selected.status]}<ChevronRight size={14} /></>
+                      }
+                    </button>
+                  )}
+                  {selected.status !== 'shipped' && (
+                    <button
+                      onClick={() => updateStatus(selected.id, 'cancelled')}
+                      disabled={updatingId === selected.id}
+                      className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient stock warning */}
+      {stockWarning && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setStockWarning(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Not enough stock to pack</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Contact admin to restock before packing this order.</p>
+              </div>
+            </div>
+
+            {/* Per-item stock status */}
+            <div className="space-y-2">
+              {stockWarning.items.map((item, i) => (
+                <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl text-sm ${item.ok ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <span className="font-medium text-slate-800 truncate mr-2">{item.product_name}</span>
+                  <span className={`text-xs font-semibold flex-shrink-0 ${item.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {item.available} / {item.required} {item.ok ? '✓' : '✗'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Admin contact */}
+            <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                <User size={14} className="text-brand-700" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-slate-500">Contact admin to restock</p>
+                <p className="text-sm font-semibold text-slate-900">{stockWarning.adminName}</p>
+              </div>
+              {stockWarning.adminPhone && (
+                <a
+                  href={`tel:${stockWarning.adminPhone}`}
+                  className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700 flex-shrink-0"
+                >
+                  <Phone size={12} />
+                  {stockWarning.adminPhone}
+                </a>
+              )}
+            </div>
+
+            <button
+              onClick={() => setStockWarning(null)}
+              className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

@@ -351,6 +351,47 @@ router.post('/commissions/withdraw', (req, res) => {
   res.status(201).json({ success: true, id: r.lastInsertRowid });
 });
 
+/* ── Admin contact (for insufficient-stock warning on dealer side) ─────── */
+router.get('/admin-contact', (req, res) => {
+  const admin = db.prepare(`SELECT name, phone, email FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1`).get();
+  res.json({ name: admin?.name || 'Admin', phone: admin?.phone || null, email: admin?.email || null });
+});
+
+/* ── Stock pre-check before packing ─────────────────────────────────────── */
+router.get('/consumer-orders/:id/stock-check', (req, res) => {
+  let dealerIds = [req.user.id];
+  if (req.user.tier === 1) {
+    const subs = db.prepare(`SELECT id FROM users WHERE referred_by_id=?`).all(req.user.id);
+    dealerIds = [req.user.id, ...subs.map(s => s.id)];
+  }
+  const placeholders = dealerIds.map(() => '?').join(',');
+  const order = db.prepare(
+    `SELECT * FROM consumer_orders WHERE id=? AND (linked_dealer_id IN (${placeholders}) OR delivery_dealer_id IN (${placeholders}))`
+  ).get(req.params.id, ...dealerIds, ...dealerIds);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const fulfillDealerId = order.delivery_dealer_id || order.linked_dealer_id;
+  const items = db.prepare(`
+    SELECT oi.product_id, oi.quantity, p.name as product_name
+    FROM consumer_order_items oi
+    JOIN products p ON oi.product_id = p.id
+    WHERE oi.order_id = ?
+  `).all(order.id);
+
+  const results = items.map(item => {
+    const inv = db.prepare(`SELECT quantity FROM dealer_inventory WHERE dealer_id=? AND product_id=?`).get(fulfillDealerId, item.product_id);
+    const available = inv ? inv.quantity : 0;
+    return {
+      product_name: item.product_name,
+      required: item.quantity,
+      available,
+      ok: available >= item.quantity,
+    };
+  });
+
+  res.json({ canPack: results.every(r => r.ok), items: results });
+});
+
 /* ── My Inventory ────────────────────────────────────────────────────── */
 router.get('/inventory', (req, res) => {
   try {
