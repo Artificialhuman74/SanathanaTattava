@@ -1,0 +1,28 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "description": "A full-stack, HTTPS-enabled trading platform with admin panel, two-tier trader network, inventory management, and order tracking.",
+  "main": "index.js",
+  "scripts": {
+    "test":          "npm run test:backend && npm run test:frontend",
+    "test:backend":  "cd backend  && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:e2e":      "playwright test",
+    "test:e2e:ui":   "playwright test --ui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Artificialhuman74/SanathanaTattava.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Artificialhuman74/SanathanaTattava/issues"
+  },
+  "homepage": "https://github.com/Artificialhuman74/SanathanaTattava#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
