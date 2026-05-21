@@ -380,6 +380,66 @@ function runMigrations(db) {
     console.log('[migration] consumer_orders: added review_email_sent');
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration 12: Razorpay full-lifecycle columns
+   *   - Refunds: track refund_id + status on consumer_orders
+   *   - Webhook idempotency: processed_webhook_events table
+   *   - Route/Linked Accounts: bank details + linked_account_id on users
+   *   - Per-transfer reconciliation: transfer_id on commissions
+   *                                  + razorpay_payout_id on weekly_payouts
+   * ═══════════════════════════════════════════════════════════════════ */
+  if (!hasColumn('consumer_orders', 'refund_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN refund_id TEXT`);
+    console.log('[migration] consumer_orders: added refund_id');
+  }
+  if (!hasColumn('consumer_orders', 'refund_status')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN refund_status TEXT`);
+    console.log('[migration] consumer_orders: added refund_status');
+  }
+  if (!hasColumn('consumer_orders', 'refund_amount')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN refund_amount REAL`);
+    console.log('[migration] consumer_orders: added refund_amount');
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+      event_id    TEXT PRIMARY KEY,
+      event_type  TEXT NOT NULL,
+      payload     TEXT,
+      received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  if (!hasColumn('users', 'bank_account_name')) {
+    db.exec(`ALTER TABLE users ADD COLUMN bank_account_name TEXT`);
+    console.log('[migration] users: added bank_account_name');
+  }
+  if (!hasColumn('users', 'bank_account_number')) {
+    db.exec(`ALTER TABLE users ADD COLUMN bank_account_number TEXT`);
+    console.log('[migration] users: added bank_account_number');
+  }
+  if (!hasColumn('users', 'bank_ifsc')) {
+    db.exec(`ALTER TABLE users ADD COLUMN bank_ifsc TEXT`);
+    console.log('[migration] users: added bank_ifsc');
+  }
+  if (!hasColumn('users', 'razorpay_linked_account_id')) {
+    db.exec(`ALTER TABLE users ADD COLUMN razorpay_linked_account_id TEXT`);
+    console.log('[migration] users: added razorpay_linked_account_id');
+  }
+  if (!hasColumn('users', 'razorpay_account_status')) {
+    db.exec(`ALTER TABLE users ADD COLUMN razorpay_account_status TEXT`);
+    console.log('[migration] users: added razorpay_account_status');
+  }
+
+  if (!hasColumn('commissions', 'razorpay_transfer_id')) {
+    db.exec(`ALTER TABLE commissions ADD COLUMN razorpay_transfer_id TEXT`);
+    console.log('[migration] commissions: added razorpay_transfer_id');
+  }
+  if (!hasColumn('weekly_payouts', 'razorpay_payout_id')) {
+    db.exec(`ALTER TABLE weekly_payouts ADD COLUMN razorpay_payout_id TEXT`);
+    console.log('[migration] weekly_payouts: added razorpay_payout_id');
+  }
+
   console.log('[migration] all migrations applied');
 }
 
