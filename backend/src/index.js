@@ -64,7 +64,8 @@ const http    = require('http');
 const cors    = require('cors');
 const helmet  = require('helmet');
 
-const { initSocket } = require('./websocket/socketServer');
+const { initSocket }      = require('./websocket/socketServer');
+const { runSeedIfEmpty }  = require('./database/runSeed');
 
 const authRoutes          = require('./routes/auth');
 const adminRoutes         = require('./routes/admin');
@@ -230,6 +231,12 @@ const getLocalIP = () => {
   return 'localhost';
 };
 
+// ─── Auto-seed on empty database ─────────────────────────────────────────
+// Runs synchronously before the server accepts connections so the database
+// is fully populated by the time the first request arrives.
+runSeedIfEmpty().then(() => startServer());
+
+function startServer() {
 // Use HTTPS locally if certs exist, plain HTTP on Railway/cloud
 if (!process.env.RAILWAY_ENVIRONMENT && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   const server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
@@ -247,3 +254,4 @@ if (!process.env.RAILWAY_ENVIRONMENT && fs.existsSync(keyPath) && fs.existsSync(
     console.log(`\n🚀 TradeHub server listening on port ${PORT}\n`);
   });
 }
+} // end startServer
