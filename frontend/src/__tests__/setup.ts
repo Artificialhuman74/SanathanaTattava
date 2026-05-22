@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, beforeAll, afterAll, afterEach } from 'vitest';
 
 // ── Mock browser APIs not available in jsdom ────────────────────────────────
 
