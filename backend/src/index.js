@@ -133,6 +133,60 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Da
 
 app.get('/', (_req, res) => res.json({ name: 'Sanathana Tattva API', status: 'running' }));
 
+// ─── One-time database reseed (remove after use) ──────────────────────────
+// Hit GET /api/reseed-database-ravi2114 to wipe all data + create ONLY the
+// ravigbb admin. Keeps schema intact (so settings + migrations still apply).
+// DESTRUCTIVE — token in URL prevents drive-by triggering.
+app.get('/api/reseed-database-ravi2114', (_req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    const db = require('./database/db');
+
+    // Tables to wipe (data only, schema preserved). Order respects FKs.
+    const tables = [
+      'inventory_transactions', 'dealer_inventory',
+      'razorpay_webhook_events',
+      'review_tokens', 'product_reviews',
+      'withdrawal_requests', 'weekly_payouts', 'commissions',
+      'consumer_order_items', 'consumer_orders',
+      'consumer_addresses', 'consumer_otps', 'consumers',
+      'order_items', 'orders',
+      'distributions', 'products',
+      'notifications',
+      'email_verifications', 'password_resets',
+      'users',
+    ];
+
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.transaction(() => {
+      for (const t of tables) {
+        try { db.prepare(`DELETE FROM ${t}`).run(); } catch (_) {}
+        try { db.prepare(`DELETE FROM sqlite_sequence WHERE name=?`).run(t); } catch (_) {}
+      }
+      // Settings: reset to defaults
+      db.prepare(`DELETE FROM settings`).run();
+      db.prepare(`INSERT INTO settings (key,value) VALUES ('referral_discount_percent','10')`).run();
+
+      // The one admin user
+      const hash = bcrypt.hashSync('Bangalore@2114.', 10);
+      db.prepare(`
+        INSERT INTO users (name, email, password, role, status, email_verified)
+        VALUES (?, ?, ?, 'admin', 'active', 1)
+      `).run('Admin', 'ravigbb@gmail.com', hash);
+    })();
+    db.exec('PRAGMA foreign_keys = ON');
+
+    res.json({
+      ok: true,
+      message: 'Database wiped. Admin created.',
+      login: { email: 'ravigbb@gmail.com', password: 'Bangalore@2114.' },
+    });
+  } catch (e) {
+    console.error('[reseed] failed:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─── One-time admin setup (remove after use) ──────────────────────────────
 app.get('/api/setup-admin-ravi2114', (_req, res) => {
   try {
