@@ -19,7 +19,21 @@
       "Bash(node -e \"const l = require\\('./package-lock.json'\\); const keys = Object.keys\\(l.packages\\).filter\\(k=>k.includes\\('esbuild'\\)\\); console.log\\(keys.slice\\(0,5\\)\\); console.log\\('playwright version:', l.packages['node_modules/@playwright/test']?.version\\)\")",
       "Bash(node -e ' *)",
       "Bash(python3 -m json.tool)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d['packages']]\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d['packages']]\")",
+      "Bash(node -e \"const db = require\\('./src/database/db'\\); console.log\\(db.prepare\\('SELECT id,name,email,phone,role FROM users WHERE role=?'\\).all\\('admin'\\)\\);\")",
+      "Bash(node -e \"const db = require\\('./src/database/db'\\); console.log\\(db.prepare\\('SELECT id,name,email,phone,role FROM users LIMIT 10'\\).all\\(\\)\\);\")",
+      "Bash(node -e \"const db = require\\('./src/database/db'\\); const rows = db.prepare\\('SELECT id,name,email,phone,role FROM users'\\).all\\(\\); console.log\\(JSON.stringify\\(rows, null, 2\\)\\);\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/backend/data/database.db \"SELECT id,name,email,phone,role FROM users;\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/backend/data/database.db \"SELECT id,name,email,phone,role FROM users WHERE role='admin';\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/backend/data/database.db \".tables\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/backend/tradehub.db \"SELECT id,name,email,phone,role FROM users WHERE role='admin';\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/backend/tradehub.db \".tables\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT id,name,email,phone,role FROM users WHERE role='admin';\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \".tables\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT id,name,email,phone,role FROM users LIMIT 5;\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT id,name,email,phone,role FROM users;\")",
+      "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT COUNT\\(*\\) FROM users;\")",
+      "Bash(find /Users/chiranthr/Desktop/test-project -name \"database.db\" -exec sh -c 'echo \"=== {} ===\"; sqlite3 \"{}\" \"SELECT COUNT\\(*\\) FROM users;\" 2>/dev/null || echo \"no users table\"' \\\\;)"
     ]
   }
 }

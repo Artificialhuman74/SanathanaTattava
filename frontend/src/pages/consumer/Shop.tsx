@@ -136,7 +136,7 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => loadCart<Product>());
   const [cartOpen, setCartOpen] = useState(false);
   const [discountPct, setDiscountPct] = useState<number>(0);
   const [shakingId, setShakingId] = useState<number | null>(null);
@@ -150,11 +150,6 @@ export default function Shop() {
   const flyRafRefs = useRef<Record<number, number>>({});
   const collapseRafRefs = useRef<Record<number, number>>({});
   const flyStartTimeoutRefs = useRef<Record<number, number>>({});
-
-  // Restore persisted cart
-  useEffect(() => {
-    setCart(loadCart<Product>());
-  }, []);
 
   // Pre-fill cart from "order again" (set in Orders.tsx)
   useEffect(() => {

@@ -87,7 +87,9 @@ function notifyConsumerDeliveryAssigned({
   dealerPhone,
 }) {
   const title = `Delivery partner assigned — ${orderNumber}`;
-  const body  = `${dealerName} (${dealerPhone}) will deliver your order.`;
+  const body  = dealerPhone
+    ? `${dealerName} (${dealerPhone}) will deliver your order.`
+    : `${dealerName} will deliver your order.`;
   const data  = JSON.stringify({ orderNumber, dealerName, dealerPhone });
 
   const r = db.prepare(`

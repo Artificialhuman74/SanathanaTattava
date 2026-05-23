@@ -16,6 +16,20 @@ const {
 const router = express.Router();
 router.use(authenticate, requireAdmin);
 
+/* ── Admin profile ───────────────────────────────────────────────────── */
+router.get('/me', (req, res) => {
+  const admin = db.prepare('SELECT id,name,email,phone FROM users WHERE id=?').get(req.user.id);
+  res.json({ admin });
+});
+
+router.put('/me', (req, res) => {
+  const { name, phone } = req.body;
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Name is required' });
+  db.prepare('UPDATE users SET name=?, phone=? WHERE id=?')
+    .run(String(name).trim(), phone ? String(phone).trim() : null, req.user.id);
+  res.json({ success: true });
+});
+
 /* ── Dashboard Stats ─────────────────────────────────────────────────── */
 router.get('/stats', (req, res) => {
   const totalTraders   = db.prepare(`SELECT COUNT(*) as c FROM users WHERE role='trader'`).get().c;

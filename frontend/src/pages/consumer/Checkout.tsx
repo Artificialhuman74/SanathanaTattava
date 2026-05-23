@@ -239,7 +239,7 @@ export default function Checkout() {
             try {
               await consumerApi.delete(`/consumer/orders/${data.order.id}`);
             } catch { /* best-effort cleanup */ }
-            toast.error('Payment cancelled. Your cart has been restored.');
+            toast('Payment cancelled. Your cart is intact — try again anytime.', { icon: 'ℹ️' });
           },
         },
       });
