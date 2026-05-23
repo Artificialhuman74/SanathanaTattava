@@ -10,6 +10,7 @@ const {
   getDealerInventory,
   getAllLowStockAlerts,
   updateThreshold,
+  returnOrderInventory,
 } = require('../services/inventoryService');
 
 const router = express.Router();
@@ -248,6 +249,11 @@ router.put('/consumer-orders/:id/status', (req, res) => {
   if (status)         db.prepare(`UPDATE consumer_orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(status, req.params.id);
   if (payment_status) db.prepare(`UPDATE consumer_orders SET payment_status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(payment_status, req.params.id);
 
+  if (status === 'cancelled') {
+    try { returnOrderInventory(order.id); }
+    catch (invErr) { console.error('[admin cancel] inventory restore failed:', invErr.message); }
+  }
+
   if (status) {
     emitOrderUpdate({
       orderId: order.id, orderNumber: order.order_number,
@@ -341,6 +347,46 @@ router.put('/commissions/payouts/:id/status', (req, res) => {
   if (!['pending','processed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   db.prepare(`UPDATE weekly_payouts SET status=?, processed_at=CURRENT_TIMESTAMP WHERE id=?`).run(status, req.params.id);
   res.json({ success: true });
+});
+
+/* ── Razorpay Route Payouts — trader bank/linked-account overview ─────── */
+/* Admin payouts cover ONLY tier-1 traders. Sub-dealer (tier-2) direct
+ * commissions are settled offline by the parent tier-1 dealer. */
+router.get('/payouts/traders', (_req, res) => {
+  const rows = db.prepare(`
+    SELECT u.id, u.name, u.email, u.phone, u.tier, u.status,
+           u.bank_account_name, u.bank_account_number, u.bank_ifsc,
+           u.razorpay_linked_account_id, u.razorpay_account_status,
+           COALESCE(SUM(CASE WHEN cm.status='pending' THEN cm.amount END), 0) AS pending_amount,
+           COALESCE(SUM(CASE WHEN cm.status='transferring' THEN cm.amount END), 0) AS transferring_amount,
+           COALESCE(SUM(CASE WHEN cm.status='transferred' THEN cm.amount END), 0) AS transferred_amount,
+           COUNT(CASE WHEN cm.status='pending' THEN 1 END) AS pending_count
+    FROM users u
+    LEFT JOIN commissions cm ON cm.trader_id = u.id
+    WHERE u.role = 'trader' AND u.tier = 1
+    GROUP BY u.id
+    ORDER BY pending_amount DESC, u.name ASC
+  `).all();
+  res.json({ traders: rows });
+});
+
+router.get('/payouts/pending-commissions', (req, res) => {
+  const { trader_id } = req.query;
+  let sql = `
+    SELECT cm.id, cm.trader_id, cm.amount, cm.rate, cm.type, cm.status,
+           cm.razorpay_transfer_id, cm.created_at,
+           u.name AS trader_name, u.razorpay_linked_account_id,
+           co.order_number, co.razorpay_payment_id, co.total_amount AS order_amount
+    FROM commissions cm
+    JOIN users u ON u.id = cm.trader_id
+    LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+    WHERE u.tier = 1
+      AND cm.status IN ('pending', 'transferring', 'transfer_failed')
+  `;
+  const params = [];
+  if (trader_id) { sql += ` AND cm.trader_id = ?`; params.push(Number(trader_id)); }
+  sql += ` ORDER BY cm.created_at DESC LIMIT 500`;
+  res.json({ commissions: db.prepare(sql).all(...params) });
 });
 
 /* ── Withdrawal Requests ──────────────────────────────────────────────── */

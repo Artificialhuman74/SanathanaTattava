@@ -4,6 +4,7 @@ const crypto   = require('crypto');
 const jwt      = require('jsonwebtoken');
 const db       = require('../database/db');
 const { createNotification } = require('../services/notificationService');
+const { returnOrderInventory } = require('../services/inventoryService');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
 
 const router = express.Router();
@@ -202,6 +203,8 @@ router.post('/webhook', (req, res) => {
         const order = db.prepare('SELECT * FROM consumer_orders WHERE razorpay_order_id = ?').get(p.order_id);
         if (order) {
           db.prepare(`UPDATE consumer_orders SET payment_status='failed' WHERE id=?`).run(order.id);
+          try { returnOrderInventory(order.id); } // idempotent
+          catch (e) { console.error('[webhook payment.failed] restore err:', e.message); }
           console.log(`[webhook] payment.failed → order ${order.order_number}`);
         }
         break;
@@ -259,6 +262,10 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
 
     db.prepare(`UPDATE consumer_orders SET refund_id=?, refund_status=?, refund_amount=?, status='cancelled' WHERE id=?`)
       .run(refund.id, refund.status, refund.amount / 100, order.id);
+
+    // Restore dealer inventory (idempotent — no-op if already restored)
+    try { returnOrderInventory(order.id); }
+    catch (e) { console.error('[refund] inventory restore failed:', e.message); }
 
     // Reverse any pending commissions tied to this order
     db.prepare(`UPDATE commissions SET status='reversed' WHERE consumer_order_id=? AND status='pending'`).run(order.id);

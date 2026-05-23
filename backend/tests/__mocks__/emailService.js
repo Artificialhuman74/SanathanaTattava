@@ -1,8 +1,10 @@
 /** Mock email service — prevents real SMTP calls during tests */
 module.exports = {
-  sendVerificationEmail:    jest.fn().mockResolvedValue({ messageId: 'test-msg-1' }),
-  sendPasswordResetEmail:   jest.fn().mockResolvedValue({ messageId: 'test-msg-2' }),
-  sendReviewRequestEmail:   jest.fn().mockResolvedValue({ messageId: 'test-msg-3' }),
-  sendDeliveryOtpEmail:     jest.fn().mockResolvedValue({ messageId: 'test-msg-4' }),
-  sendOrderConfirmationEmail: jest.fn().mockResolvedValue({ messageId: 'test-msg-5' }),
+  sendVerificationEmail:           jest.fn().mockResolvedValue({ messageId: 'test-msg-1' }),
+  sendPasswordResetEmail:          jest.fn().mockResolvedValue({ messageId: 'test-msg-2' }),
+  sendReviewRequestEmail:          jest.fn().mockResolvedValue({ messageId: 'test-msg-3' }),
+  sendDeliveryOtpEmail:            jest.fn().mockResolvedValue({ messageId: 'test-msg-4' }),
+  sendOrderConfirmationEmail:      jest.fn().mockResolvedValue({ messageId: 'test-msg-5' }),
+  sendCommissionConfirmationEmail: jest.fn().mockResolvedValue({ messageId: 'test-msg-6' }),
+  sendCommissionDisputeEmail:      jest.fn().mockResolvedValue({ messageId: 'test-msg-7' }),
 };

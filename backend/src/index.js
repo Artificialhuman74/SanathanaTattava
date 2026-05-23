@@ -74,6 +74,7 @@ const locationRoutes      = require('./routes/location');
 const notificationRoutes  = require('./routes/notifications');
 const deliveryRoutes      = require('./routes/delivery');
 const paymentRoutes       = require('./routes/payments');
+const publicRoutes        = require('./routes/public');
 
 const app  = express();
 const PORT = process.env.PORT || 5001;
@@ -128,6 +129,7 @@ app.use('/api/location',      locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/delivery',      deliveryRoutes);
 app.use('/api/payments',      paymentRoutes);
+app.use('/api/public',        publicRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
@@ -168,7 +170,7 @@ app.get('/api/reseed-database-ravi2114', (_req, res) => {
       db.prepare(`INSERT INTO settings (key,value) VALUES ('referral_discount_percent','10')`).run();
 
       // The one admin user
-      const hash = bcrypt.hashSync('Bangalore@2114.', 10);
+      const hash = bcrypt.hashSync('Bangalore@2114', 10);
       db.prepare(`
         INSERT INTO users (name, email, password, role, status, email_verified)
         VALUES (?, ?, ?, 'admin', 'active', 1)
@@ -179,7 +181,7 @@ app.get('/api/reseed-database-ravi2114', (_req, res) => {
     res.json({
       ok: true,
       message: 'Database wiped. Admin created.',
-      login: { email: 'ravigbb@gmail.com', password: 'Bangalore@2114.' },
+      login: { email: 'ravigbb@gmail.com', password: 'Bangalore@2114' },
     });
   } catch (e) {
     console.error('[reseed] failed:', e);
@@ -192,7 +194,7 @@ app.get('/api/setup-admin-ravi2114', (_req, res) => {
   try {
     const bcrypt = require('bcryptjs');
     const db = require('./database/db');
-    const hash = bcrypt.hashSync('Bangalore@2114.', 10);
+    const hash = bcrypt.hashSync('Bangalore@2114', 10);
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get('ravigbb@gmail.com');
     if (existing) {
       db.prepare('UPDATE users SET password = ?, role = ? WHERE email = ?').run(hash, 'admin', 'ravigbb@gmail.com');
@@ -257,6 +259,15 @@ function scheduleReviewEmails() {
 // Run once at startup (catches any missed while server was down) and then hourly
 setTimeout(scheduleReviewEmails, 60_000);
 setInterval(scheduleReviewEmails, 60 * 60 * 1000);
+
+/* ── Abandoned-order sweeper ──────────────────────────────────────────────── */
+const { sweepAbandonedOrders } = require('./services/orderSweeperService');
+function runSweeper() {
+  try { sweepAbandonedOrders(); }
+  catch (err) { console.error('[sweeper] error:', err.message); }
+}
+setTimeout(runSweeper, 90_000);
+setInterval(runSweeper, 10 * 60 * 1000);
 
 // ─── Global error handler ─────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {

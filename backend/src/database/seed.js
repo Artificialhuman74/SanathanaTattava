@@ -192,7 +192,7 @@ async function seed() {
 
   /* ── Admin ─────────────────────────────────────────────────────────── */
   const adminPw = await bcrypt.hash('Admin@123', 12);
-  db.prepare(`INSERT INTO users (name,email,password,role,status) VALUES (?,?,?,'admin','active')`)
+  db.prepare(`INSERT INTO users (name,email,password,role,status,will_deliver,delivery_enabled,availability_status) VALUES (?,?,?,'admin','active',1,1,'available')`)
     .run('Admin User', 'admin@tradehub.com', adminPw);
 
   /* ── Tier 1 Parent Dealers – codes: A0000, B0000, C0000 ────────────── */

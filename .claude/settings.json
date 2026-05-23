@@ -4,7 +4,15 @@
       "Bash(npm --version)",
       "Bash(npm ci *)",
       "Bash(npm run *)",
-      "Bash(node -c src/index.js)"
+      "Bash(node -c src/index.js)",
+      "Bash(git rm *)",
+      "Bash(node -c src/routes/admin.js)",
+      "Bash(node -c src/routes/trader.js)",
+      "Bash(node -c src/routes/public.js)",
+      "Bash(node -c src/services/emailService.js)",
+      "Bash(node -c src/database/migrations.js)",
+      "Bash(node -c src/services/inventoryService.js)",
+      "Bash(node -c src/routes/payments.js)"
     ]
   }
 }

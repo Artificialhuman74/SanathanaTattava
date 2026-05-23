@@ -183,4 +183,99 @@ async function sendReviewRequestEmail(toEmail, consumerName, productName, review
   return sendMail({ to: toEmail, subject, text, html });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail, DEV_MODE };
+/* ── Sub-dealer commission payment confirmation ───────────────────────── */
+async function sendCommissionConfirmationEmail(toEmail, {
+  subDealerName, parentName, amount, method, confirmUrl, orderNumber, note,
+}) {
+  const methodLabel = method === 'cash' ? 'Cash (in person)' : 'Bank transfer';
+  const amtStr      = `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  const subject     = `Confirm commission payment of ${amtStr} from ${parentName}`;
+  const text =
+    `Hi ${subDealerName || 'there'},\n\n` +
+    `${parentName} has marked a commission payment of ${amtStr} as paid to you via ${methodLabel}` +
+    (orderNumber ? ` (order ${orderNumber})` : '') + `.\n\n` +
+    `Please confirm whether you received this payment:\n${confirmUrl}\n\n` +
+    `If you did not receive it, you can dispute the payment on that page — the admin will be notified immediately.\n\n` +
+    `This link expires in 14 days.`;
+  const html = buildEmailHtml({
+    title:    'Confirm Commission Payment',
+    preheader: `${parentName} marked ${amtStr} as paid — confirm or dispute`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${subDealerName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        <strong>${parentName}</strong> has marked a commission payment as paid to you. Please confirm whether you actually received the amount below.
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px 22px;margin:0 0 22px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Amount</td>
+              <td align="right" style="color:#15803d;font-size:22px;font-weight:800;padding-bottom:6px;">${amtStr}</td></tr>
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:4px;">Method</td>
+              <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:4px;">${methodLabel}</td></tr>
+          ${orderNumber ? `<tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order</td>
+              <td align="right" style="color:#0f172a;font-size:13px;font-family:monospace;">${orderNumber}</td></tr>` : ''}
+          ${note ? `<tr><td colspan="2" style="padding-top:10px;color:#64748b;font-size:12px;font-style:italic;">"${note.replace(/</g, '&lt;')}"</td></tr>` : ''}
+        </table>
+      </div>
+      <div style="text-align:center;margin:0 0 16px;">
+        <a href="${confirmUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#14532d 0%,#16a34a 100%);color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 36px;border-radius:12px;">
+          Review & Confirm
+        </a>
+      </div>
+      <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+        Link valid for 14 days. If you didn't receive this payment, choose <strong>Dispute</strong> on the page.
+      </p>
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+/* ── Notify parent + admin of a disputed payment ──────────────────────── */
+async function sendCommissionDisputeEmail(toEmail, {
+  recipientName, subDealerName, parentName, amount, reason, orderNumber,
+}) {
+  const amtStr  = `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  const subject = `[Dispute] ${subDealerName} did not receive ${amtStr} commission`;
+  const text =
+    `Hi ${recipientName || 'there'},\n\n` +
+    `${subDealerName} has DISPUTED a commission payment of ${amtStr} marked as paid by ${parentName}` +
+    (orderNumber ? ` for order ${orderNumber}` : '') + `.\n\n` +
+    (reason ? `Reason: ${reason}\n\n` : '') +
+    `Please investigate and reconcile manually.`;
+  const html = buildEmailHtml({
+    title:    'Commission Payment Disputed',
+    preheader: `${subDealerName} disputed ${amtStr} from ${parentName}`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${recipientName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        <strong>${subDealerName}</strong> has <strong style="color:#dc2626;">disputed</strong> a commission payment marked as paid by <strong>${parentName}</strong>.
+      </p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:18px 22px;margin:0 0 22px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Amount</td>
+              <td align="right" style="color:#b91c1c;font-size:20px;font-weight:800;padding-bottom:6px;">${amtStr}</td></tr>
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:4px;">Sub-dealer</td>
+              <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:4px;">${subDealerName}</td></tr>
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:4px;">Paid by</td>
+              <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:4px;">${parentName}</td></tr>
+          ${orderNumber ? `<tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Order</td>
+              <td align="right" style="color:#0f172a;font-size:13px;font-family:monospace;">${orderNumber}</td></tr>` : ''}
+        </table>
+        ${reason ? `<p style="margin:14px 0 0;color:#7f1d1d;font-size:13px;font-style:italic;">Reason: "${reason.replace(/</g, '&lt;')}"</p>` : ''}
+      </div>
+      <p style="margin:0;color:#64748b;font-size:13px;">Please reach out to both parties and reconcile.</p>
+    `,
+    footer: 'Sanathana Tattva',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+module.exports = {
+  sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
+  sendCommissionConfirmationEmail, sendCommissionDisputeEmail, DEV_MODE,
+};

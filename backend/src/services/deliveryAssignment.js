@@ -150,7 +150,7 @@ function queryDealersInCells(cells, customerLat, customerLng, excludeId) {
            availability_status, referral_code
     FROM   users
     WHERE  h3_index IN (${placeholders})
-      AND  role = 'trader'
+      AND  role IN ('trader', 'admin')
       AND  status = 'active'
       AND  delivery_enabled = 1
       AND  will_deliver = 1
@@ -195,7 +195,7 @@ function queryAllDealersInCells(cells, customerLat, customerLng) {
            availability_status, referral_code
     FROM   users
     WHERE  h3_index IN (${placeholders})
-      AND  role = 'trader'
+      AND  role IN ('trader', 'admin')
       AND  status = 'active'
       AND  delivery_enabled = 1
       AND  will_deliver = 1

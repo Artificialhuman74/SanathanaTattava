@@ -97,6 +97,13 @@ function deductOrderInventory(orderId, dealerId) {
   if (items.length === 0) throw new Error('No items found for this order');
 
   return db.transaction(() => {
+    // Idempotency: skip if already deducted for this order
+    const order = db.prepare(`SELECT inventory_deducted FROM consumer_orders WHERE id = ?`).get(orderId);
+    if (!order) throw new Error('Order not found');
+    if (order.inventory_deducted) {
+      return { success: true, deducted: [], already_deducted: true };
+    }
+
     const deducted = [];
 
     for (const item of items) {
@@ -135,6 +142,13 @@ function deductOrderInventory(orderId, dealerId) {
       });
     }
 
+    // Mark order as deducted + record which dealer fulfilled it
+    db.prepare(`
+      UPDATE consumer_orders
+      SET inventory_deducted = 1, fulfilled_by_dealer_id = ?
+      WHERE id = ?
+    `).run(dealerId, orderId);
+
     // Check low stock after deduction
     checkLowStockAlerts(dealerId);
 
@@ -143,30 +157,59 @@ function deductOrderInventory(orderId, dealerId) {
 }
 
 /**
- * Return inventory when an order is cancelled.
+ * Return inventory when an order is cancelled / refunded / payment failed.
+ * Idempotent: safe to call multiple times — only restores once.
+ * Reads the dealer from the order row (set when inventory was originally deducted).
+ *
+ * @param {number} orderId
+ * @returns {{ success: boolean, restored: boolean, reason?: string }}
  */
-function returnOrderInventory(orderId, dealerId) {
-  const items = db.prepare(`
-    SELECT oi.product_id, oi.quantity, p.name as product_name
-    FROM consumer_order_items oi
-    JOIN products p ON oi.product_id = p.id
-    WHERE oi.order_id = ?
-  `).all(orderId);
-
+function returnOrderInventory(orderId) {
   return db.transaction(() => {
-    for (const item of items) {
-      db.prepare(`
-        UPDATE dealer_inventory
-        SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
-        WHERE dealer_id = ? AND product_id = ?
-      `).run(item.quantity, dealerId, item.product_id);
+    const order = db.prepare(`
+      SELECT id, inventory_deducted, inventory_restored, fulfilled_by_dealer_id
+      FROM consumer_orders WHERE id = ?
+    `).get(orderId);
 
-      db.prepare(`
-        INSERT INTO inventory_transactions (dealer_id, product_id, quantity, type, reference_id, notes)
-        VALUES (?, ?, ?, 'return', ?, ?)
-      `).run(dealerId, item.product_id, item.quantity, orderId, `Order #${orderId} cancelled — stock returned`);
+    if (!order) return { success: false, restored: false, reason: 'order_not_found' };
+    if (!order.inventory_deducted) return { success: true, restored: false, reason: 'never_deducted' };
+    if (order.inventory_restored)  return { success: true, restored: false, reason: 'already_restored' };
+
+    const dealerId = order.fulfilled_by_dealer_id;
+    if (!dealerId) return { success: false, restored: false, reason: 'no_dealer_recorded' };
+
+    const fulfiller = db.prepare(`SELECT role FROM users WHERE id = ?`).get(dealerId);
+    const isAdmin = fulfiller && fulfiller.role === 'admin';
+
+    const items = db.prepare(`
+      SELECT oi.product_id, oi.quantity
+      FROM consumer_order_items oi
+      WHERE oi.order_id = ?
+    `).all(orderId);
+
+    for (const item of items) {
+      if (isAdmin) {
+        // Admin-fulfilled: warehouse was debited at order creation, restore it there
+        db.prepare(`UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(item.quantity, item.product_id);
+      } else {
+        db.prepare(`
+          INSERT INTO dealer_inventory (dealer_id, product_id, quantity, updated_at)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(dealer_id, product_id)
+          DO UPDATE SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP
+        `).run(dealerId, item.product_id, item.quantity, item.quantity);
+
+        db.prepare(`
+          INSERT INTO inventory_transactions (dealer_id, product_id, quantity, type, reference_id, notes)
+          VALUES (?, ?, ?, 'return', ?, ?)
+        `).run(dealerId, item.product_id, item.quantity, orderId, `Order #${orderId} cancelled — stock returned`);
+      }
     }
-    return { success: true };
+
+    db.prepare(`UPDATE consumer_orders SET inventory_restored = 1 WHERE id = ?`).run(orderId);
+
+    return { success: true, restored: true, fulfilled_by: isAdmin ? 'admin' : 'dealer' };
   })();
 }
 

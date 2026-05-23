@@ -10,7 +10,7 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const db = require('../database/db');
-const { authenticate, requireTrader } = require('../middleware/auth');
+const { authenticate, requireTrader, requireTraderOrAdmin } = require('../middleware/auth');
 const {
   latLngToH3Index,
   isValidCoordinate,
@@ -33,7 +33,7 @@ const router = express.Router();
 router.put(
   '/dealer/update',
   authenticate,
-  requireTrader,
+  requireTraderOrAdmin,
   [
     body('latitude').isFloat({ min: -90, max: 90 }).withMessage('Valid latitude required'),
     body('longitude').isFloat({ min: -180, max: 180 }).withMessage('Valid longitude required'),
@@ -69,7 +69,7 @@ router.put(
 router.put(
   '/dealer/availability',
   authenticate,
-  requireTrader,
+  requireTraderOrAdmin,
   [
     body('status')
       .isIn(['available', 'busy', 'offline'])
@@ -91,7 +91,7 @@ router.put(
  *
  * Return the dealer's current stored location + availability.
  */
-router.get('/dealer/me', authenticate, requireTrader, (req, res) => {
+router.get('/dealer/me', authenticate, requireTraderOrAdmin, (req, res) => {
   const dealer = db.prepare(`
     SELECT id, name, latitude, longitude, h3_index, availability_status,
            will_deliver, delivery_enabled

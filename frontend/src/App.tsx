@@ -4,6 +4,7 @@ import { useRubberBandScroll } from './hooks/useRubberBandScroll';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
+import { PrivateRoute, DeliveryRoute, ConsumerRoute } from './components/RouteGuards';
 
 import Landing         from './pages/Landing';
 import Login           from './pages/Login';
@@ -22,6 +23,7 @@ import AdminTraders       from './pages/admin/Traders';
 import AdminOrders        from './pages/admin/Orders';
 import AdminConsumerOrders from './pages/admin/ConsumerOrders';
 import AdminCommissions   from './pages/admin/Commissions';
+import AdminPayouts       from './pages/admin/Payouts';
 import AdminConsumers     from './pages/admin/Consumers';
 import AdminSettings      from './pages/admin/Settings';
 import AdminDealerInventory from './pages/admin/DealerInventory';
@@ -34,6 +36,8 @@ import TraderConsumerOrders from './pages/trader/ConsumerOrders';
 import TraderCommissions   from './pages/trader/Commissions';
 import TraderProfile       from './pages/trader/Profile';
 import TraderInventory     from './pages/trader/Inventory';
+import TraderSubDealerCommissions from './pages/trader/SubDealerCommissions';
+import ConfirmCommission   from './pages/ConfirmCommission';
 
 import Shop                from './pages/consumer/Shop';
 import ConsumerLogin       from './pages/consumer/Login';
@@ -54,44 +58,6 @@ import DeliveryOrderDetail from './pages/delivery/OrderDetail';
 import DeliveryHistory   from './pages/delivery/History';
 import DeliveryProfile   from './pages/delivery/DeliveryProfile';
 
-// Protected route for admin/trader
-const PrivateRoute = ({ children, role }: { children: React.ReactNode; role?: 'admin' | 'trader' }) => {
-  const { user, loading } = useAuth();
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
-    </div>
-  );
-  if (!user) return <Navigate to="/login" replace />;
-  if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} replace />;
-  return <>{children}</>;
-};
-
-// Protected route for delivery partner
-const DeliveryRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-    </div>
-  );
-  if (!user) return <Navigate to="/delivery/login" replace />;
-  if (user.role !== 'trader') return <Navigate to="/delivery/login" replace />;
-  return <>{children}</>;
-};
-
-// Protected route for consumer
-const ConsumerRoute = ({ children }: { children: React.ReactNode }) => {
-  const { consumer, loading } = useAuth();
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
-    </div>
-  );
-  if (!consumer) return <Navigate to="/shop/login" replace />;
-  return <>{children}</>;
-};
-
 const AppRoutes = () => {
   const { user } = useAuth();
   useRubberBandScroll();
@@ -110,6 +76,7 @@ const AppRoutes = () => {
         <Route path="/register"        element={user ? <Navigate to="/trader" /> : <Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password"  element={<ResetPassword />} />
+        <Route path="/confirm-commission" element={<ConfirmCommission />} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<PrivateRoute role="admin"><AdminLayout /></PrivateRoute>}>
@@ -121,6 +88,7 @@ const AppRoutes = () => {
           <Route path="consumer-orders" element={<AdminConsumerOrders />} />
           <Route path="consumers"       element={<AdminConsumers />} />
           <Route path="commissions"     element={<AdminCommissions />} />
+          <Route path="payouts"         element={<AdminPayouts />} />
           <Route path="dealer-inventory" element={<AdminDealerInventory />} />
           <Route path="settings"        element={<AdminSettings />} />
         </Route>
@@ -134,6 +102,7 @@ const AppRoutes = () => {
           <Route path="sub-dealers"     element={<TraderSubDealers />} />
           <Route path="consumer-orders" element={<TraderConsumerOrders />} />
           <Route path="commissions"     element={<TraderCommissions />} />
+          <Route path="sub-dealer-commissions" element={<TraderSubDealerCommissions />} />
           <Route path="profile"         element={<TraderProfile />} />
           <Route path="inventory"       element={<TraderInventory />} />
         </Route>

@@ -440,6 +440,58 @@ function runMigrations(db) {
     console.log('[migration] weekly_payouts: added razorpay_payout_id');
   }
 
+  /* Sub-dealer commission offline-payment confirmation flow */
+  const commCols = [
+    ['payment_method',          'TEXT'],
+    ['paid_by_trader_id',       'INTEGER REFERENCES users(id)'],
+    ['paid_at_offline',         'DATETIME'],
+    ['confirmation_token',      'TEXT'],
+    ['confirmation_expires_at', 'DATETIME'],
+    ['confirmed_at',            'DATETIME'],
+    ['disputed_at',             'DATETIME'],
+    ['dispute_reason',          'TEXT'],
+    ['payment_note',            'TEXT'],
+  ];
+  for (const [col, decl] of commCols) {
+    if (!hasColumn('commissions', col)) {
+      db.exec(`ALTER TABLE commissions ADD COLUMN ${col} ${decl}`);
+      console.log(`[migration] commissions: added ${col}`);
+    }
+  }
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_commissions_confirmation_token ON commissions(confirmation_token)`); } catch (_) {}
+
+  /* Inventory-restore idempotency flag */
+  if (!hasColumn('consumer_orders', 'inventory_deducted')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN inventory_deducted INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_orders: added inventory_deducted');
+  }
+  if (!hasColumn('consumer_orders', 'inventory_restored')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN inventory_restored INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_orders: added inventory_restored');
+  }
+  if (!hasColumn('consumer_orders', 'fulfilled_by_dealer_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN fulfilled_by_dealer_id INTEGER REFERENCES users(id)`);
+    console.log('[migration] consumer_orders: added fulfilled_by_dealer_id');
+  }
+  /* Back-fill: orders previously marked as packed/shipped/delivered must
+     have had inventory deducted under the old flow. */
+  try {
+    db.exec(`
+      UPDATE consumer_orders
+      SET inventory_deducted = 1
+      WHERE inventory_deducted = 0
+        AND status IN ('processing','shipped','delivered')
+    `);
+  } catch (_) {}
+
+  // Admin users are delivery agents by default — set flags if not already set
+  db.exec(`
+    UPDATE users
+    SET will_deliver = 1, delivery_enabled = 1, availability_status = 'available'
+    WHERE role = 'admin'
+      AND (will_deliver = 0 OR delivery_enabled = 0)
+  `);
+
   console.log('[migration] all migrations applied');
 }
 

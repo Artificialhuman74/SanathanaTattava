@@ -32,7 +32,7 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Run backend tests with coverage
+      - name: Run backend tests with coverage (enforces floor — see jest.config.js)
         working-directory: backend
         run: npm run test:coverage
         env:
@@ -47,7 +47,31 @@ jobs:
           path: backend/coverage/
           retention-days: 7
 
-  # ── Job 2: Frontend type-check + unit tests ────────────────────────────────
+  # ── Job 2: Backend lint (ESLint) ───────────────────────────────────────────
+  backend-lint:
+    name: Backend Lint (ESLint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: backend
+        run: npm run lint
+
+  # ── Job 3: Frontend type-check + unit tests ────────────────────────────────
   frontend-tests:
     name: Frontend Tests (Vitest + TypeScript)
     runs-on: ubuntu-latest
@@ -83,7 +107,7 @@ jobs:
           path: frontend/coverage/
           retention-days: 7
 
-  # ── Job 3: Frontend build (Netlify build check) ────────────────────────────
+  # ── Job 4: Frontend build (Netlify build check) ────────────────────────────
   frontend-build:
     name: Frontend Build Check
     runs-on: ubuntu-latest
@@ -118,13 +142,129 @@ jobs:
           path: frontend/dist/
           retention-days: 3
 
-  # ── Job 4: E2E tests (Playwright) ─────────────────────────────────────────
+  # ── Job 5: npm audit (non-blocking — surfaces vulns without failing PRs) ───
+  npm-audit:
+    name: Dependency Audit (npm audit)
+    runs-on: ubuntu-latest
+    # Surface high+ vulns without blocking — promote to required check later.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Audit backend (high severity)
+        working-directory: backend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit frontend (high severity)
+        working-directory: frontend
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  # ── Job 6: Secret scan (gitleaks) ──────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gitleaks can scan past commits
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Job 7: Seed-and-smoke (server boots + critical endpoints respond) ─────
+  seed-and-smoke:
+    name: Seed-and-Smoke (DB seed + endpoint pings)
+    runs-on: ubuntu-latest
+    needs: backend-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Seed the database
+        working-directory: backend
+        run: npm run seed
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-jwt-secret-32chars-min!!' }}
+          NODE_ENV: test
+          DATA_DIR: ${{ github.workspace }}/backend/data
+
+      - name: Start backend in background
+        working-directory: backend
+        run: nohup node src/index.js > server.log 2>&1 &
+        env:
+          PORT: 5001
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-jwt-secret-32chars-min!!' }}
+          NODE_ENV: test
+          DATA_DIR: ${{ github.workspace }}/backend/data
+          RAILWAY_ENVIRONMENT: 'ci'  # forces plain HTTP (no certs in CI)
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:5001/api/health >/dev/null 2>&1; then
+              echo "Server is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start." >&2
+          cat backend/server.log || true
+          exit 1
+
+      - name: Smoke test critical endpoints
+        run: |
+          set -e
+          # 1. health
+          curl -fsS -o /dev/null -w "health=%{http_code}\n" http://localhost:5001/api/health
+          # 2. public consumer settings (no auth)
+          curl -fsS -o /dev/null -w "settings=%{http_code}\n" http://localhost:5001/api/consumer/settings
+          # 3. public consumer products list (no auth)
+          curl -fsS -o /dev/null -w "products=%{http_code}\n" http://localhost:5001/api/consumer/products
+          # 4. protected admin endpoint should reject without auth (401/403, NOT 5xx)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/api/admin/users)
+          echo "admin-noauth=$STATUS"
+          if [ "$STATUS" != "401" ] && [ "$STATUS" != "403" ]; then
+            echo "expected 401/403 on /api/admin/users without auth, got $STATUS" >&2
+            exit 1
+          fi
+
+      - name: Dump server log on failure
+        if: failure()
+        run: cat backend/server.log || true
+
+  # ── Job 8: E2E tests (Playwright) ─────────────────────────────────────────
   e2e-tests:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     # Only run E2E after unit tests pass and the build succeeds
     needs: [backend-tests, frontend-build]
-    # E2E is allowed to fail without blocking the PR — treat as informational
+    # E2E is allowed to fail without blocking the PR — treat as informational.
+    # Flip to `false` once the suite is stable (Part 10 / TESTING_PLAN.md).
     continue-on-error: true
 
     steps:
@@ -165,20 +305,85 @@ jobs:
           path: e2e/report/
           retention-days: 7
 
+  # ── Job 9: Load-smoke (k6, Part 11) ───────────────────────────────────────
+  # A tiny k6 run on every PR — guards against obvious regressions. The full
+  # load suite runs nightly (see .github/workflows/load-nightly.yml if added).
+  load-smoke:
+    name: Load Smoke (k6)
+    runs-on: ubuntu-latest
+    needs: backend-tests
+    continue-on-error: true  # non-blocking on PRs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Seed DB and start backend
+        working-directory: backend
+        run: |
+          npm run seed
+          nohup node src/index.js > server.log 2>&1 &
+        env:
+          PORT: 5001
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-jwt-secret-32chars-min!!' }}
+          NODE_ENV: test
+          DATA_DIR: ${{ github.workspace }}/backend/data
+          RAILWAY_ENVIRONMENT: 'ci'
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:5001/api/health >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Run k6 smoke
+        run: k6 run loadtests/smoke.k6.js
+        env:
+          BASE_URL: http://localhost:5001
+          K6_SMOKE: '1'
+
+      - name: Dump server log on failure
+        if: failure()
+        run: cat backend/server.log || true
+
   # ── Summary gate ───────────────────────────────────────────────────────────
   # PRs can only be merged when this job passes (add this as a required check)
   all-checks-passed:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests, frontend-build]
+    needs: [backend-tests, backend-lint, frontend-tests, frontend-build, secret-scan, seed-and-smoke]
     if: always()
 
     steps:
       - name: Check all required jobs succeeded
         run: |
-          if [[ "${{ needs.backend-tests.result }}"  != "success" ]] || \
-             [[ "${{ needs.frontend-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
+          if [[ "${{ needs.backend-tests.result }}"   != "success" ]] || \
+             [[ "${{ needs.backend-lint.result }}"    != "success" ]] || \
+             [[ "${{ needs.frontend-tests.result }}"  != "success" ]] || \
+             [[ "${{ needs.frontend-build.result }}"  != "success" ]] || \
+             [[ "${{ needs.secret-scan.result }}"     != "success" ]] || \
+             [[ "${{ needs.seed-and-smoke.result }}"  != "success" ]]; then
             echo "One or more required checks failed."
             exit 1
           fi

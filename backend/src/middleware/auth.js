@@ -29,4 +29,10 @@ const requireTrader = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requireAdmin, requireTrader };
+const requireTraderOrAdmin = (req, res, next) => {
+  if (req.user.role !== 'trader' && req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Trader or admin access required' });
+  next();
+};
+
+module.exports = { authenticate, requireAdmin, requireTrader, requireTraderOrAdmin };

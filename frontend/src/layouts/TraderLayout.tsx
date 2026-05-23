@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, ShoppingCart,
   Users, DollarSign, QrCode, Warehouse, UserCircle,
-  LogOut, Menu, X, ChevronRight, Bell, Star, Truck,
+  LogOut, Menu, X, ChevronRight, Bell, Star, Truck, HandCoins,
 } from 'lucide-react';
 import LocationPrompt from '../components/LocationPrompt';
 import NotificationBell from '../components/NotificationBell';
@@ -21,6 +21,7 @@ export default function TraderLayout() {
     { to: '/trader/orders',           icon: ShoppingCart,    label: 'My Orders',       show: true },
     { to: '/trader/inventory',         icon: Warehouse,       label: 'My Inventory',    show: true },
     { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Dealers',     show: isTier1 },
+    { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Dealers', show: isTier1 },
     { to: '/trader/commissions',      icon: DollarSign,      label: 'Commissions',     show: true },
     { to: '/trader/profile',          icon: UserCircle,      label: 'My Profile',      show: true },
     { to: '/delivery/dashboard',      icon: Truck,           label: 'Delivery',        show: true },

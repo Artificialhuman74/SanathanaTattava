@@ -383,9 +383,15 @@ router.post('/orders', authConsumer, [
       if (parent?.delivery_enabled && parent?.will_deliver) deliveryDealerId = parent.id;
     }
   }
-  // Direct orders with no geo: admin handles delivery (deliveryDealerId stays null)
-
-  const assignmentStatus = deliveryDealerId ? 'assigned' : 'unassigned';
+  // Final fallback: assign to admin if no trader could be resolved
+  let assignmentStatus = deliveryDealerId ? 'assigned' : 'unassigned';
+  if (!deliveryDealerId) {
+    const admin = db.prepare(`SELECT id FROM users WHERE role='admin' AND status='active' ORDER BY id LIMIT 1`).get();
+    if (admin) {
+      deliveryDealerId = admin.id;
+      assignmentStatus = 'admin';
+    }
+  }
 
   /* Validate items */
   let subtotal = 0;
@@ -419,6 +425,22 @@ router.post('/orders', authConsumer, [
     for (const it of resolved) {
       insI.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total);
       db.prepare(`UPDATE products SET stock=stock-? WHERE id=?`).run(it.quantity, it.product_id);
+    }
+
+    // Admin-fulfilled orders: warehouse was just debited above, so mark the
+    // order as already inventory-deducted. This lets cancel/refund paths
+    // restore warehouse stock via returnOrderInventory() without ever having
+    // to go through a trader's "processing" step.
+    // Check by role so both H3-found admins and fallback-assigned admins are covered.
+    if (deliveryDealerId) {
+      const fulfiller = db.prepare(`SELECT role FROM users WHERE id = ?`).get(deliveryDealerId);
+      if (fulfiller?.role === 'admin') {
+        db.prepare(`
+          UPDATE consumer_orders
+          SET inventory_deducted = 1, fulfilled_by_dealer_id = ?
+          WHERE id = ?
+        `).run(deliveryDealerId, or.lastInsertRowid);
+      }
     }
 
     /* Commissions are recorded after payment confirmation, not here */

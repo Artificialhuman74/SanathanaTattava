@@ -6,6 +6,7 @@ import {
   UserCircle, MapPin, Phone, Mail, Star, Truck, Package,
   Shield, QrCode, Users, Copy, Check, Navigation,
   Edit2, Save, X, Loader2, RefreshCw, AlertTriangle, KeyRound,
+  Landmark,
 } from 'lucide-react';
 
 interface ProfileData {
@@ -16,6 +17,11 @@ interface ProfileData {
     commission_rate: number; latitude: number | null; longitude: number | null;
     h3_index: string | null; availability_status: string; status: string;
     created_at: string;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_ifsc: string | null;
+    razorpay_linked_account_id: string | null;
+    razorpay_account_status: string | null;
   };
   referrer: { id: number; name: string; phone: string; email: string; referral_code: string } | null;
   subDealerCount: number;
@@ -36,6 +42,11 @@ export default function TraderProfile() {
   const [pwStep,    setPwStep]    = useState<'idle'|'otp'>('idle');
   const [pwLoading, setPwLoading] = useState(false);
 
+  // Bank details states
+  const [bankEditing, setBankEditing] = useState(false);
+  const [bankSaving, setBankSaving]   = useState(false);
+  const [bankForm, setBankForm]       = useState({ bank_account_name: '', bank_account_number: '', bank_ifsc: '' });
+
   // GPS location update states
   const [gpsUpdating, setGpsUpdating] = useState(false);
   const [gpsError, setGpsError] = useState('');
@@ -51,9 +62,41 @@ export default function TraderProfile() {
           address: r.data.user.address || '',
           pincode: r.data.user.pincode || '',
         });
+        setBankForm({
+          bank_account_name:   r.data.user.bank_account_name   || '',
+          bank_account_number: r.data.user.bank_account_number || '',
+          bank_ifsc:           r.data.user.bank_ifsc           || '',
+        });
       })
       .catch(() => toast.error('Failed to load profile'))
       .finally(() => setLoading(false));
+  };
+
+  const handleBankSave = async () => {
+    const name = bankForm.bank_account_name.trim();
+    const number = bankForm.bank_account_number.trim();
+    const ifsc = bankForm.bank_ifsc.trim().toUpperCase();
+    if (!name || !number || !ifsc) { toast.error('All bank fields are required'); return; }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { toast.error('Invalid IFSC code'); return; }
+    if (!/^\d{9,18}$/.test(number)) { toast.error('Invalid account number (9–18 digits)'); return; }
+
+    setBankSaving(true);
+    try {
+      await api.post('/payments/bank-details', { bank_account_name: name, bank_account_number: number, bank_ifsc: ifsc });
+      toast.success('Bank details saved');
+      setBankEditing(false);
+      fetchProfile();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to save bank details');
+    } finally {
+      setBankSaving(false);
+    }
+  };
+
+  const maskAccount = (acc: string | null) => {
+    if (!acc) return '—';
+    if (acc.length <= 4) return acc;
+    return '•'.repeat(Math.max(0, acc.length - 4)) + acc.slice(-4);
   };
 
   useEffect(() => { fetchProfile(); }, []);
@@ -426,6 +469,122 @@ export default function TraderProfile() {
             <span className="text-slate-700 font-medium">Commission Rate</span>
             <span className="text-2xl font-extrabold text-emerald-700">{user.commission_rate}%</span>
           </div>
+        </div>
+
+        {/* Bank Details */}
+        <div className="card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Landmark size={14} /> Bank Details (for commission payouts)
+            </h3>
+            {!bankEditing && (
+              <button
+                onClick={() => setBankEditing(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              >
+                <Edit2 size={14} />
+                {user.bank_account_number ? 'Update' : 'Add'}
+              </button>
+            )}
+          </div>
+
+          {user.razorpay_linked_account_id && (
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-start gap-2">
+              <Check size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-emerald-700">
+                <p className="font-semibold">Linked Razorpay account active</p>
+                <p className="text-emerald-600 mt-0.5">Status: {user.razorpay_account_status || 'created'}. Commissions are sent to this bank account.</p>
+              </div>
+            </div>
+          )}
+
+          {bankEditing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Account Holder Name</label>
+                <input
+                  type="text"
+                  value={bankForm.bank_account_name}
+                  onChange={e => setBankForm(f => ({ ...f, bank_account_name: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  placeholder="As per bank records"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Account Number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bankForm.bank_account_number}
+                  onChange={e => setBankForm(f => ({ ...f, bank_account_number: e.target.value.replace(/\D/g, '') }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono"
+                  placeholder="9–18 digits"
+                  maxLength={18}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">IFSC Code</label>
+                <input
+                  type="text"
+                  value={bankForm.bank_ifsc}
+                  onChange={e => setBankForm(f => ({ ...f, bank_ifsc: e.target.value.toUpperCase() }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
+                  placeholder="e.g. HDFC0001234"
+                  maxLength={11}
+                />
+              </div>
+              {user.razorpay_linked_account_id && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  Your bank is already linked to Razorpay. Editing here updates your local record; ask the admin to re-link if the bank account changed.
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleBankSave}
+                  disabled={bankSaving}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {bankSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setBankEditing(false);
+                    setBankForm({
+                      bank_account_name:   user.bank_account_name   || '',
+                      bank_account_number: user.bank_account_number || '',
+                      bank_ifsc:           user.bank_ifsc           || '',
+                    });
+                  }}
+                  className="px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            user.bank_account_number ? (
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs text-slate-400">Account Holder</p>
+                  <p className="text-sm font-medium text-slate-900">{user.bank_account_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Account Number</p>
+                  <p className="text-sm font-mono font-medium text-slate-900">{maskAccount(user.bank_account_number)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">IFSC</p>
+                  <p className="text-sm font-mono font-medium text-slate-900">{user.bank_ifsc}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex gap-2">
+                <AlertTriangle size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-700">Add your bank details so the admin can enable commission payouts to your account.</p>
+              </div>
+            )
+          )}
         </div>
 
         {/* Change Password */}

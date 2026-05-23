@@ -213,16 +213,13 @@ router.put('/consumer-orders/:id/status', [
     }
   }
 
-  /* ── Return inventory when order is CANCELLED (if it was packed) ──── */
-  if (status === 'cancelled' && ['processing', 'shipped'].includes(order.status)) {
-    const fulfillDealerId = order.delivery_dealer_id || order.linked_dealer_id;
-    if (fulfillDealerId) {
-      try {
-        returnOrderInventory(order.id, fulfillDealerId);
-      } catch (invErr) {
-        console.error('[inventory] return failed:', invErr.message);
-        // Non-fatal — still cancel the order
-      }
+  /* ── Return inventory when order is CANCELLED (idempotent) ────────── */
+  if (status === 'cancelled') {
+    try {
+      returnOrderInventory(order.id);
+    } catch (invErr) {
+      console.error('[inventory] return failed:', invErr.message);
+      // Non-fatal — still cancel the order
     }
   }
 
@@ -351,6 +348,155 @@ router.post('/commissions/withdraw', (req, res) => {
   res.status(201).json({ success: true, id: r.lastInsertRowid });
 });
 
+/* ── Sub-dealer Commission Settlement (offline cash/bank) ─────────────────
+ * Tier-1 parent settles direct commissions owed to their sub-dealers
+ * (commissions where trader_id is a sub-dealer referred_by_id=parent.id).
+ * Admin only handles tier-1 commissions; tier-2 are settled here.
+ */
+router.get('/sub-dealer-commissions', (req, res) => {
+  if (req.user.tier !== 1) return res.status(403).json({ error: 'Only tier-1 dealers can view sub-dealer commissions' });
+
+  const rows = db.prepare(`
+    SELECT cm.id, cm.trader_id, cm.amount, cm.rate, cm.type, cm.status,
+           cm.payment_method, cm.paid_at_offline, cm.confirmed_at, cm.disputed_at,
+           cm.dispute_reason, cm.payment_note, cm.created_at,
+           u.name AS sub_dealer_name, u.email AS sub_dealer_email,
+           co.order_number, co.total_amount AS order_amount
+    FROM commissions cm
+    JOIN users u ON u.id = cm.trader_id
+    LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+    WHERE u.referred_by_id = ? AND cm.type = 'direct'
+    ORDER BY
+      CASE cm.status
+        WHEN 'pending' THEN 0
+        WHEN 'awaiting_confirmation' THEN 1
+        WHEN 'disputed' THEN 2
+        WHEN 'paid' THEN 3
+        ELSE 4
+      END,
+      cm.created_at DESC
+    LIMIT 500
+  `).all(req.user.id);
+
+  const summary = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN cm.status='pending' THEN cm.amount END),0) AS owed,
+      COALESCE(SUM(CASE WHEN cm.status='awaiting_confirmation' THEN cm.amount END),0) AS awaiting,
+      COALESCE(SUM(CASE WHEN cm.status='disputed' THEN cm.amount END),0) AS disputed,
+      COALESCE(SUM(CASE WHEN cm.status='paid' THEN cm.amount END),0) AS paid,
+      COUNT(CASE WHEN cm.status='pending' THEN 1 END) AS owed_count
+    FROM commissions cm
+    JOIN users u ON u.id = cm.trader_id
+    WHERE u.referred_by_id = ? AND cm.type = 'direct'
+  `).get(req.user.id);
+
+  res.json({ commissions: rows, summary });
+});
+
+router.post('/sub-dealer-commissions/:id/log-payment', async (req, res) => {
+  if (req.user.tier !== 1) return res.status(403).json({ error: 'Only tier-1 dealers can settle sub-dealer commissions' });
+
+  const { method, note } = req.body || {};
+  if (!['cash', 'bank_transfer'].includes(method))
+    return res.status(400).json({ error: 'method must be "cash" or "bank_transfer"' });
+
+  const id = Number(req.params.id);
+  const comm = db.prepare(`
+    SELECT cm.*, u.name AS sub_dealer_name, u.email AS sub_dealer_email,
+           u.referred_by_id, co.order_number
+    FROM commissions cm
+    JOIN users u ON u.id = cm.trader_id
+    LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+    WHERE cm.id = ?
+  `).get(id);
+
+  if (!comm) return res.status(404).json({ error: 'Commission not found' });
+  if (comm.referred_by_id !== req.user.id) return res.status(403).json({ error: 'This commission is not owed by you' });
+  if (comm.type !== 'direct')      return res.status(400).json({ error: 'Only direct sub-dealer commissions can be settled offline' });
+  if (comm.status !== 'pending')   return res.status(400).json({ error: `Commission is ${comm.status}, not pending` });
+  if (!comm.sub_dealer_email)      return res.status(400).json({ error: 'Sub-dealer has no email on file' });
+
+  const crypto = require('crypto');
+  const token = crypto.randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const noteTrim = (note || '').toString().trim().slice(0, 500) || null;
+
+  db.prepare(`
+    UPDATE commissions
+    SET status='awaiting_confirmation',
+        payment_method=?, paid_by_trader_id=?, paid_at_offline=CURRENT_TIMESTAMP,
+        confirmation_token=?, confirmation_expires_at=?, payment_note=?
+    WHERE id=?
+  `).run(method, req.user.id, token, expiresAt, noteTrim, id);
+
+  /* Send email to sub-dealer */
+  try {
+    const { sendCommissionConfirmationEmail } = require('../services/emailService');
+    const FRONTEND = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+    const confirmUrl = `${FRONTEND}/confirm-commission?token=${encodeURIComponent(token)}`;
+    await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
+      subDealerName: comm.sub_dealer_name,
+      parentName:    req.user.name,
+      amount:        comm.amount,
+      method,
+      confirmUrl,
+      orderNumber:   comm.order_number,
+      note:          noteTrim,
+    });
+  } catch (err) {
+    console.error('[sub-dealer-commission] email send failed:', err.message);
+    /* Non-fatal — the parent can resend later */
+  }
+
+  /* In-app notification to sub-dealer */
+  try {
+    const { createNotification } = require('../services/notificationService');
+    createNotification(
+      'dealer', comm.trader_id,
+      `Commission marked as paid — ₹${comm.amount}`,
+      `${req.user.name} marked a ${method === 'cash' ? 'cash' : 'bank transfer'} payment as sent. Check your email to confirm.`,
+      { commission_id: comm.id, requires_confirmation: true },
+    );
+  } catch { /* non-fatal */ }
+
+  res.json({ success: true });
+});
+
+router.post('/sub-dealer-commissions/:id/resend-email', async (req, res) => {
+  if (req.user.tier !== 1) return res.status(403).json({ error: 'Forbidden' });
+  const id = Number(req.params.id);
+  const comm = db.prepare(`
+    SELECT cm.*, u.name AS sub_dealer_name, u.email AS sub_dealer_email,
+           u.referred_by_id, co.order_number
+    FROM commissions cm
+    JOIN users u ON u.id = cm.trader_id
+    LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+    WHERE cm.id = ?
+  `).get(id);
+  if (!comm) return res.status(404).json({ error: 'Commission not found' });
+  if (comm.referred_by_id !== req.user.id) return res.status(403).json({ error: 'Not your sub-dealer' });
+  if (comm.status !== 'awaiting_confirmation') return res.status(400).json({ error: 'Not awaiting confirmation' });
+  if (!comm.confirmation_token) return res.status(400).json({ error: 'No active confirmation link' });
+
+  try {
+    const { sendCommissionConfirmationEmail } = require('../services/emailService');
+    const FRONTEND = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+    const confirmUrl = `${FRONTEND}/confirm-commission?token=${encodeURIComponent(comm.confirmation_token)}`;
+    await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
+      subDealerName: comm.sub_dealer_name,
+      parentName:    req.user.name,
+      amount:        comm.amount,
+      method:        comm.payment_method,
+      confirmUrl,
+      orderNumber:   comm.order_number,
+      note:          comm.payment_note,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to send email' });
+  }
+});
+
 /* ── Admin contact (for insufficient-stock warning on dealer side) ─────── */
 router.get('/admin-contact', (req, res) => {
   const admin = db.prepare(`SELECT name, phone, email FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1`).get();
@@ -405,7 +551,9 @@ router.get('/my-profile', (req, res) => {
   const user = db.prepare(`
     SELECT id, name, email, phone, address, pincode, tier, referral_code,
            will_deliver, delivery_enabled, commission_rate, referred_by_id,
-           latitude, longitude, h3_index, availability_status, status, created_at
+           latitude, longitude, h3_index, availability_status, status, created_at,
+           bank_account_name, bank_account_number, bank_ifsc,
+           razorpay_linked_account_id, razorpay_account_status
     FROM users WHERE id = ?
   `).get(req.user.id);
 

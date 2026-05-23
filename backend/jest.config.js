@@ -33,5 +33,16 @@ module.exports = {
     '!src/database/seed.js',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov'],
+  coverageReporters: ['text', 'lcov', 'json-summary'],
+
+  // Floor below current numbers. Bump up as new tests land — see TESTING_PLAN
+  // Part 10. PRs that drop coverage below these floors will fail CI.
+  coverageThreshold: {
+    global: {
+      statements: 55,
+      branches: 45,
+      functions: 50,
+      lines: 60,
+    },
+  },
 };

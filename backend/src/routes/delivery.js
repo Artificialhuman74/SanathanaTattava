@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const db = require('../database/db');
-const { authenticate, requireTrader } = require('../middleware/auth');
+const { authenticate, requireTraderOrAdmin } = require('../middleware/auth');
 const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
@@ -10,8 +10,8 @@ const { sendDeliveryOtpEmail } = require('../services/emailService');
 
 const router = express.Router();
 
-/* ── All routes require authenticated trader ────────────────────────── */
-router.use(authenticate, requireTrader);
+/* ── All routes require authenticated trader or admin ───────────────── */
+router.use(authenticate, requireTraderOrAdmin);
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
