@@ -99,6 +99,8 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     // Allow any trycloudflare.com subdomain (temporary tunnels)
     if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return cb(null, true);
+    // Allow any Netlify deployment origin.
+    if (/^https:\/\/[a-z0-9-]+\.netlify\.app$/.test(origin)) return cb(null, true);
     // Allow railway deployments:
     // - https://foo.railway.app
     // - https://foo.up.railway.app
