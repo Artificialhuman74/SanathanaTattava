@@ -352,6 +352,141 @@ router.post('/refund', authenticate, requireAdmin, auditLog('refund'), async (re
   }
 });
 
+/* ── POST /api/payments/onboard (admin) ──────────────────────────────────
+ * All-in-one: create linked account + register Route product + bank details
+ * + stakeholder KYC in a single call. Idempotent — skips steps already done.
+ */
+router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { trader_id } = req.body;
+  if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
+
+  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  if (!trader.bank_account_number || !trader.bank_ifsc || !trader.bank_account_name)
+    return res.status(400).json({ error: 'Trader bank details missing — ask trader to fill bank details first' });
+  if (!trader.pan)
+    return res.status(400).json({ error: 'Trader PAN missing — required for KYC' });
+
+  const steps = [];
+  try {
+    // Step 1: Create linked account (skip if already exists)
+    let accountId = trader.razorpay_linked_account_id;
+    if (!accountId) {
+      const account = await razorpay.accounts.create({
+        email:               trader.email,
+        phone:               trader.phone,
+        legal_business_name: trader.bank_account_name || trader.name,
+        business_type:       'individual',
+        contact_name:        trader.name,
+        profile: {
+          category:    'others',
+          subcategory: 'others',
+          addresses: {
+            registered: {
+              street1:     trader.address || 'NA',
+              street2:     'NA',
+              city:        'NA',
+              state:       'KARNATAKA',
+              postal_code: trader.pincode || '560001',
+              country:     'IN',
+            },
+          },
+        },
+      });
+      accountId = account.id;
+      db.prepare(`UPDATE users SET razorpay_linked_account_id=?, razorpay_account_status='created' WHERE id=?`)
+        .run(accountId, trader.id);
+      steps.push('linked_account_created');
+    } else {
+      steps.push('linked_account_exists');
+    }
+
+    // Step 2: Register Route product + bank details (skip if already done)
+    const status = db.prepare('SELECT razorpay_account_status, razorpay_product_id FROM users WHERE id=?').get(trader.id);
+    if (!['bank_added', 'stakeholder_added', 'activated'].includes(status.razorpay_account_status)) {
+      const product = await razorpay.products.requestProductConfiguration(accountId, {
+        product_name: 'route',
+        tnc_accepted: true,
+      });
+      await razorpay.products.edit(accountId, product.id, {
+        settlements: {
+          account_number:   trader.bank_account_number,
+          ifsc_code:        trader.bank_ifsc,
+          beneficiary_name: trader.bank_account_name,
+        },
+        tnc_accepted: true,
+      });
+      db.prepare(`UPDATE users SET razorpay_account_status='bank_added', razorpay_product_id=? WHERE id=?`)
+        .run(product.id, trader.id);
+      steps.push('bank_registered');
+    } else {
+      steps.push('bank_already_registered');
+    }
+
+    // Step 3: Add stakeholder for KYC (skip if already done)
+    const status2 = db.prepare('SELECT razorpay_account_status FROM users WHERE id=?').get(trader.id);
+    if (!['stakeholder_added', 'activated'].includes(status2.razorpay_account_status)) {
+      const stakeholder = await razorpay.stakeholders.create(accountId, {
+        name:                 trader.name,
+        email:                trader.email,
+        percentage_ownership: 100,
+        relationship:         { director: true },
+        phone:                { primary: trader.phone || '' },
+        addresses: {
+          residential: {
+            street:      trader.address || 'NA',
+            city:        'NA',
+            state:       'Karnataka',
+            postal_code: trader.pincode || '560001',
+            country:     'IN',
+          },
+        },
+        kyc: { pan: trader.pan },
+      });
+      db.prepare(`UPDATE users SET razorpay_account_status='stakeholder_added' WHERE id=?`).run(trader.id);
+      steps.push(`stakeholder_created:${stakeholder.id}`);
+    } else {
+      steps.push('stakeholder_already_added');
+    }
+
+    res.json({ success: true, linked_account_id: accountId, steps });
+  } catch (err) {
+    console.error('[razorpay] onboard error:', err.error?.description || err.message, '| steps so far:', steps);
+    res.status(500).json({ error: err.error?.description || err.message || 'Onboarding failed', steps });
+  }
+});
+
+/* ── POST /api/payments/sync-account (admin) ─────────────────────────────
+ * Manually pull the current account status from Razorpay and update DB.
+ * Useful when the account.activated webhook was missed.
+ */
+router.post('/sync-account', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { trader_id } = req.body;
+  if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
+
+  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  if (!trader.razorpay_linked_account_id)
+    return res.status(400).json({ error: 'No linked account — run onboarding first' });
+
+  try {
+    const account = await razorpay.accounts.fetch(trader.razorpay_linked_account_id);
+    // Razorpay returns profile.status for linked accounts
+    const rzpStatus = account.profile?.status || account.status;
+    const mapped = rzpStatus === 'activated' ? 'activated'
+                 : rzpStatus === 'under_review' ? 'under_review'
+                 : rzpStatus === 'rejected' ? 'rejected'
+                 : trader.razorpay_account_status; // keep existing if unrecognised
+    db.prepare(`UPDATE users SET razorpay_account_status=? WHERE id=?`).run(mapped, trader.id);
+    res.json({ success: true, razorpay_status: rzpStatus, mapped_status: mapped });
+  } catch (err) {
+    console.error('[razorpay] sync-account error:', err.error?.description || err.message);
+    res.status(500).json({ error: err.error?.description || 'Failed to sync account status' });
+  }
+});
+
 /* ── POST /api/payments/linked-account (admin) ───────────────────────────
  * Register a trader as a Razorpay Route linked account. Requires Route
  * to be activated on the merchant account; bank account is penny-tested

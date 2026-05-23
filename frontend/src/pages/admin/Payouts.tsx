@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Landmark, Link2, Send, RefreshCw, AlertCircle, Check, Clock,
-  Loader2, Wallet, Users as UsersIcon, CreditCard, UserCheck, ChevronRight,
+  Loader2, Wallet, Users as UsersIcon, UserCheck, ChevronRight,
 } from 'lucide-react';
 
 interface PayoutTrader {
@@ -62,9 +62,9 @@ export default function AdminPayouts() {
   const [commissions, setCommissions]       = useState<PendingCommission[]>([]);
   const [loading, setLoading]               = useState(true);
   const [traderFilter, setTraderFilter]     = useState<number | ''>('');
-  const [busyTraderId, setBusyTraderId]     = useState<number | null>(null);
+  const [busyTraderId, setBusyTraderId]         = useState<number | null>(null);
   const [busyCommissionId, setBusyCommissionId] = useState<number | null>(null);
-  const [busyStep, setBusyStep]             = useState<string | null>(null); // `${traderId}:step`
+  const [busyStep, setBusyStep]                 = useState<string | null>(null);
   const [payingAll, setPayingAll]           = useState(false);
 
   const fetchAll = useCallback(() => {
@@ -85,46 +85,36 @@ export default function AdminPayouts() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleLinkAccount = async (t: PayoutTrader) => {
+  const handleOnboard = async (t: PayoutTrader) => {
     if (!t.bank_account_number || !t.bank_ifsc || !t.bank_account_name) {
       toast.error('Trader has not added bank details yet'); return;
     }
-    if (!window.confirm(`Create Razorpay linked account for ${t.name}?`)) return;
+    if (!window.confirm(`Onboard ${t.name} to Razorpay Route? This will create their linked account, register bank details, and submit KYC.`)) return;
     setBusyTraderId(t.id);
     try {
-      const { data } = await api.post('/payments/linked-account', { trader_id: t.id });
-      toast.success(`Linked account created (${data.linked_account_id})`);
+      const { data } = await api.post('/payments/onboard', { trader_id: t.id });
+      toast.success(`Onboarding complete — awaiting Razorpay activation`);
+      console.log('[onboard] steps:', data.steps);
       fetchAll();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to create linked account');
+      toast.error(err?.response?.data?.error || 'Onboarding failed');
     } finally {
       setBusyTraderId(null);
     }
   };
 
-  const handleAddBankAccount = async (t: PayoutTrader) => {
-    if (!window.confirm(`Upload bank details for ${t.name} to Razorpay?`)) return;
-    setBusyStep(`${t.id}:bank`);
+  const handleSyncStatus = async (t: PayoutTrader) => {
+    setBusyStep(`${t.id}:sync`);
     try {
-      await api.post('/payments/add-bank-account', { trader_id: t.id });
-      toast.success('Bank account added to Razorpay');
+      const { data } = await api.post('/payments/sync-account', { trader_id: t.id });
+      if (data.mapped_status === 'activated') {
+        toast.success(`${t.name} is now activated!`);
+      } else {
+        toast(`Current status: ${data.razorpay_status || data.mapped_status}`, { icon: 'ℹ️' });
+      }
       fetchAll();
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to add bank account');
-    } finally {
-      setBusyStep(null);
-    }
-  };
-
-  const handleAddStakeholder = async (t: PayoutTrader) => {
-    if (!window.confirm(`Submit KYC stakeholder for ${t.name}? Their PAN must be on file.`)) return;
-    setBusyStep(`${t.id}:kyc`);
-    try {
-      await api.post('/payments/stakeholder', { trader_id: t.id });
-      toast.success('Stakeholder KYC submitted — waiting for Razorpay activation');
-      fetchAll();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to add stakeholder');
+      toast.error(err?.response?.data?.error || 'Failed to sync status');
     } finally {
       setBusyStep(null);
     }
@@ -239,72 +229,57 @@ export default function AdminPayouts() {
                   const status     = t.razorpay_account_status;
                   const linked     = !!t.razorpay_linked_account_id;
                   const activated  = status === 'activated';
-                  const step2Busy  = busyStep === `${t.id}:bank`;
-                  const step3Busy  = busyStep === `${t.id}:kyc`;
-
-                  // Stepper: which step are we on?
-                  // 0 = no bank, 1 = has bank (ready to link), 2 = linked (add bank to Rzp), 3 = bank added (add stakeholder), 4 = stakeholder (waiting), 5 = activated
-                  const step = !hasBank ? 0
-                    : !linked           ? 1
-                    : status === 'created'          ? 2
-                    : status === 'bank_added'        ? 3
-                    : status === 'stakeholder_added' ? 4
-                    : activated                      ? 5 : 2;
+                  const syncBusy = busyStep === `${t.id}:sync`;
 
                   const statusBadge = () => {
-                    if (step === 0) return <span className="badge bg-slate-100 text-slate-500">No bank details</span>;
-                    if (step === 1) return <span className="badge bg-amber-100 text-amber-700">Not linked</span>;
-                    if (step === 2) return <span className="badge bg-blue-100 text-blue-700">Account created</span>;
-                    if (step === 3) return <span className="badge bg-indigo-100 text-indigo-700">Bank uploaded</span>;
-                    if (step === 4) return <span className="badge bg-purple-100 text-purple-700">KYC pending</span>;
-                    return (
+                    if (!hasBank)   return <span className="badge bg-slate-100 text-slate-500">No bank details</span>;
+                    if (!linked)    return <span className="badge bg-amber-100 text-amber-700">Not onboarded</span>;
+                    if (status === 'created')           return <span className="badge bg-blue-100 text-blue-700">Account created</span>;
+                    if (status === 'bank_added')        return <span className="badge bg-indigo-100 text-indigo-700">Bank registered</span>;
+                    if (status === 'stakeholder_added') return <span className="badge bg-purple-100 text-purple-700">KYC submitted</span>;
+                    if (status === 'under_review')      return <span className="badge bg-amber-100 text-amber-700">Under review</span>;
+                    if (activated) return (
                       <div className="flex flex-col gap-0.5">
                         <span className="badge bg-emerald-100 text-emerald-700 w-fit"><Check size={10} /> Active</span>
                         <span className="text-xs font-mono text-slate-400">{t.razorpay_linked_account_id}</span>
                       </div>
                     );
+                    return <span className="badge bg-slate-100 text-slate-500">{status || 'unknown'}</span>;
                   };
 
                   const actionButton = () => {
-                    if (step === 0) return <span className="text-xs text-slate-400">Needs bank details</span>;
-                    if (step === 1) return (
-                      <button
-                        onClick={() => handleLinkAccount(t)}
-                        disabled={busyTraderId === t.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {busyTraderId === t.id ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
-                        {busyTraderId === t.id ? 'Creating…' : 'Step 1: Create Account'}
-                      </button>
-                    );
-                    if (step === 2) return (
-                      <button
-                        onClick={() => handleAddBankAccount(t)}
-                        disabled={step2Busy}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {step2Busy ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
-                        {step2Busy ? 'Uploading…' : 'Step 2: Upload Bank'}
-                      </button>
-                    );
-                    if (step === 3) return (
-                      <button
-                        onClick={() => handleAddStakeholder(t)}
-                        disabled={step3Busy}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {step3Busy ? <Loader2 size={12} className="animate-spin" /> : <UserCheck size={12} />}
-                        {step3Busy ? 'Submitting…' : 'Step 3: Submit KYC'}
-                      </button>
-                    );
-                    if (step === 4) return <span className="text-xs text-slate-400 italic">Awaiting Razorpay activation…</span>;
-                    // step 5 — fully active
-                    return (
+                    if (!hasBank) return <span className="text-xs text-slate-400">Needs bank details</span>;
+                    if (activated) return (
                       <button
                         onClick={() => setTraderFilter(t.id)}
                         className="flex items-center gap-1 btn-ghost text-xs text-brand-600 hover:text-brand-700 font-semibold"
                       >
                         View commissions <ChevronRight size={12} />
+                      </button>
+                    );
+                    // Awaiting Razorpay to activate after KYC submitted — show sync button
+                    if (status === 'stakeholder_added' || status === 'under_review') return (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs text-slate-400 italic">Awaiting Razorpay…</span>
+                        <button
+                          onClick={() => handleSyncStatus(t)}
+                          disabled={syncBusy}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {syncBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {syncBusy ? 'Checking…' : 'Sync Status'}
+                        </button>
+                      </div>
+                    );
+                    // Not yet onboarded or partially done — single onboard button
+                    return (
+                      <button
+                        onClick={() => handleOnboard(t)}
+                        disabled={busyTraderId === t.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {busyTraderId === t.id ? <Loader2 size={12} className="animate-spin" /> : <UserCheck size={12} />}
+                        {busyTraderId === t.id ? 'Onboarding…' : linked ? 'Resume Onboarding' : 'Onboard to Razorpay'}
                       </button>
                     );
                   };
