@@ -12,7 +12,8 @@
       "Bash(node -c src/services/emailService.js)",
       "Bash(node -c src/database/migrations.js)",
       "Bash(node -c src/services/inventoryService.js)",
-      "Bash(node -c src/routes/payments.js)"
+      "Bash(node -c src/routes/payments.js)",
+      "Bash(JWT_SECRET=test node scripts/assignUnlinkedConsumers.js --dry-run)"
     ]
   }
 }

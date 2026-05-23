@@ -89,6 +89,8 @@ const allowedOrigins = [
   'https://localhost:5001',
 ];
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+// Named Cloudflare tunnel — stays constant, no regex needed
+if (process.env.API_ORIGIN) allowedOrigins.push(process.env.API_ORIGIN);
 
 app.use(cors({
   origin: (origin, cb) => {

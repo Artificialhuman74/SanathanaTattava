@@ -226,6 +226,22 @@ router.post('/webhook', (req, res) => {
         db.prepare(`UPDATE commissions SET status=? WHERE razorpay_transfer_id=?`).run(status, t.id);
         break;
       }
+      case 'account.activated':
+      case 'account.under_review':
+      case 'account.rejected': {
+        const acct = event.payload.account?.entity;
+        if (acct?.id) {
+          const statusMap = {
+            'account.activated':    'activated',
+            'account.under_review': 'under_review',
+            'account.rejected':     'rejected',
+          };
+          db.prepare(`UPDATE users SET razorpay_account_status=? WHERE razorpay_linked_account_id=?`)
+            .run(statusMap[event.event], acct.id);
+          console.log(`[webhook] ${event.event} → account ${acct.id}`);
+        }
+        break;
+      }
       default:
         console.log(`[webhook] unhandled event: ${event.event}`);
     }
@@ -318,6 +334,92 @@ router.post('/linked-account', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+/* ── POST /api/payments/add-bank-account (admin) ────────────────────────
+ * Upload the trader's locally-stored bank details to their Razorpay linked
+ * account. Must be called after /linked-account and before any transfers.
+ */
+router.post('/add-bank-account', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { trader_id } = req.body;
+  if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
+
+  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  if (!trader.razorpay_linked_account_id)
+    return res.status(400).json({ error: 'Trader has no linked account — call /linked-account first' });
+  if (!trader.bank_account_number || !trader.bank_ifsc || !trader.bank_account_name)
+    return res.status(400).json({ error: 'Trader bank details missing' });
+
+  try {
+    const bankAccount = await razorpay.accounts.addBankAccount(
+      trader.razorpay_linked_account_id,
+      {
+        ifsc_code:            trader.bank_ifsc,
+        account_number:       trader.bank_account_number,
+        beneficiary_name:     trader.bank_account_name,
+        beneficiary_email:    trader.email,
+        beneficiary_mobile:   trader.phone || '',
+        beneficiary_country:  'IN',
+        beneficiary_city:     'NA',
+        beneficiary_state:    'KA',
+        beneficiary_pin:      trader.pincode || '560001',
+        beneficiary_address1: trader.address || 'NA',
+      },
+    );
+
+    db.prepare(`UPDATE users SET razorpay_account_status='bank_added' WHERE id=?`).run(trader.id);
+
+    res.json({ success: true, bank_account_id: bankAccount.id, status: bankAccount.status });
+  } catch (err) {
+    console.error('[razorpay] add-bank-account error:', err.error?.description || err.message);
+    res.status(500).json({ error: err.error?.description || 'Failed to add bank account' });
+  }
+});
+
+/* ── POST /api/payments/stakeholder (admin) ──────────────────────────────
+ * Add the trader as a stakeholder (KYC owner) on their linked account.
+ * Razorpay requires this before the account can be activated.
+ */
+router.post('/stakeholder', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { trader_id } = req.body;
+  if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
+
+  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  if (!trader.razorpay_linked_account_id)
+    return res.status(400).json({ error: 'Trader has no linked account — call /linked-account first' });
+
+  try {
+    const stakeholder = await razorpay.stakeholders.create(
+      trader.razorpay_linked_account_id,
+      {
+        name:          trader.name,
+        email:         trader.email,
+        phone:         { primary: trader.phone || '' },
+        addresses:     {
+          residential: {
+            street:      trader.address || 'NA',
+            city:        'NA',
+            state:       'KARNATAKA',
+            postal_code: trader.pincode || '560001',
+            country:     'IN',
+          },
+        },
+        kyc:           { pan: '' },
+        relationship:  { director: true },
+      },
+    );
+
+    db.prepare(`UPDATE users SET razorpay_account_status='stakeholder_added' WHERE id=?`).run(trader.id);
+
+    res.json({ success: true, stakeholder_id: stakeholder.id });
+  } catch (err) {
+    console.error('[razorpay] stakeholder error:', err.error?.description || err.message);
+    res.status(500).json({ error: err.error?.description || 'Failed to add stakeholder' });
+  }
+});
+
 /* ── POST /api/payments/transfer (admin) ─────────────────────────────────
  * Trigger a Route transfer for a single pending commission. The captured
  * consumer payment funds the source; the linked account receives the cut.
@@ -360,6 +462,76 @@ router.post('/transfer', authenticate, requireAdmin, async (req, res) => {
     console.error('[razorpay] transfer error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Transfer failed' });
   }
+});
+
+/* ── POST /api/payments/payout-week (admin) ──────────────────────────────
+ * Batch-transfer all pending commissions for a given week whose traders
+ * have an activated Route account.
+ *
+ * body: { week_start: 'YYYY-MM-DD' }
+ *
+ * Returns: { transferred, skipped, errors }
+ *   transferred — commissions successfully sent to Razorpay
+ *   skipped     — commissions whose trader has no linked/activated account
+ *   errors      — per-commission failures (transfer attempted but Razorpay rejected)
+ */
+router.post('/payout-week', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { week_start } = req.body;
+  if (!week_start || !/^\d{4}-\d{2}-\d{2}$/.test(week_start))
+    return res.status(400).json({ error: 'week_start required (YYYY-MM-DD)' });
+
+  const pending = db.prepare(`
+    SELECT c.*, u.razorpay_linked_account_id, u.razorpay_account_status, u.name AS trader_name,
+           co.razorpay_payment_id, co.order_number
+    FROM commissions c
+    JOIN users u  ON u.id  = c.trader_id
+    JOIN consumer_orders co ON co.id = c.consumer_order_id
+    WHERE c.week_start = ?
+      AND c.status     = 'pending'
+      AND c.razorpay_transfer_id IS NULL
+  `).all(week_start);
+
+  if (pending.length === 0)
+    return res.json({ transferred: 0, skipped: 0, errors: [], message: 'No pending commissions for this week' });
+
+  let transferred = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const comm of pending) {
+    // Skip if trader not activated on Route
+    if (!comm.razorpay_linked_account_id || comm.razorpay_account_status !== 'activated') {
+      skipped++;
+      continue;
+    }
+    if (!comm.razorpay_payment_id) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      const transfer = await razorpay.payments.transfer(comm.razorpay_payment_id, {
+        transfers: [{
+          account:  comm.razorpay_linked_account_id,
+          amount:   Math.round(comm.amount * 100),
+          currency: 'INR',
+          notes:    { commission_id: String(comm.id), order_number: comm.order_number },
+        }],
+      }, { 'X-Razorpay-Idempotency': idempotencyKey('transfer', comm.id) });
+
+      const transferId = transfer.items?.[0]?.id || transfer.id;
+      db.prepare(`UPDATE commissions SET razorpay_transfer_id=?, status='transferring' WHERE id=?`)
+        .run(transferId, comm.id);
+      transferred++;
+    } catch (err) {
+      const msg = err.error?.description || err.message;
+      console.error(`[payout-week] commission ${comm.id} failed: ${msg}`);
+      errors.push({ commission_id: comm.id, trader: comm.trader_name, error: msg });
+    }
+  }
+
+  res.json({ transferred, skipped, errors, total: pending.length });
 });
 
 /* ── POST /api/payments/bank-details (trader) ────────────────────────────

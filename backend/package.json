@@ -12,7 +12,9 @@
     "seed": "node src/database/seed.js",
     "test": "jest --no-coverage",
     "test:coverage": "jest --coverage",
-    "lint": "eslint \"src/**/*.js\" \"tests/**/*.js\""
+    "lint": "eslint \"src/**/*.js\" \"tests/**/*.js\"",
+    "assign-unlinked": "node scripts/assignUnlinkedConsumers.js",
+    "assign-unlinked:dry": "node scripts/assignUnlinkedConsumers.js --dry-run"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
