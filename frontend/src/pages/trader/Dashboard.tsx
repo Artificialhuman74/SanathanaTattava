@@ -5,9 +5,10 @@ import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import api from '../../api/axios';
 import {
   ShoppingBag, Package, Star, Users, ChevronRight, TrendingUp,
-  Clock, CheckCircle2, DollarSign, Copy, Check, ShieldAlert,
+  Clock, CheckCircle2, DollarSign, Copy, Check, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 
 const STATUS_COLORS: Record<string, string> = {
   pending:    'bg-amber-100 text-amber-700',
@@ -26,6 +27,18 @@ export default function TraderDashboard() {
   const [subDealers,     setSubDealers]     = useState<any[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [copied,         setCopied]         = useState(false);
+
+  // Fire confetti once when pan_verified becomes true
+  const panCelebKey = user ? `pan_verified_celebrated_${user.id}` : null;
+  const [panCelebrated] = useState(() => panCelebKey ? !!localStorage.getItem(panCelebKey) : true);
+  React.useEffect(() => {
+    if (user?.pan_verified && !panCelebrated && panCelebKey) {
+      localStorage.setItem(panCelebKey, '1');
+      confetti({ particleCount: 180, spread: 90, origin: { y: 0.55 } });
+      setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.1, y: 0.6 }, angle: 60 }), 300);
+      setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.9, y: 0.6 }, angle: 120 }), 500);
+    }
+  }, [user?.pan_verified]);
 
   const fetchDashboard = useCallback(() => {
     const promises: Promise<any>[] = [
@@ -68,21 +81,52 @@ export default function TraderDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* PAN verification warning */}
-      {!user?.pan_verified && (
+      {/* Account status banner — hidden once pan_verified AND razorpay activated */}
+      {(!user?.pan_verified || user?.razorpay_account_status !== 'activated') && (
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
-          <ShieldAlert size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          {user?.pan_verified
+            ? <ShieldCheck size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            : <ShieldAlert size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          }
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-800 text-sm">Account not yet verified</p>
-            <p className="text-amber-700 text-xs mt-0.5">
-              {user?.pan
-                ? 'Your PAN has been submitted and is awaiting admin verification. You cannot receive orders until verified.'
-                : 'You must add your PAN in your profile before orders can be assigned to you.'}
+            <p className="font-semibold text-amber-800 text-sm">
+              {!user?.pan && !user?.pan_verified ? 'Account information needed' : 'Account setup in progress'}
             </p>
+            <p className="text-amber-700 text-xs mt-1 mb-2">
+              You need to complete both steps below before you can receive orders.
+            </p>
+            <div className="space-y-1.5">
+              {/* Step 1: PAN */}
+              <div className="flex items-center gap-2 text-xs">
+                {user?.pan_verified
+                  ? <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                  : <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${user?.pan ? 'border-amber-500' : 'border-slate-300'}`} />
+                }
+                <span className={user?.pan_verified ? 'text-emerald-700 line-through' : 'text-amber-800'}>
+                  Step 1: Add PAN &amp; get admin verification
+                  {user?.pan && !user?.pan_verified && <span className="ml-1 text-amber-600 font-medium">(pending admin approval)</span>}
+                </span>
+              </div>
+              {/* Step 2: Bank / Razorpay */}
+              <div className="flex items-center gap-2 text-xs">
+                {user?.razorpay_account_status === 'activated'
+                  ? <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                  : <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${user?.razorpay_account_status ? 'border-amber-500' : 'border-slate-300'}`} />
+                }
+                <span className={user?.razorpay_account_status === 'activated' ? 'text-emerald-700 line-through' : 'text-amber-800'}>
+                  Step 2: Add bank account &amp; complete KYC in Profile
+                  {user?.razorpay_account_status && user?.razorpay_account_status !== 'activated' && (
+                    <span className="ml-1 text-amber-600 font-medium">(status: {user.razorpay_account_status})</span>
+                  )}
+                </span>
+              </div>
+            </div>
           </div>
-          <Link to="/trader/profile" className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
-            {user?.pan ? 'View profile' : 'Add PAN →'}
-          </Link>
+          {!user?.pan && (
+            <Link to="/trader/profile" className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap">
+              Go to Profile →
+            </Link>
+          )}
         </div>
       )}
 
@@ -96,7 +140,7 @@ export default function TraderDashboard() {
               <div className="flex items-center gap-2 mb-2">
                 {user?.tier === 1
                   ? <span className="px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 text-xs font-bold rounded-full flex items-center gap-1"><Star size={10} />Tier 1 Parent Dealer</span>
-                  : <span className="px-2.5 py-0.5 bg-purple-500/30 text-purple-200 text-xs font-bold rounded-full">Sub-Dealer</span>
+                  : <span className="px-2.5 py-0.5 bg-purple-500/30 text-purple-200 text-xs font-bold rounded-full">Sub-Partner</span>
                 }
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">Welcome back, {user?.name?.split(' ')[0]}!</h2>
@@ -136,7 +180,7 @@ export default function TraderDashboard() {
           { label: 'Pending Orders',     value: pendingOrders,                                  icon: Clock,        color: 'amber',   link: '/trader/consumer-orders' },
           { label: "This Week's Comm",   value: `₹${pendingComm.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'emerald', link: '/trader/commissions' },
           ...(isTier1
-            ? [{ label: 'Sub-Dealers',    value: subDealers.length,                             icon: Users,        color: 'indigo',  link: '/trader/sub-dealers' }]
+            ? [{ label: 'Sub-Partners',    value: subDealers.length,                             icon: Users,        color: 'indigo',  link: '/trader/sub-dealers' }]
             : [{ label: 'Total Earned',   value: `₹${totalComm.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, icon: CheckCircle2, color: 'teal', link: '/trader/commissions' }]
           ),
         ].map(({ label, value, icon: Icon, color, link }: any) => {
@@ -203,7 +247,7 @@ export default function TraderDashboard() {
               <Users className="w-6 h-6 text-indigo-600" />
             </div>
             <div className="flex-1">
-              <p className="font-bold text-slate-900">Sub-Dealers</p>
+              <p className="font-bold text-slate-900">Sub-Partners</p>
               <p className="text-slate-400 text-sm">{subDealers.length} sub-dealers in your network</p>
             </div>
             <ChevronRight className="text-slate-300" size={18} />

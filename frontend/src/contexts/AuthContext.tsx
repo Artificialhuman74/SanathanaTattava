@@ -19,6 +19,7 @@ export interface User {
   commission_rate?: number;
   pan?: string | null;
   pan_verified?: number;
+  razorpay_account_status?: string | null;
   status: string;
 }
 

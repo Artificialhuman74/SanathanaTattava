@@ -54,7 +54,8 @@
       "Bash(sed -i '' 's/Trader Login <ArrowRight/Partner Login <ArrowRight/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
       "Bash(sed -i '' 's/> Trader Portal/> Partner Portal/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
       "Bash(sed -i '' 's|<th>Dealer</th>|<th>Partner</th>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Commissions.tsx /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Dashboard.tsx)",
-      "Bash(sed -i '' 's/Traders \\\\& Bank Accounts/Partners \\\\& Bank Accounts/g; s|<th>Trader</th>|<th>Partner</th>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Payouts.tsx)"
+      "Bash(sed -i '' 's/Traders \\\\& Bank Accounts/Partners \\\\& Bank Accounts/g; s|<th>Trader</th>|<th>Partner</th>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Payouts.tsx)",
+      "Bash(node -e \"const Razorpay = require\\('razorpay'\\); const r = new Razorpay\\({key_id:'test',key_secret:'test'}\\); console.log\\(Object.keys\\(r\\)\\)\")"
     ]
   }
 }

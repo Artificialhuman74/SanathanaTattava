@@ -161,7 +161,7 @@ export default function TraderProducts() {
                   <p className="text-xs text-slate-400 mt-1 line-clamp-2">{p.description}</p>
                   <div className="flex items-center justify-between mt-3">
                     <div>
-                      <p className="text-lg font-extrabold text-slate-900">${p.price.toFixed(2)}</p>
+                      <p className="text-lg font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                       <p className="text-xs text-slate-400">{p.stock} {p.unit}s left</p>
                     </div>
                     <button
@@ -218,7 +218,7 @@ export default function TraderProducts() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
-                    <p className="text-xs text-brand-600 font-semibold">${product.price.toFixed(2)} / {product.unit}</p>
+                    <p className="text-xs text-brand-600 font-semibold">₹{product.price.toFixed(2)} / {product.unit}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <button onClick={() => updateQty(product.id, quantity - 1)} className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100">
                         <Minus size={12} />
@@ -227,7 +227,7 @@ export default function TraderProducts() {
                       <button onClick={() => updateQty(product.id, quantity + 1)} className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100">
                         <Plus size={12} />
                       </button>
-                      <span className="ml-auto text-sm font-bold text-slate-900">${(product.price * quantity).toFixed(2)}</span>
+                      <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
                     </div>
                   </div>
                   <button onClick={() => removeFromCart(product.id)} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -246,7 +246,7 @@ export default function TraderProducts() {
                 />
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-slate-900">Total</span>
-                  <span className="text-xl font-extrabold text-brand-600">${cartTotal.toFixed(2)}</span>
+                  <span className="text-xl font-extrabold text-brand-600">₹{cartTotal.toFixed(2)}</span>
                 </div>
                 <button onClick={placeOrder} disabled={placing} className="btn-primary w-full py-3 text-base">
                   {placing ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <CheckCircle2 size={16} />}

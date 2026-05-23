@@ -124,7 +124,7 @@ export default function AdminOrders() {
                       <p className="text-slate-400 text-xs">{o.trader_email}</p>
                     </td>
                     <td><span className={`badge ${o.tier === 1 ? 'bg-gold-500/10 text-gold-600' : 'bg-brand-50 text-brand-700'}`}>Tier {o.tier}</span></td>
-                    <td className="font-bold">${o.total_amount.toFixed(2)}</td>
+                    <td className="font-bold">₹{o.total_amount.toFixed(2)}</td>
                     <td>
                       <select
                         value={o.status}
@@ -195,7 +195,7 @@ export default function AdminOrders() {
                         <p className="font-semibold text-sm truncate">{item.product_name}</p>
                         <p className="text-xs text-slate-400">{item.sku} · ×{item.quantity} {item.unit}</p>
                       </div>
-                      <p className="font-bold text-sm">${item.total.toFixed(2)}</p>
+                      <p className="font-bold text-sm">₹{item.total.toFixed(2)}</p>
                     </div>
                   ))}
                 </div>

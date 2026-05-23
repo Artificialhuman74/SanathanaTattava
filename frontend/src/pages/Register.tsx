@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import {
-  TrendingUp, User, Mail, Lock, Eye, EyeOff, Phone, MapPin, Hash,
+  User, Mail, Lock, Eye, EyeOff, Phone, MapPin, Hash,
   CheckCircle2, XCircle, ArrowLeft, Star, Users, Truck, Info,
 } from 'lucide-react';
 
@@ -61,7 +61,7 @@ export default function Register() {
         referralCode:  form.referralCode.trim() || undefined,
         willDeliver,
       });
-      toast.success('Account created! Welcome to TradeHub!');
+      toast.success('Account created! Welcome to Sanathana Tattva!');
       navigate('/trader', { replace: true });
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Registration failed');
@@ -71,7 +71,7 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-brand-950 to-slate-900 flex flex-col items-center justify-center p-4 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] via-[#14532d] to-[#0d1f10] flex flex-col items-center justify-center p-4 py-10">
       <div className="absolute inset-0 hero-pattern" />
 
       <div className="relative w-full max-w-lg">
@@ -80,12 +80,10 @@ export default function Register() {
             <ArrowLeft size={14} /> Back to Login
           </Link>
           <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-2xl font-extrabold text-white">TradeHub</span>
+            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <span className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
           </div>
-          <p className="text-white/60 mt-2 text-sm">Create your trader account</p>
+          <p className="text-white/60 mt-2 text-sm">Create your partner account</p>
         </div>
 
         {/* Referral info box */}
@@ -95,8 +93,8 @@ export default function Register() {
             <div>
               <p className="font-semibold text-white/90 mb-1">How registration works:</p>
               <p className="text-xs leading-relaxed">
-                <strong className="text-indigo-300">Leave blank</strong> = Register as a <strong>Tier 1 Parent Dealer</strong> — you get your own referral code to appoint sub-dealers.<br />
-                <strong className="text-purple-300">Enter a code</strong> = Register as a <strong>Sub-Dealer</strong> under that parent dealer.
+                <strong className="text-indigo-300">Leave blank</strong> = Register as a <strong>Tier 1 Partner</strong> — you get your own referral code to appoint sub-partners.<br />
+                <strong className="text-purple-300">Enter a code</strong> = Register as a <strong>Sub-Partner</strong> under that parent partner.
               </p>
             </div>
           </div>
@@ -111,12 +109,12 @@ export default function Register() {
           </div>
           <div>
             <p className={`font-bold text-sm ${isSubDealer ? 'text-purple-300' : 'text-indigo-300'}`}>
-              {isSubDealer ? `Sub-Dealer under ${refStatus?.name}` : 'Tier 1 Parent Dealer'}
+              {isSubDealer ? `Sub-Partner under ${refStatus?.name}` : 'Tier 1 Partner'}
             </p>
             <p className="text-white/50 text-xs mt-0.5">
               {isSubDealer
-                ? 'You will be a sub-dealer. You get your own sub-dealer code and earn commissions.'
-                : 'No referral code — you\'ll receive your own referral code to recruit sub-dealers.'
+                ? 'You will be a sub-partner. You get your own referral code and earn commissions.'
+                : 'No referral code — you\'ll receive your own referral code to recruit sub-partners.'
               }
             </p>
           </div>
@@ -195,7 +193,7 @@ export default function Register() {
               <label className="form-label flex items-center gap-2">
                 <Hash size={14} />
                 Referral Code
-                <span className="text-slate-400 text-xs font-normal">(leave blank = Tier 1 Parent Dealer)</span>
+                <span className="text-slate-400 text-xs font-normal">(leave blank = Tier 1 Partner)</span>
               </label>
               <div className="relative">
                 <input
@@ -214,7 +212,7 @@ export default function Register() {
                   {!refChecking && refStatus?.valid === false && <XCircle      size={16} className="text-red-500" />}
                 </div>
               </div>
-              {refStatus?.valid === true  && <p className="text-emerald-600 text-xs mt-1.5">Valid — Sub-Dealer under {refStatus.name}</p>}
+              {refStatus?.valid === true  && <p className="text-emerald-600 text-xs mt-1.5">Valid — Sub-Partner under {refStatus.name}</p>}
               {refStatus?.valid === false && <p className="text-red-500 text-xs mt-1.5">Referral code not found</p>}
             </div>
 
@@ -252,7 +250,7 @@ export default function Register() {
               className="btn-primary w-full py-3 text-base mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {loading ? 'Creating account...' : `Register as Tier ${tier} ${tier === 1 ? 'Parent Dealer' : 'Sub-Dealer'}`}
+              {loading ? 'Creating account...' : `Register as Tier ${tier} ${tier === 1 ? 'Partner' : 'Sub-Partner'}`}
             </button>
           </form>
 

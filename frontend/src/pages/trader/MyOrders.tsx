@@ -35,7 +35,7 @@ export default function MyOrders() {
     <div className="space-y-5 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">My Orders</h2>
-        <p className="text-slate-500 text-sm mt-0.5">{orders.length} orders · <span className="text-emerald-600 font-medium">${totalSpend.toFixed(2)} total spent</span></p>
+        <p className="text-slate-500 text-sm mt-0.5">{orders.length} orders · <span className="text-emerald-600 font-medium">₹{totalSpend.toFixed(2)} total spent</span></p>
       </div>
 
       {/* Status Filter */}
@@ -71,7 +71,7 @@ export default function MyOrders() {
                 {filtered.map((o: any) => (
                   <tr key={o.id}>
                     <td className="font-mono text-brand-600 font-medium">{o.order_number}</td>
-                    <td className="font-bold">${o.total_amount.toFixed(2)}</td>
+                    <td className="font-bold">₹{o.total_amount.toFixed(2)}</td>
                     <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span></td>
                     <td className="text-xs text-slate-400">{new Date(o.created_at).toLocaleDateString()}</td>
                     <td>
@@ -149,9 +149,9 @@ export default function MyOrders() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm truncate">{item.product_name}</p>
-                        <p className="text-xs text-slate-400">{item.sku} · ×{item.quantity} {item.unit} @ ${item.price.toFixed(2)}</p>
+                        <p className="text-xs text-slate-400">{item.sku} · ×{item.quantity} {item.unit} @ ₹{item.price.toFixed(2)}</p>
                       </div>
-                      <p className="font-bold text-sm">${item.total.toFixed(2)}</p>
+                      <p className="font-bold text-sm">₹{item.total.toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
@@ -160,15 +160,15 @@ export default function MyOrders() {
               <div className="border-t border-slate-100 pt-4 space-y-1.5 text-sm">
                 <div className="flex justify-between text-slate-500">
                   <span>Subtotal</span>
-                  <span>${detail.order.subtotal.toFixed(2)}</span>
+                  <span>₹{detail.order.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Discount</span>
-                  <span>-${(detail.order.discount || 0).toFixed(2)}</span>
+                  <span>-₹{(detail.order.discount || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-900 text-base pt-1">
                   <span>Total</span>
-                  <span className="text-brand-600">${detail.order.total_amount.toFixed(2)}</span>
+                  <span className="text-brand-600">₹{detail.order.total_amount.toFixed(2)}</span>
                 </div>
               </div>
             </div>

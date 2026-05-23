@@ -379,7 +379,7 @@ router.post('/linked-account', authenticate, requireAdmin, async (req, res) => {
       business_type: 'individual',
       contact_name:  trader.name,
       profile:       { category: 'others', subcategory: 'others',
-                       addresses: { registered: { street1: trader.address || 'NA', city: 'NA', state: 'KARNATAKA', postal_code: trader.pincode || '560001', country: 'IN' } } },
+                       addresses: { registered: { street1: trader.address || 'NA', street2: 'NA', city: 'NA', state: 'KARNATAKA', postal_code: trader.pincode || '560001', country: 'IN' } } },
       legal_info:    {},
     });
 
