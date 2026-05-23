@@ -430,6 +430,10 @@ function runMigrations(db) {
     db.exec(`ALTER TABLE users ADD COLUMN razorpay_account_status TEXT`);
     console.log('[migration] users: added razorpay_account_status');
   }
+  if (!hasColumn('users', 'razorpay_product_id')) {
+    db.exec(`ALTER TABLE users ADD COLUMN razorpay_product_id TEXT`);
+    console.log('[migration] users: added razorpay_product_id');
+  }
 
   if (!hasColumn('commissions', 'razorpay_transfer_id')) {
     db.exec(`ALTER TABLE commissions ADD COLUMN razorpay_transfer_id TEXT`);

@@ -372,15 +372,25 @@ router.post('/linked-account', authenticate, requireAdmin, async (req, res) => {
   try {
     // Razorpay Route Linked Account API (v2 accounts endpoint)
     const account = await razorpay.accounts.create({
-      email:         trader.email,
-      phone:         trader.phone,
-      type:          'route',
-      legal_business_name: trader.bank_account_name,
-      business_type: 'individual',
-      contact_name:  trader.name,
-      profile:       { category: 'others', subcategory: 'others',
-                       addresses: { registered: { street1: trader.address || 'NA', street2: 'NA', city: 'NA', state: 'KARNATAKA', postal_code: trader.pincode || '560001', country: 'IN' } } },
-      legal_info:    {},
+      email:               trader.email,
+      phone:               trader.phone,
+      legal_business_name: trader.bank_account_name || trader.name,
+      business_type:       'individual',
+      contact_name:        trader.name,
+      profile: {
+        category:    'others',
+        subcategory: 'others',
+        addresses: {
+          registered: {
+            street1:     trader.address || 'NA',
+            street2:     'NA',
+            city:        'NA',
+            state:       'KARNATAKA',
+            postal_code: trader.pincode || '560001',
+            country:     'IN',
+          },
+        },
+      },
     });
 
     db.prepare(`UPDATE users SET razorpay_linked_account_id=?, razorpay_account_status=? WHERE id=?`)
@@ -410,24 +420,30 @@ router.post('/add-bank-account', authenticate, requireAdmin, async (req, res) =>
     return res.status(400).json({ error: 'Trader bank details missing' });
 
   try {
-    // Bank account is registered by requesting the "route" product configuration
+    // Step 1: Request the Route product — only product_name + tnc_accepted allowed here
     const product = await razorpay.products.requestProductConfiguration(
       trader.razorpay_linked_account_id,
+      { product_name: 'route', tnc_accepted: true },
+    );
+
+    // Step 2: PATCH the product to add settlement (bank account) details
+    const updated = await razorpay.products.edit(
+      trader.razorpay_linked_account_id,
+      product.id,
       {
-        product_name: 'route',
-        requested_at: Math.floor(Date.now() / 1000),
         settlements: {
-          account_number:  trader.bank_account_number,
-          ifsc_code:       trader.bank_ifsc,
+          account_number:   trader.bank_account_number,
+          ifsc_code:        trader.bank_ifsc,
           beneficiary_name: trader.bank_account_name,
         },
         tnc_accepted: true,
       },
     );
 
-    db.prepare(`UPDATE users SET razorpay_account_status='bank_added' WHERE id=?`).run(trader.id);
+    db.prepare(`UPDATE users SET razorpay_account_status='bank_added', razorpay_product_id=? WHERE id=?`)
+      .run(product.id, trader.id);
 
-    res.json({ success: true, product_id: product.id, status: product.activation_status });
+    res.json({ success: true, product_id: product.id, activation_status: updated.activation_status, requirements: updated.requirements });
   } catch (err) {
     console.error('[razorpay] add-bank-account error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to add bank account' });
@@ -452,20 +468,21 @@ router.post('/stakeholder', authenticate, requireAdmin, async (req, res) => {
     const stakeholder = await razorpay.stakeholders.create(
       trader.razorpay_linked_account_id,
       {
-        name:          trader.name,
-        email:         trader.email,
-        phone:         { primary: trader.phone || '' },
-        addresses:     {
+        name:                 trader.name,
+        email:                trader.email,
+        percentage_ownership: 100,
+        relationship:         { director: true },
+        phone:                { primary: trader.phone || '' },
+        addresses: {
           residential: {
             street:      trader.address || 'NA',
             city:        'NA',
-            state:       'KARNATAKA',
+            state:       'Karnataka',
             postal_code: trader.pincode || '560001',
             country:     'IN',
           },
         },
-        kyc:           { pan: trader.pan || '' },
-        relationship:  { director: true },
+        kyc: { pan: trader.pan || '' },
       },
     );
 
