@@ -3,8 +3,14 @@ const Razorpay = require('razorpay');
 const crypto   = require('crypto');
 const jwt      = require('jsonwebtoken');
 const db       = require('../database/db');
-const { createNotification } = require('../services/notificationService');
+const {
+  createNotification,
+  notifyDealerDeliveryAssigned,
+  notifyConsumerDeliveryAssigned,
+  notifyLinkedDealerOrderRouted,
+} = require('../services/notificationService');
 const { returnOrderInventory } = require('../services/inventoryService');
+const { emitOrderUpdate } = require('../websocket/socketServer');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
 const { auditLog } = require('../middleware/auditLog');
 
@@ -153,6 +159,58 @@ router.post('/verify', authConsumer, (req, res) => {
       );
     } catch { /* non-fatal */ }
   }
+
+  /* Delivery assignment notifications — deferred from order creation until payment confirmed */
+  try {
+    const consumer = db.prepare('SELECT id,name FROM consumers WHERE id=?').get(order.consumer_id);
+    if (order.delivery_dealer_id) {
+      const deliveryDealer = db.prepare('SELECT id,name,phone FROM users WHERE id=?').get(order.delivery_dealer_id);
+      if (deliveryDealer) {
+        notifyDealerDeliveryAssigned({
+          dealerId:        deliveryDealer.id,
+          dealerName:      deliveryDealer.name,
+          orderNumber:     order.order_number,
+          consumerName:    consumer?.name ?? 'Customer',
+          deliveryAddress: order.delivery_address,
+          distanceKm:      order.delivery_distance_km ?? 0,
+        });
+        notifyConsumerDeliveryAssigned({
+          consumerId:  order.consumer_id,
+          orderNumber: order.order_number,
+          dealerName:  deliveryDealer.name,
+          dealerPhone: deliveryDealer.phone,
+        });
+        if (order.linked_dealer_id && order.delivery_dealer_id !== order.linked_dealer_id) {
+          const linkedDealer = db.prepare('SELECT id,name FROM users WHERE id=?').get(order.linked_dealer_id);
+          if (linkedDealer) {
+            notifyLinkedDealerOrderRouted({
+              linkedDealerId:     linkedDealer.id,
+              linkedDealerName:   linkedDealer.name,
+              orderNumber:        order.order_number,
+              consumerName:       consumer?.name ?? 'Customer',
+              deliveryDealerId:   deliveryDealer.id,
+              deliveryDealerName: deliveryDealer.name,
+              distanceKm:         order.delivery_distance_km ?? 0,
+            });
+          }
+        }
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  /* Real-time: push confirmed order to all relevant traders + admin */
+  try {
+    emitOrderUpdate({
+      orderId:          order.id,
+      orderNumber:      order.order_number,
+      status:           'confirmed',
+      deliveryStatus:   order.delivery_status || null,
+      consumerId:       order.consumer_id,
+      linkedDealerId:   order.linked_dealer_id,
+      deliveryDealerId: order.delivery_dealer_id,
+      extra: { event: 'order_paid' },
+    });
+  } catch { /* non-fatal */ }
 
   res.json({ success: true });
 });

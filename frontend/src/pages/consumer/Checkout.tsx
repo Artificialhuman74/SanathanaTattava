@@ -235,8 +235,11 @@ export default function Checkout() {
         },
         theme: { color: '#16a34a' },
         modal: {
-          ondismiss: () => {
-            toast('Payment cancelled. Complete payment from My Orders anytime.', { icon: 'ℹ️' });
+          ondismiss: async () => {
+            try {
+              await consumerApi.delete(`/consumer/orders/${data.order.id}`);
+            } catch { /* best-effort cleanup */ }
+            toast.error('Payment cancelled. Your cart has been restored.');
           },
         },
       });

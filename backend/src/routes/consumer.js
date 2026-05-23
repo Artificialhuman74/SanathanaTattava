@@ -80,7 +80,7 @@ router.get('/me', authConsumer, (req, res) => {
 /* ── GET /me/export — GDPR data export ───────────────────────────────── */
 router.get('/me/export', authConsumer, (req, res) => {
   const consumer = db.prepare('SELECT id,name,email,phone,address,pincode,created_at FROM consumers WHERE id=?').get(req.consumer.id);
-  const orders   = db.prepare('SELECT id,order_number,status,payment_status,total_amount,created_at FROM consumer_orders WHERE consumer_id=?').all(req.consumer.id);
+  const orders   = db.prepare('SELECT id,order_number,status,payment_status,total_amount,created_at FROM consumer_orders WHERE consumer_id=? AND payment_status != \'pending\'').all(req.consumer.id);
   const addresses = db.prepare('SELECT label,name,address,pincode FROM consumer_addresses WHERE consumer_id=?').all(req.consumer.id);
   res.json({ consumer, orders, addresses });
 });
@@ -477,61 +477,8 @@ router.post('/orders', authConsumer, [
     return db.prepare(`SELECT * FROM consumer_orders WHERE id=?`).get(or.lastInsertRowid);
   })();
 
-  /* ── Notifications ──────────────────────────────────────────────── */
-  if (deliveryDealerId) {
-    try {
-      const deliveryDealer = db.prepare(`SELECT id,name,phone FROM users WHERE id=?`).get(deliveryDealerId);
-      if (deliveryDealer) {
-        // Notify the delivery dealer about the new assignment
-        notifyDealerDeliveryAssigned({
-          dealerId:        deliveryDealer.id,
-          dealerName:      deliveryDealer.name,
-          orderNumber:     order.order_number,
-          consumerName:    consumer.name,
-          deliveryAddress: delivery_address,
-          distanceKm:      deliveryDistanceKm ?? 0,
-        });
-        // Notify the consumer about who will deliver
-        notifyConsumerDeliveryAssigned({
-          consumerId:  consumer.id,
-          orderNumber: order.order_number,
-          dealerName:  deliveryDealer.name,
-          dealerPhone: deliveryDealer.phone,
-        });
-        // If the delivery dealer is DIFFERENT from the linked dealer,
-        // notify the linked dealer that the order was routed to the nearest dealer
-        if (linkedDealerId && deliveryDealerId !== linkedDealerId) {
-          const linkedDealer = db.prepare(`SELECT id,name FROM users WHERE id=?`).get(linkedDealerId);
-          if (linkedDealer) {
-            notifyLinkedDealerOrderRouted({
-              linkedDealerId:     linkedDealer.id,
-              linkedDealerName:   linkedDealer.name,
-              orderNumber:        order.order_number,
-              consumerName:       consumer.name,
-              deliveryDealerId:   deliveryDealer.id,
-              deliveryDealerName: deliveryDealer.name,
-              distanceKm:         deliveryDistanceKm ?? 0,
-            });
-          }
-        }
-      }
-    } catch (notifErr) {
-      console.error('[notification] failed:', notifErr.message);
-      // non-fatal — order still succeeds
-    }
-  }
-
-  /* ── Real-time: push new order to all relevant traders + admin ───── */
-  emitOrderUpdate({
-    orderId:         order.id,
-    orderNumber:     order.order_number,
-    status:          order.status,
-    deliveryStatus:  order.delivery_status || null,
-    consumerId:      consumer.id,
-    linkedDealerId:  linkedDealerId,
-    deliveryDealerId: deliveryDealerId,
-    extra: { event: 'order_assigned' },
-  });
+  /* Notifications and real-time updates fire after payment is confirmed,
+     not here — so dealers don't see orders before the consumer has paid. */
 
   /* Build confirmation response */
   let parentDealer = null;
@@ -581,7 +528,7 @@ router.get('/orders', authConsumer, (req, res) => {
     FROM consumer_orders co
     LEFT JOIN users u  ON co.linked_dealer_id = u.id
     LEFT JOIN users d2 ON co.delivery_dealer_id = d2.id
-    WHERE co.consumer_id = ?
+    WHERE co.consumer_id = ? AND co.payment_status != 'pending'
     ORDER BY co.created_at DESC
   `).all(req.consumer.id);
 
@@ -619,6 +566,29 @@ router.get('/orders/:id', authConsumer, (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
   const items = db.prepare(`SELECT oi.*, p.name as product_name, p.sku, p.image_url, p.unit FROM consumer_order_items oi JOIN products p ON oi.product_id=p.id WHERE oi.order_id=?`).all(order.id);
   res.json({ order, items });
+});
+
+/* ── DELETE /orders/:id — cancel an unpaid pending order ─────────────── */
+router.delete('/orders/:id', authConsumer, (req, res) => {
+  const order = db.prepare(
+    `SELECT * FROM consumer_orders WHERE id=? AND consumer_id=?`
+  ).get(req.params.id, req.consumer.id);
+
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (order.payment_status !== 'pending')
+    return res.status(400).json({ error: 'Only unpaid pending orders can be cancelled' });
+
+  db.transaction(() => {
+    /* Restore stock for each item */
+    const items = db.prepare(`SELECT * FROM consumer_order_items WHERE order_id=?`).all(order.id);
+    for (const item of items) {
+      db.prepare(`UPDATE products SET stock=stock+? WHERE id=?`).run(item.quantity, item.product_id);
+    }
+    db.prepare(`DELETE FROM consumer_order_items WHERE order_id=?`).run(order.id);
+    db.prepare(`DELETE FROM consumer_orders WHERE id=?`).run(order.id);
+  })();
+
+  res.json({ success: true });
 });
 
 /* ══════════════════════════════════════════════════════════════════════
