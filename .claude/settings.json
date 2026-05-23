@@ -13,7 +13,13 @@
       "Bash(node -c src/database/migrations.js)",
       "Bash(node -c src/services/inventoryService.js)",
       "Bash(node -c src/routes/payments.js)",
-      "Bash(JWT_SECRET=test node scripts/assignUnlinkedConsumers.js --dry-run)"
+      "Bash(JWT_SECRET=test node scripts/assignUnlinkedConsumers.js --dry-run)",
+      "Bash(node -e \"const l = require\\('/Users/chiranthr/Desktop/test-project/package-lock.json'\\); console.log\\('lockfileVersion:', l.lockfileVersion\\); console.log\\('has esbuild:', !!l.packages['node_modules/esbuild']\\)\")",
+      "Bash(node -e \"const l = require\\('/Users/chiranthr/Desktop/test-project/frontend/package-lock.json'\\); console.log\\('has esbuild:', !!l.packages['node_modules/esbuild']\\); console.log\\('esbuild version:', l.packages['node_modules/esbuild']?.version\\)\")",
+      "Bash(node -e \"const l = require\\('./package-lock.json'\\); const keys = Object.keys\\(l.packages\\).filter\\(k=>k.includes\\('esbuild'\\)\\); console.log\\(keys.slice\\(0,5\\)\\); console.log\\('playwright version:', l.packages['node_modules/@playwright/test']?.version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d['packages']]\")"
     ]
   }
 }

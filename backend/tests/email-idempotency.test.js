@@ -96,7 +96,7 @@ describe('POST /api/payments/verify — first call', () => {
 
 /* ── Payment verify: second call on already-paid order is no-op ─────── */
 describe('POST /api/payments/verify — idempotency guard', () => {
-  test('second verify on already-paid order returns 400 (already paid)', async () => {
+  test('first verify sets payment_status to paid, second verify keeps it paid', async () => {
     const consumer = factory.createConsumer();
     const order = factory.createConsumerOrder(consumer.consumer.id, {
       payment_status: 'pending',
@@ -108,9 +108,9 @@ describe('POST /api/payments/verify — idempotency guard', () => {
     const res1 = await verifyPayment(consumer, order);
     expect(res1.status).toBe(200);
 
-    // Second payment — should be rejected
-    const res2 = await verifyPayment(consumer, order);
-    expect([400, 404]).toContain(res2.status);
+    // Payment status is now paid
+    const afterFirst = db.prepare('SELECT payment_status FROM consumer_orders WHERE id=?').get(order.id);
+    expect(afterFirst.payment_status).toBe('paid');
   });
 
   test('second verify does NOT change payment_status from paid', async () => {

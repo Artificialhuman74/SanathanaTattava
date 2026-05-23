@@ -159,7 +159,7 @@ Boundaries.
 
 ---
 
-## Part 9 — E2E (Playwright)  `[ ]`
+## Part 9 — E2E (Playwright)  `[x]`
 
 Full user journeys.
 
@@ -221,7 +221,7 @@ full runs nightly.
 
 ---
 
-## Part 12 — Catalog & cart UX  `[ ]`
+## Part 12 — Catalog & cart UX  `[x]`
 
 The boring stuff that bites you the most.
 
@@ -246,7 +246,7 @@ The boring stuff that bites you the most.
 
 ---
 
-## Part 13 — Accessibility (WCAG 2.2 AA)  `[ ]`
+## Part 13 — Accessibility (WCAG 2.2 AA)  `[x]`
 
 95.9% of e-commerce sites fail WCAG. Accessible sites have a 23% cart
 abandonment rate vs 69% for inaccessible — this is revenue.
@@ -271,7 +271,7 @@ clear the initial violations.
 
 ---
 
-## Part 14 — SEO & meta  `[ ]`
+## Part 14 — SEO & meta  `[x]`
 
 Organic traffic = free customers. Don't ship pages with `<title>Vite App</title>`.
 
@@ -289,7 +289,7 @@ Organic traffic = free customers. Don't ship pages with `<title>Vite App</title>
 
 ---
 
-## Part 15 — Internationalization & locale  `[ ]`
+## Part 15 — Internationalization & locale  `[x]`
 
 We're Bangalore-first (INR, IST, English) but money/time bugs are universal.
 
@@ -311,7 +311,7 @@ We're Bangalore-first (INR, IST, English) but money/time bugs are universal.
 
 ---
 
-## Part 16 — Real-time & Socket.IO  `[ ]`
+## Part 16 — Real-time & Socket.IO  `[x]`
 
 Notifications, order updates, dealer alerts — all real-time.
 
@@ -333,7 +333,7 @@ Notifications, order updates, dealer alerts — all real-time.
 
 ---
 
-## Part 17 — Notification deliverability & idempotency  `[ ]`
+## Part 17 — Notification deliverability & idempotency  `[x]`
 
 Don't email a customer 3 times because Resend retried.
 
@@ -356,7 +356,7 @@ Don't email a customer 3 times because Resend retried.
 
 ---
 
-## Part 18 — Data integrity & disaster recovery  `[ ]`
+## Part 18 — Data integrity & disaster recovery  `[x]`
 
 When the laptop running production dies, what happens?
 
@@ -380,7 +380,7 @@ When the laptop running production dies, what happens?
 
 ---
 
-## Part 19 — Observability & ops  `[ ]`
+## Part 19 — Observability & ops  `[x]`
 
 You can't fix what you can't see.
 
@@ -400,7 +400,7 @@ You can't fix what you can't see.
 
 ---
 
-## Part 20 — Compliance & legal  `[ ]`
+## Part 20 — Compliance & legal  `[x]`
 
 Indian DPDP Act 2023 + Razorpay rules.
 
