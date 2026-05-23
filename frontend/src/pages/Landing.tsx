@@ -307,7 +307,7 @@ export default function Landing() {
               For Dealers
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold mb-4 tracking-tight" style={{ color: C.text }}>
-              Grow with Us as a Trader
+              Grow with Us as a Partner
             </h2>
             <p className="max-w-xl mx-auto leading-relaxed text-sm sm:text-base" style={{ color: C.textMuted }}>
               Join our dealer network. Earn commissions, serve your local community, and build a sustainable business.
@@ -344,7 +344,7 @@ export default function Landing() {
             <div>
               <h3 className="font-bold text-lg mb-1" style={{ color: C.goldLight }}>Already a dealer?</h3>
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                Log in to your trader dashboard to manage orders, inventory, and commissions.
+                Log in to your partner dashboard to manage orders, inventory, and commissions.
               </p>
             </div>
             <button
@@ -352,7 +352,7 @@ export default function Landing() {
               className="flex-shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-colors"
               style={{ background: C.gold, color: C.greenDeep }}
             >
-              Trader Login <ArrowRight size={14} />
+              Partner Login <ArrowRight size={14} />
             </button>
           </div>
         </div>
@@ -368,7 +368,7 @@ export default function Landing() {
         </p>
         <div className="flex items-center justify-center gap-4 text-xs" style={{ color: C.border }}>
           <button onClick={() => navigate('/login')} className="hover:opacity-70 transition-opacity flex items-center gap-1">
-            <Lock size={9} /> Trader Portal
+            <Lock size={9} /> Partner Portal
           </button>
           <span>·</span>
           <button onClick={() => navigate('/login')} className="hover:opacity-70 transition-opacity flex items-center gap-1">

@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Users, Search, ChevronDown, Star, UserCheck, UserX, Phone, Mail,
-  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2,
+  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2, ShieldCheck, ShieldOff,
 } from 'lucide-react';
 
 interface Trader {
@@ -23,6 +23,8 @@ interface Trader {
   delivery_enabled: boolean;
   commission_rate: number;
   created_at: string;
+  pan: string | null;
+  pan_verified: number;
   sub_dealers?: Trader[];
 }
 
@@ -53,7 +55,7 @@ export default function AdminTraders() {
     const newStatus = trader.status === 'active' ? 'suspended' : 'active';
     try {
       await api.put(`/admin/traders/${trader.id}/status`, { status: newStatus });
-      toast.success(newStatus === 'active' ? 'Trader activated' : 'Trader suspended');
+      toast.success(newStatus === 'active' ? 'Partner activated' : 'Partner suspended');
       fetchTraders();
     } catch { toast.error('Failed to update status'); }
   };
@@ -75,6 +77,18 @@ export default function AdminTraders() {
         t.id === trader.id ? { ...t, will_deliver: trader.will_deliver, delivery_enabled: trader.delivery_enabled } : t
       ));
       toast.error('Failed to update delivery status');
+    }
+  };
+
+  const togglePanVerify = async (trader: Trader) => {
+    const next = !trader.pan_verified;
+    if (next && !trader.pan) { toast.error('Trader has not submitted a PAN'); return; }
+    try {
+      await api.put(`/admin/traders/${trader.id}/pan-verify`, { verified: next });
+      toast.success(next ? `${trader.name} PAN verified` : `${trader.name} PAN unverified`);
+      fetchTraders();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to update PAN verification');
     }
   };
 
@@ -129,7 +143,7 @@ export default function AdminTraders() {
         <td>
           {t.tier === 1
             ? <span className="badge bg-indigo-100 text-indigo-700 gap-1"><Star size={10} />Tier 1</span>
-            : <span className="badge bg-purple-100 text-purple-700">Sub-Dealer</span>
+            : <span className="badge bg-purple-100 text-purple-700">Sub-Partner</span>
           }
         </td>
         <td>
@@ -202,19 +216,40 @@ export default function AdminTraders() {
           <span className="flex items-center gap-1"><Calendar size={10} />{new Date(t.created_at).toLocaleDateString('en-IN')}</span>
         </td>
         <td>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => toggleStatus(t)}
+                className={`btn-ghost p-2 text-xs font-medium gap-1 ${t.status === 'active' ? 'text-red-500 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-800'}`}
+              >
+                {t.status === 'active' ? <><UserX size={14} />Suspend</> : <><UserCheck size={14} />Activate</>}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(t)}
+                className="btn-ghost p-2 text-xs font-medium gap-1 text-slate-400 hover:text-red-600"
+                title="Delete partner permanently"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
             <button
-              onClick={() => toggleStatus(t)}
-              className={`btn-ghost p-2 text-xs font-medium gap-1 ${t.status === 'active' ? 'text-red-500 hover:text-red-700' : 'text-emerald-600 hover:text-emerald-800'}`}
+              onClick={() => togglePanVerify(t)}
+              title={t.pan ? `PAN: ${t.pan}` : 'No PAN submitted'}
+              className={`btn-ghost px-2 py-1 text-xs font-medium gap-1 w-fit ${
+                t.pan_verified
+                  ? 'text-emerald-600 hover:text-red-500'
+                  : t.pan
+                  ? 'text-amber-600 hover:text-emerald-600'
+                  : 'text-slate-300 cursor-not-allowed'
+              }`}
+              disabled={!t.pan && !t.pan_verified}
             >
-              {t.status === 'active' ? <><UserX size={14} />Suspend</> : <><UserCheck size={14} />Activate</>}
-            </button>
-            <button
-              onClick={() => setConfirmDelete(t)}
-              className="btn-ghost p-2 text-xs font-medium gap-1 text-slate-400 hover:text-red-600"
-              title="Delete trader permanently"
-            >
-              <Trash2 size={14} />
+              {t.pan_verified
+                ? <><ShieldCheck size={12} />PAN verified</>
+                : t.pan
+                ? <><ShieldOff size={12} />Verify PAN</>
+                : <><ShieldOff size={12} />No PAN</>
+              }
             </button>
           </div>
         </td>
@@ -230,16 +265,16 @@ export default function AdminTraders() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Traders</h2>
-        <p className="text-slate-500 text-sm mt-0.5">{traders.length} total · {tier1} Tier 1 · {tier2} Sub-Dealers</p>
+        <h2 className="text-2xl font-bold text-slate-900">Partners</h2>
+        <p className="text-slate-500 text-sm mt-0.5">{traders.length} total · {tier1} Tier 1 · {tier2} Sub-Partners</p>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Traders', value: traders.length,                                   color: 'bg-brand-50 text-brand-600' },
+          { label: 'Total Partners', value: traders.length,                                   color: 'bg-brand-50 text-brand-600' },
           { label: 'Tier 1',        value: tier1,                                             color: 'bg-indigo-50 text-indigo-600' },
-          { label: 'Sub-Dealers',   value: tier2,                                             color: 'bg-purple-50 text-purple-600' },
+          { label: 'Sub-Partners',   value: tier2,                                             color: 'bg-purple-50 text-purple-600' },
           { label: 'Active',        value: traders.filter(t => t.status === 'active').length, color: 'bg-emerald-50 text-emerald-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card p-4 text-center">
@@ -256,7 +291,7 @@ export default function AdminTraders() {
           {[
             { value: '',  label: 'All' },
             { value: '1', label: 'Tier 1' },
-            { value: '2', label: 'Sub-Dealers' },
+            { value: '2', label: 'Sub-Partners' },
           ].map(({ value, label }) => (
             <button
               key={value}
@@ -300,11 +335,11 @@ export default function AdminTraders() {
             <table>
               <thead>
                 <tr>
-                  <th>Trader</th>
+                  <th>Partner</th>
                   <th>Tier</th>
                   <th>Referral Code</th>
                   <th>Parent Dealer</th>
-                  <th>Sub-Dealers</th>
+                  <th>Sub-Partners</th>
                   <th>C.Orders</th>
                   <th>Commission</th>
                   <th>Delivery</th>
@@ -340,7 +375,7 @@ export default function AdminTraders() {
                 <Trash2 size={18} className="text-red-600" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900">Delete Trader</h3>
+                <h3 className="font-bold text-slate-900">Delete Partner</h3>
                 <p className="text-xs text-slate-500">This action cannot be undone</p>
               </div>
             </div>

@@ -326,7 +326,7 @@ router.post('/orders', authConsumer, [
   /* Determine linked dealer (consumer's own or from checkout code) */
   let linkedDealerId = consumer.linked_dealer_id ?? null;
   if (!linkedDealerId && referral_code && referral_code.trim()) {
-    const dealer = db.prepare(`SELECT id FROM users WHERE referral_code=? AND role='trader' AND status='active'`).get(referral_code.trim());
+    const dealer = db.prepare(`SELECT id FROM users WHERE referral_code=? AND role='trader' AND status='active' AND pan_verified=1`).get(referral_code.trim());
     if (dealer) {
       linkedDealerId = dealer.id;
       // Permanently link this consumer to the dealer
@@ -391,11 +391,11 @@ router.post('/orders', authConsumer, [
   // Fallback: legacy referral-chain assignment (if H3 found nobody)
   if (!deliveryDealerId && !isDirect) {
     const dealer = db.prepare(`SELECT * FROM users WHERE id=?`).get(linkedDealerId);
-    if (dealer?.delivery_enabled && dealer?.will_deliver) {
+    if (dealer?.delivery_enabled && dealer?.will_deliver && dealer?.pan_verified) {
       deliveryDealerId = dealer.id;
     } else if (dealer?.tier === 2 && dealer.referred_by_id) {
       const parent = db.prepare(`SELECT * FROM users WHERE id=?`).get(dealer.referred_by_id);
-      if (parent?.delivery_enabled && parent?.will_deliver) deliveryDealerId = parent.id;
+      if (parent?.delivery_enabled && parent?.will_deliver && parent?.pan_verified) deliveryDealerId = parent.id;
     }
   }
   // Final fallback: assign to admin if no trader could be resolved

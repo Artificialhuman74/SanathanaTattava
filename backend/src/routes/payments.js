@@ -465,7 +465,7 @@ router.post('/stakeholder', authenticate, requireAdmin, async (req, res) => {
             country:     'IN',
           },
         },
-        kyc:           { pan: '' },
+        kyc:           { pan: trader.pan || '' },
         relationship:  { director: true },
       },
     );
@@ -521,6 +521,58 @@ router.post('/transfer', authenticate, requireAdmin, async (req, res) => {
     console.error('[razorpay] transfer error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Transfer failed' });
   }
+});
+
+/* ── POST /api/payments/pay-all (admin) ──────────────────────────────────
+ * Pay every pending commission whose trader has an activated Route account.
+ * No week filter — clears the full backlog in one call.
+ */
+router.post('/pay-all', authenticate, requireAdmin, auditLog('pay-all'), async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+
+  const pending = db.prepare(`
+    SELECT c.*, u.razorpay_linked_account_id, u.razorpay_account_status, u.name AS trader_name,
+           co.razorpay_payment_id, co.order_number
+    FROM commissions c
+    JOIN users u  ON u.id  = c.trader_id
+    JOIN consumer_orders co ON co.id = c.consumer_order_id
+    WHERE c.status = 'pending'
+      AND c.razorpay_transfer_id IS NULL
+  `).all();
+
+  if (pending.length === 0)
+    return res.json({ transferred: 0, skipped: 0, errors: [], message: 'No pending commissions' });
+
+  let transferred = 0, skipped = 0;
+  const errors = [];
+
+  for (const comm of pending) {
+    if (!comm.razorpay_linked_account_id || comm.razorpay_account_status !== 'activated' || !comm.razorpay_payment_id) {
+      skipped++;
+      continue;
+    }
+    try {
+      const transfer = await razorpay.payments.transfer(comm.razorpay_payment_id, {
+        transfers: [{
+          account:  comm.razorpay_linked_account_id,
+          amount:   Math.round(comm.amount * 100),
+          currency: 'INR',
+          notes:    { commission_id: String(comm.id), order_number: comm.order_number },
+        }],
+      }, { 'X-Razorpay-Idempotency': idempotencyKey('transfer', comm.id) });
+
+      const transferId = transfer.items?.[0]?.id || transfer.id;
+      db.prepare(`UPDATE commissions SET razorpay_transfer_id=?, status='transferring' WHERE id=?`)
+        .run(transferId, comm.id);
+      transferred++;
+    } catch (err) {
+      const msg = err.error?.description || err.message;
+      console.error(`[pay-all] commission ${comm.id} failed: ${msg}`);
+      errors.push({ commission_id: comm.id, trader: comm.trader_name, error: msg });
+    }
+  }
+
+  res.json({ transferred, skipped, errors, total: pending.length });
 });
 
 /* ── POST /api/payments/payout-week (admin) ──────────────────────────────
@@ -599,16 +651,18 @@ router.post('/payout-week', authenticate, requireAdmin, auditLog('payout-week'),
  * locally; admin then creates the linked account.
  */
 router.post('/bank-details', authenticate, requireTrader, (req, res) => {
-  const { bank_account_name, bank_account_number, bank_ifsc } = req.body;
+  const { bank_account_name, bank_account_number, bank_ifsc, pan } = req.body;
   if (!bank_account_name || !bank_account_number || !bank_ifsc)
     return res.status(400).json({ error: 'All bank fields required' });
   if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bank_ifsc))
     return res.status(400).json({ error: 'Invalid IFSC code' });
   if (!/^\d{9,18}$/.test(bank_account_number))
     return res.status(400).json({ error: 'Invalid account number' });
+  if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim().toUpperCase()))
+    return res.status(400).json({ error: 'Invalid PAN format (e.g. ABCDE1234F)' });
 
-  db.prepare(`UPDATE users SET bank_account_name=?, bank_account_number=?, bank_ifsc=? WHERE id=?`)
-    .run(bank_account_name.trim(), bank_account_number.trim(), bank_ifsc.toUpperCase().trim(), req.user.id);
+  db.prepare(`UPDATE users SET bank_account_name=?, bank_account_number=?, bank_ifsc=?, pan=? WHERE id=?`)
+    .run(bank_account_name.trim(), bank_account_number.trim(), bank_ifsc.toUpperCase().trim(), pan ? pan.trim().toUpperCase() : null, req.user.id);
 
   res.json({ success: true });
 });

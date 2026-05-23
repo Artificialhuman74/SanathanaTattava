@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
@@ -6,8 +6,9 @@ import {
   UserCircle, MapPin, Phone, Mail, Star, Truck, Package,
   Shield, QrCode, Users, Copy, Check, Navigation,
   Edit2, Save, X, Loader2, RefreshCw, AlertTriangle, KeyRound,
-  Landmark,
+  Landmark, PartyPopper,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 interface ProfileData {
   user: {
@@ -20,6 +21,7 @@ interface ProfileData {
     bank_account_name: string | null;
     bank_account_number: string | null;
     bank_ifsc: string | null;
+    pan: string | null;
     razorpay_linked_account_id: string | null;
     razorpay_account_status: string | null;
   };
@@ -45,7 +47,11 @@ export default function TraderProfile() {
   // Bank details states
   const [bankEditing, setBankEditing] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
-  const [bankForm, setBankForm]       = useState({ bank_account_name: '', bank_account_number: '', bank_ifsc: '' });
+  const [bankForm, setBankForm]       = useState({ bank_account_name: '', bank_account_number: '', bank_ifsc: '', pan: '' });
+
+  // Razorpay activation celebration (show once per trader)
+  const [showActivationBanner, setShowActivationBanner] = useState(false);
+  const activationFiredRef = useRef(false);
 
   // GPS location update states
   const [gpsUpdating, setGpsUpdating] = useState(false);
@@ -55,6 +61,17 @@ export default function TraderProfile() {
   const fetchProfile = () => {
     api.get('/trader/my-profile')
       .then(r => {
+        const prevStatus = data?.user.razorpay_account_status;
+        const newStatus  = r.data.user.razorpay_account_status;
+        const celebKey   = `rzp_activated_celebrated_${r.data.user.id}`;
+        if (newStatus === 'activated' && prevStatus !== 'activated' && !localStorage.getItem(celebKey) && !activationFiredRef.current) {
+          activationFiredRef.current = true;
+          localStorage.setItem(celebKey, '1');
+          setShowActivationBanner(true);
+          confetti({ particleCount: 180, spread: 90, origin: { y: 0.55 } });
+          setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.1, y: 0.6 }, angle: 60 }), 300);
+          setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.9, y: 0.6 }, angle: 120 }), 500);
+        }
         setData(r.data);
         setForm({
           name: r.data.user.name || '',
@@ -66,6 +83,7 @@ export default function TraderProfile() {
           bank_account_name:   r.data.user.bank_account_name   || '',
           bank_account_number: r.data.user.bank_account_number || '',
           bank_ifsc:           r.data.user.bank_ifsc           || '',
+          pan:                 r.data.user.pan                 || '',
         });
       })
       .catch(() => toast.error('Failed to load profile'))
@@ -76,13 +94,15 @@ export default function TraderProfile() {
     const name = bankForm.bank_account_name.trim();
     const number = bankForm.bank_account_number.trim();
     const ifsc = bankForm.bank_ifsc.trim().toUpperCase();
+    const pan = bankForm.pan.trim().toUpperCase();
     if (!name || !number || !ifsc) { toast.error('All bank fields are required'); return; }
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { toast.error('Invalid IFSC code'); return; }
     if (!/^\d{9,18}$/.test(number)) { toast.error('Invalid account number (9–18 digits)'); return; }
+    if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) { toast.error('Invalid PAN format (e.g. ABCDE1234F)'); return; }
 
     setBankSaving(true);
     try {
-      await api.post('/payments/bank-details', { bank_account_name: name, bank_account_number: number, bank_ifsc: ifsc });
+      await api.post('/payments/bank-details', { bank_account_name: name, bank_account_number: number, bank_ifsc: ifsc, pan: pan || undefined });
       toast.success('Bank details saved');
       setBankEditing(false);
       fetchProfile();
@@ -249,6 +269,27 @@ export default function TraderProfile() {
           </div>
         ))}
       </div>
+
+      {/* Razorpay activation celebration banner — shown once */}
+      {showActivationBanner && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 p-5 text-white shadow-lg animate-fade-in">
+          <button
+            onClick={() => setShowActivationBanner(false)}
+            className="absolute top-3 right-3 p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+          >
+            <X size={14} />
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <PartyPopper size={24} />
+            </div>
+            <div>
+              <p className="font-bold text-lg leading-tight">Your account is verified!</p>
+              <p className="text-emerald-100 text-sm mt-0.5">Your Razorpay account is now active. Commission payouts will be sent directly to your bank account.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Contact Info — Editable */}
@@ -419,8 +460,11 @@ export default function TraderProfile() {
 
           {/* GPS Error */}
           {gpsError && (
-            <div className="p-3 bg-red-50 rounded-xl border border-red-100">
-              <p className="text-xs text-red-700">{gpsError}</p>
+            <div className="p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-2">
+              <p className="text-xs text-red-700 flex-1">{gpsError}</p>
+              <button onClick={() => setGpsError('')} className="text-red-400 hover:text-red-600 flex-shrink-0">
+                <X size={14} />
+              </button>
             </div>
           )}
 
@@ -533,6 +577,17 @@ export default function TraderProfile() {
                   maxLength={11}
                 />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">PAN <span className="text-slate-400 font-normal">(required for KYC)</span></label>
+                <input
+                  type="text"
+                  value={bankForm.pan}
+                  onChange={e => setBankForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
+                  placeholder="e.g. ABCDE1234F"
+                  maxLength={10}
+                />
+              </div>
               {user.razorpay_linked_account_id && (
                 <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                   Your bank is already linked to Razorpay. Editing here updates your local record; ask the admin to re-link if the bank account changed.
@@ -554,6 +609,7 @@ export default function TraderProfile() {
                       bank_account_name:   user.bank_account_name   || '',
                       bank_account_number: user.bank_account_number || '',
                       bank_ifsc:           user.bank_ifsc           || '',
+                      pan:                 user.pan        || '',
                     });
                   }}
                   className="px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
@@ -576,6 +632,10 @@ export default function TraderProfile() {
                 <div>
                   <p className="text-xs text-slate-400">IFSC</p>
                   <p className="text-sm font-mono font-medium text-slate-900">{user.bank_ifsc}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">PAN</p>
+                  <p className="text-sm font-mono font-medium text-slate-900">{user.pan || <span className="text-amber-600 font-sans font-normal text-xs">Not provided — required for KYC</span>}</p>
                 </div>
               </div>
             ) : (

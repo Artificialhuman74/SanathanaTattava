@@ -155,6 +155,15 @@ router.put('/traders/:id/delivery', (req, res) => {
   res.json({ success: true });
 });
 
+router.put('/traders/:id/pan-verify', (req, res) => {
+  const trader = db.prepare(`SELECT id, pan FROM users WHERE id = ? AND role = 'trader'`).get(req.params.id);
+  if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  if (!trader.pan) return res.status(400).json({ error: 'Trader has not submitted their PAN' });
+  const { verified } = req.body;
+  db.prepare(`UPDATE users SET pan_verified = ? WHERE id = ?`).run(verified ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+
 router.put('/traders/:id/commission-rate', (req, res) => {
   const { commission_rate } = req.body;
   if (commission_rate === undefined || isNaN(commission_rate)) return res.status(400).json({ error: 'Valid commission_rate required' });
@@ -389,7 +398,7 @@ router.get('/payouts/pending-commissions', (req, res) => {
   let sql = `
     SELECT cm.id, cm.trader_id, cm.amount, cm.rate, cm.type, cm.status,
            cm.razorpay_transfer_id, cm.created_at,
-           u.name AS trader_name, u.razorpay_linked_account_id,
+           u.name AS trader_name, u.razorpay_linked_account_id, u.razorpay_account_status,
            co.order_number, co.razorpay_payment_id, co.total_amount AS order_amount
     FROM commissions cm
     JOIN users u ON u.id = cm.trader_id

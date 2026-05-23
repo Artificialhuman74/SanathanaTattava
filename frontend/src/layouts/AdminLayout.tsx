@@ -11,10 +11,10 @@ import NotificationBell from '../components/NotificationBell';
 const navItems = [
   { to: '/admin/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/inventory',       icon: Package,         label: 'Inventory' },
-  { to: '/admin/traders',         icon: Users,           label: 'Traders' },
+  { to: '/admin/traders',         icon: Users,           label: 'Partners' },
   { to: '/admin/consumer-orders', icon: ShoppingBag,     label: 'Consumer Orders' },
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
-  { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Dealer Inventory' },
+  { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Partner Inventory' },
   { to: '/admin/commissions',     icon: DollarSign,      label: 'Commissions' },
   { to: '/admin/payouts',         icon: Landmark,        label: 'Payouts' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },

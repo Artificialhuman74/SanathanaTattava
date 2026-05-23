@@ -20,8 +20,8 @@ export default function TraderLayout() {
     { to: '/trader/dashboard',       icon: LayoutDashboard, label: 'Dashboard',       show: true },
     { to: '/trader/orders',           icon: ShoppingCart,    label: 'My Orders',       show: true },
     { to: '/trader/inventory',         icon: Warehouse,       label: 'My Inventory',    show: true },
-    { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Dealers',     show: isTier1 },
-    { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Dealers', show: isTier1 },
+    { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Partners',    show: isTier1 },
+    { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Partners', show: isTier1 },
     { to: '/trader/commissions',      icon: DollarSign,      label: 'Commissions',     show: true },
     { to: '/trader/profile',          icon: UserCircle,      label: 'My Profile',      show: true },
     { to: '/delivery/dashboard',      icon: Truck,           label: 'Delivery',        show: true },
@@ -29,7 +29,7 @@ export default function TraderLayout() {
 
   const tierBadge = user?.tier === 1
     ? <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1"><Star size={10} />Tier 1</span>
-    : <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">Sub-Dealer</span>;
+    : <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold">Sub-Partner</span>;
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>
@@ -118,7 +118,7 @@ export default function TraderLayout() {
             <div className="flex items-center gap-1.5">
               {user?.tier === 1
                 ? <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold"><Star size={10} />Tier 1</span>
-                : <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">Sub-Dealer</span>
+                : <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">Sub-Partner</span>
               }
             </div>
             <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center">

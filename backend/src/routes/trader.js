@@ -35,6 +35,7 @@ router.get('/sub-dealers', (req, res) => {
   const subs = db.prepare(`
     SELECT u.id, u.name, u.email, u.phone, u.pincode, u.address, u.referral_code,
            u.commission_rate, u.will_deliver, u.delivery_enabled, u.status, u.created_at,
+           u.pan, u.pan_verified,
            (SELECT COUNT(*) FROM consumer_orders co WHERE co.linked_dealer_id = u.id) as consumer_order_count,
            (SELECT COALESCE(SUM(amount),0) FROM commissions WHERE trader_id=u.id AND status='paid') as total_earned,
            (SELECT COALESCE(SUM(amount),0) FROM commissions WHERE trader_id=u.id AND status='pending') as pending_commission
@@ -42,6 +43,16 @@ router.get('/sub-dealers', (req, res) => {
     ORDER BY u.created_at ASC
   `).all(req.user.id);
   res.json({ subDealers: subs });
+});
+
+router.put('/sub-dealers/:id/pan-verify', (req, res) => {
+  if (req.user.tier !== 1) return res.status(403).json({ error: 'Tier 1 only' });
+  const sub = db.prepare(`SELECT id, pan FROM users WHERE id=? AND referred_by_id=?`).get(req.params.id, req.user.id);
+  if (!sub) return res.status(404).json({ error: 'Sub-partner not found under your account' });
+  if (!sub.pan) return res.status(400).json({ error: 'Sub-partner has not submitted their PAN' });
+  const { verified } = req.body;
+  db.prepare(`UPDATE users SET pan_verified=? WHERE id=?`).run(verified ? 1 : 0, req.params.id);
+  res.json({ success: true });
 });
 
 router.put('/sub-dealers/:id/commission-rate', (req, res) => {
@@ -552,7 +563,7 @@ router.get('/my-profile', (req, res) => {
     SELECT id, name, email, phone, address, pincode, tier, referral_code,
            will_deliver, delivery_enabled, commission_rate, referred_by_id,
            latitude, longitude, h3_index, availability_status, status, created_at,
-           bank_account_name, bank_account_number, bank_ifsc,
+           bank_account_name, bank_account_number, bank_ifsc, pan,
            razorpay_linked_account_id, razorpay_account_status
     FROM users WHERE id = ?
   `).get(req.user.id);

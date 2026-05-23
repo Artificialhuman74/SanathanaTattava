@@ -176,7 +176,7 @@ export default function AdminCommissions() {
             <table>
               <thead>
                 <tr>
-                  <th>Dealer</th>
+                  <th>Partner</th>
                   <th>Tier</th>
                   <th>Pending</th>
                   <th>Paid</th>
@@ -245,7 +245,7 @@ export default function AdminCommissions() {
           <table>
             <thead>
               <tr>
-                <th>Dealer</th>
+                <th>Partner</th>
                 <th>Tier</th>
                 <th>Amount</th>
                 <th>UPI ID</th>
@@ -345,7 +345,7 @@ export default function AdminCommissions() {
           <table>
             <thead>
               <tr>
-                <th>Dealer</th>
+                <th>Partner</th>
                 <th>Tier</th>
                 <th>Week</th>
                 <th>Orders</th>

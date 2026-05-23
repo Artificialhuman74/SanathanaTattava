@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import {
   Users, Copy, Check, Mail, Phone, QrCode, Truck,
   Edit2, CheckCircle2, X, AlertCircle, ShoppingBag, DollarSign,
+  ShieldCheck, ShieldOff,
 } from 'lucide-react';
 
 interface SubDealer {
@@ -20,6 +21,8 @@ interface SubDealer {
   total_earned: number;
   status: string;
   created_at: string;
+  pan: string | null;
+  pan_verified: number;
 }
 
 export default function TraderSubDealers() {
@@ -60,6 +63,19 @@ export default function TraderSubDealers() {
       fetchSubDealers();
     } catch { toast.error('Failed to update delivery'); }
     finally { setUpdatingId(null); }
+  };
+
+  const togglePanVerify = async (dealer: SubDealer) => {
+    const next = !dealer.pan_verified;
+    if (next && !dealer.pan) { toast.error('Sub-partner has not submitted their PAN yet'); return; }
+    setUpdatingId(dealer.id);
+    try {
+      await api.put(`/trader/sub-dealers/${dealer.id}/pan-verify`, { verified: next });
+      toast.success(next ? `${dealer.name} PAN verified` : `${dealer.name} PAN unverified`);
+      fetchSubDealers();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to update PAN verification');
+    } finally { setUpdatingId(null); }
   };
 
   const saveCommissionRate = async (id: number) => {
@@ -177,6 +193,33 @@ export default function TraderSubDealers() {
               <div className="flex flex-wrap gap-3 text-sm text-slate-600">
                 <span className="flex items-center gap-1.5"><Mail size={13} />{dealer.email}</span>
                 {dealer.phone && <span className="flex items-center gap-1.5"><Phone size={13} />{dealer.phone}</span>}
+              </div>
+
+              {/* PAN Verification */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  {dealer.pan_verified
+                    ? <ShieldCheck size={16} className="text-emerald-600" />
+                    : <ShieldOff size={16} className="text-amber-500" />
+                  }
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">PAN Verification</p>
+                    <p className="text-xs text-slate-400">
+                      {dealer.pan_verified ? `Verified — ${dealer.pan}` : dealer.pan ? `Submitted: ${dealer.pan}` : 'Not submitted yet'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => togglePanVerify(dealer)}
+                  disabled={updatingId === dealer.id || (!dealer.pan && !dealer.pan_verified)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    dealer.pan_verified
+                      ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-600'
+                      : 'bg-amber-100 text-amber-700 hover:bg-emerald-100 hover:text-emerald-700'
+                  }`}
+                >
+                  {dealer.pan_verified ? 'Unverify' : dealer.pan ? 'Verify PAN' : 'No PAN'}
+                </button>
               </div>
 
               {/* Delivery Status */}

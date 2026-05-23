@@ -33,7 +33,28 @@
       "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT id,name,email,phone,role FROM users LIMIT 5;\")",
       "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT id,name,email,phone,role FROM users;\")",
       "Bash(sqlite3 /Users/chiranthr/Desktop/test-project/data/database.db \"SELECT COUNT\\(*\\) FROM users;\")",
-      "Bash(find /Users/chiranthr/Desktop/test-project -name \"database.db\" -exec sh -c 'echo \"=== {} ===\"; sqlite3 \"{}\" \"SELECT COUNT\\(*\\) FROM users;\" 2>/dev/null || echo \"no users table\"' \\\\;)"
+      "Bash(find /Users/chiranthr/Desktop/test-project -name \"database.db\" -exec sh -c 'echo \"=== {} ===\"; sqlite3 \"{}\" \"SELECT COUNT\\(*\\) FROM users;\" 2>/dev/null || echo \"no users table\"' \\\\;)",
+      "Read(//Users/chiranthr/**)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; sqlite3 \"{}\" \"SELECT COUNT\\(*\\) as users FROM users;\" 2>/dev/null')",
+      "Bash(sed -i '' 's/Trader Login/Partner Login/g' /Users/chiranthr/Desktop/test-project/frontend/src/layouts/ConsumerLayout.tsx)",
+      "Bash(sed -n '241p' /Users/chiranthr/Desktop/test-project/frontend/src/layouts/ConsumerLayout.tsx)",
+      "Bash(sed -i '' 's/toast\\\\.success\\(newStatus === .active. ? .Trader activated. : .Trader suspended.\\)/toast.success\\(newStatus === '\\\\''active'\\\\'' ? '\\\\''Partner activated'\\\\'' : '\\\\''Partner suspended'\\\\''\\)/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/title=\"Delete trader permanently\"/title=\"Delete partner permanently\"/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's|<h2 className=\"text-2xl font-bold text-slate-900\">Traders</h2>|<h2 className=\"text-2xl font-bold text-slate-900\">Partners</h2>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/{ label: '\\\\''Total Traders'\\\\''/{ label: '\\\\''Total Partners'\\\\''/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/{ label: '\\\\''Sub-Dealers'\\\\''/{ label: '\\\\''Sub-Partners'\\\\''/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/>Sub-Dealer<\\\\/span>/>Sub-Partner<\\\\/span>/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/<th>Trader<\\\\/th>/<th>Partner<\\\\/th>/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/<th>Sub-Dealers<\\\\/th>/<th>Sub-Partners<\\\\/th>/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's|{ value: '\\\\''2'\\\\'', label: '\\\\''Sub-Dealers'\\\\'' }|{ value: '\\\\''2'\\\\'', label: '\\\\''Sub-Partners'\\\\'' }|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/<h3 className=\"font-bold text-slate-900\">Delete Trader<\\\\/h3>/<h3 className=\"font-bold text-slate-900\">Delete Partner<\\\\/h3>/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Traders.tsx)",
+      "Bash(sed -i '' 's/label: '\\\\''Trader Login'\\\\''/label: '\\\\''Partner Login'\\\\''/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Login.tsx)",
+      "Bash(sed -i '' 's/Grow with Us as a Trader/Grow with Us as a Partner/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
+      "Bash(sed -i '' 's/Log in to your trader dashboard to manage orders, inventory, and commissions\\\\./Log in to your partner dashboard to manage orders, inventory, and commissions./g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
+      "Bash(sed -i '' 's/Trader Login <ArrowRight/Partner Login <ArrowRight/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
+      "Bash(sed -i '' 's/> Trader Portal/> Partner Portal/g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/Landing.tsx)",
+      "Bash(sed -i '' 's|<th>Dealer</th>|<th>Partner</th>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Commissions.tsx /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Dashboard.tsx)",
+      "Bash(sed -i '' 's/Traders \\\\& Bank Accounts/Partners \\\\& Bank Accounts/g; s|<th>Trader</th>|<th>Partner</th>|g' /Users/chiranthr/Desktop/test-project/frontend/src/pages/admin/Payouts.tsx)"
     ]
   }
 }

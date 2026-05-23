@@ -15,7 +15,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "axios": "^1.6.8",
+    "canvas-confetti": "^1.9.4",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

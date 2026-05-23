@@ -484,12 +484,27 @@ function runMigrations(db) {
     `);
   } catch (_) {}
 
-  // Admin users are delivery agents by default — set flags if not already set
+  if (!hasColumn('users', 'pan')) {
+    db.exec(`ALTER TABLE users ADD COLUMN pan TEXT`);
+    console.log('[migration] users: added pan');
+  }
+  if (!hasColumn('users', 'pan_verified')) {
+    db.exec(`ALTER TABLE users ADD COLUMN pan_verified INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] users: added pan_verified');
+  }
+
+  // Keep admin as fallback-only — not in the H3 active delivery network
   db.exec(`
     UPDATE users
-    SET will_deliver = 1, delivery_enabled = 1, availability_status = 'available'
+    SET will_deliver = 0, delivery_enabled = 0
     WHERE role = 'admin'
-      AND (will_deliver = 0 OR delivery_enabled = 0)
+  `);
+
+  // Ensure admin has the correct name and phone
+  db.exec(`
+    UPDATE users
+    SET name = 'Ravikumar', phone = '9972922514'
+    WHERE role = 'admin'
   `);
 
   console.log('[migration] all migrations applied');

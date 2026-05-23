@@ -150,13 +150,14 @@ function queryDealersInCells(cells, customerLat, customerLng, excludeId) {
            availability_status, referral_code
     FROM   users
     WHERE  h3_index IN (${placeholders})
-      AND  role IN ('trader', 'admin')
+      AND  role = 'trader'
       AND  status = 'active'
       AND  delivery_enabled = 1
       AND  will_deliver = 1
       AND  availability_status = 'available'
       AND  latitude IS NOT NULL
       AND  longitude IS NOT NULL
+      AND  pan_verified = 1
   `;
   const params = [...cells];
 
@@ -195,13 +196,14 @@ function queryAllDealersInCells(cells, customerLat, customerLng) {
            availability_status, referral_code
     FROM   users
     WHERE  h3_index IN (${placeholders})
-      AND  role IN ('trader', 'admin')
+      AND  role = 'trader'
       AND  status = 'active'
       AND  delivery_enabled = 1
       AND  will_deliver = 1
       AND  availability_status = 'available'
       AND  latitude IS NOT NULL
       AND  longitude IS NOT NULL
+      AND  pan_verified = 1
   `).all(...cells);
 
   return dealers.map(d => ({

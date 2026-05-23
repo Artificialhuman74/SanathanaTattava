@@ -5,8 +5,9 @@ import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import api from '../../api/axios';
 import {
   ShoppingBag, Package, Star, Users, ChevronRight, TrendingUp,
-  Clock, CheckCircle2, DollarSign, Copy, Check,
+  Clock, CheckCircle2, DollarSign, Copy, Check, ShieldAlert,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const STATUS_COLORS: Record<string, string> = {
   pending:    'bg-amber-100 text-amber-700',
@@ -67,6 +68,24 @@ export default function TraderDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* PAN verification warning */}
+      {!user?.pan_verified && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+          <ShieldAlert size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-800 text-sm">Account not yet verified</p>
+            <p className="text-amber-700 text-xs mt-0.5">
+              {user?.pan
+                ? 'Your PAN has been submitted and is awaiting admin verification. You cannot receive orders until verified.'
+                : 'You must add your PAN in your profile before orders can be assigned to you.'}
+            </p>
+          </div>
+          <Link to="/trader/profile" className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline">
+            {user?.pan ? 'View profile' : 'Add PAN →'}
+          </Link>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-brand-700 to-brand-600 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
         <div className="absolute right-0 top-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />

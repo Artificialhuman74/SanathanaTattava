@@ -17,6 +17,8 @@ export interface User {
   will_deliver?: boolean;
   delivery_enabled?: boolean;
   commission_rate?: number;
+  pan?: string | null;
+  pan_verified?: number;
   status: string;
 }
 

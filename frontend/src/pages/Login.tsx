@@ -58,7 +58,7 @@ export default function Login() {
           {/* Tabs */}
           <div className="flex rounded-xl bg-slate-100 p-1 mb-6">
             {[
-              { id: 'trader' as Tab, icon: Users,  label: 'Trader Login' },
+              { id: 'trader' as Tab, icon: Users,  label: 'Partner Login' },
               { id: 'admin'  as Tab, icon: Shield, label: 'Admin Login' },
             ].map(({ id, icon: Icon, label }) => (
               <button

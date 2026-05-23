@@ -238,7 +238,7 @@ export default function ConsumerLayout() {
                   <NavLink to="/shop/addresses" className="hover:text-gray-300">Addresses</NavLink>
                 </>
               )}
-              <Link to="/login" className="hover:text-gray-300">Trader Login</Link>
+              <Link to="/login" className="hover:text-gray-300">Partner Login</Link>
             </div>
           </div>
         </footer>

@@ -209,7 +209,7 @@ export default function AdminDashboard() {
               <tr>
                 <th>Order #</th>
                 <th>Consumer</th>
-                <th>Dealer</th>
+                <th>Partner</th>
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Date</th>
