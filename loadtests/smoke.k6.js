@@ -54,7 +54,10 @@ export default function () {
   errorRate.add(!ok3);
 
   // 4. Protected endpoint without token → must be 401/403, never 5xx
-  const adminNoAuth = http.get(`${BASE_URL}/api/admin/users`);
+  // responseCallback marks 401/403 as non-failures so http_req_failed threshold isn't skewed
+  const adminNoAuth = http.get(`${BASE_URL}/api/admin/users`, {
+    responseCallback: http.expectedStatuses({ min: 200, max: 403 }),
+  });
   const ok4 = check(adminNoAuth, {
     'admin-noauth not 5xx': (r) => r.status < 500,
     'admin-noauth rejects': (r) => r.status === 401 || r.status === 403,

@@ -77,6 +77,21 @@ router.get('/me', authConsumer, (req, res) => {
   res.json({ consumer });
 });
 
+/* ── GET /me/export — GDPR data export ───────────────────────────────── */
+router.get('/me/export', authConsumer, (req, res) => {
+  const consumer = db.prepare('SELECT id,name,email,phone,address,pincode,created_at FROM consumers WHERE id=?').get(req.consumer.id);
+  const orders   = db.prepare('SELECT id,order_number,status,payment_status,total_amount,created_at FROM consumer_orders WHERE consumer_id=?').all(req.consumer.id);
+  const addresses = db.prepare('SELECT label,name,address,pincode FROM consumer_addresses WHERE consumer_id=?').all(req.consumer.id);
+  res.json({ consumer, orders, addresses });
+});
+
+/* ── DELETE /me — soft-delete consumer account ────────────────────────── */
+router.delete('/me', authConsumer, (req, res) => {
+  const id = req.consumer.id;
+  db.prepare(`UPDATE consumers SET status='deleted', email=email||'__deleted_'||id, name='[Deleted]', phone=NULL WHERE id=?`).run(id);
+  res.json({ success: true });
+});
+
 /* ── PATCH /me — update name / phone ─────────────────────────────────── */
 router.patch('/me', authConsumer, (req, res) => {
   const { name, phone } = req.body;

@@ -65,6 +65,7 @@ const cors    = require('cors');
 const helmet  = require('helmet');
 
 const { initSocket } = require('./websocket/socketServer');
+const db = require('./database/db');
 
 const authRoutes          = require('./routes/auth');
 const adminRoutes         = require('./routes/admin');
@@ -110,6 +111,9 @@ app.use(cors({
 }));
 app.options('*', cors()); // Enable CORS preflight for all routes
 
+const requestId = require('./middleware/requestId');
+app.use(requestId);
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -133,7 +137,14 @@ app.use('/api/delivery',      deliveryRoutes);
 app.use('/api/payments',      paymentRoutes);
 app.use('/api/public',        publicRoutes);
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'error', db: 'unreachable', error: err.message });
+  }
+});
 
 app.get('/', (_req, res) => res.json({ name: 'Sanathana Tattva API', status: 'running' }));
 
@@ -298,8 +309,9 @@ const getLocalIP = () => {
 };
 
 // Use HTTPS locally if certs exist, plain HTTP on Railway/cloud
+let server;
 if (!process.env.RAILWAY_ENVIRONMENT && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-  const server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
+  server = https.createServer({ key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }, app);
   initSocket(server);
   server.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIP();
@@ -308,9 +320,22 @@ if (!process.env.RAILWAY_ENVIRONMENT && fs.existsSync(keyPath) && fs.existsSync(
     console.log(`   Network: https://${localIP}:${PORT}\n`);
   });
 } else {
-  const server = http.createServer(app);
+  server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 TradeHub server listening on port ${PORT}\n`);
   });
 }
+
+function gracefulShutdown(signal) {
+  console.log(`[shutdown] ${signal} received — draining connections`);
+  server.close(() => {
+    console.log('[shutdown] HTTP server closed');
+    try { db.close(); } catch { /* already closed */ }
+    process.exit(0);
+  });
+  // Force exit after 10s if connections don't drain
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));

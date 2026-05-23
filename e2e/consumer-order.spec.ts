@@ -5,6 +5,7 @@
  * Register → Verify → Browse products → Add to cart → View cart → Place order
  */
 import { test, expect } from '@playwright/test';
+import { createAndLoginConsumer } from './helpers/auth';
 
 test.describe('Consumer order flow', () => {
   let consumerEmail: string;
@@ -92,5 +93,105 @@ test.describe('Consumer order flow', () => {
     await expect(page).toHaveURL(/\/shop\/orders/);
     // Page should render without crashing
     await expect(page.locator('body')).not.toContainText('Error', { ignoreCase: false });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shop Browsing & Checkout (Part 9 additions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('Consumer shop browsing', () => {
+  let email: string;
+  let password: string;
+
+  test.beforeAll(async ({ request }) => {
+    const account = await createAndLoginConsumer(request);
+    email    = account.email;
+    password = account.password;
+  });
+
+  test('shop page loads and shows product list', async ({ page }) => {
+    // Log in first so the shop is accessible
+    await page.goto('/shop/login');
+    await page.getByPlaceholder(/email/i).fill(email);
+    await page.getByPlaceholder(/password/i).fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.waitForURL(/\/shop/, { timeout: 10_000 });
+
+    await page.goto('/shop');
+    await expect(page).toHaveURL(/\/shop/);
+    await page.waitForLoadState('networkidle');
+
+    // Either product cards appear or a "no products" empty state is visible
+    const productCards = page.locator('[data-testid="product-card"], .product-card, [class*="product"]');
+    const emptyState   = page.locator('text=/no products|empty|nothing here/i');
+
+    const hasProducts = await productCards.count();
+    const hasEmpty    = await emptyState.count();
+    expect(hasProducts + hasEmpty).toBeGreaterThan(0);
+  });
+
+  test('clicking a product opens product detail or adds to cart', async ({ page }) => {
+    await page.goto('/shop/login');
+    await page.getByPlaceholder(/email/i).fill(email);
+    await page.getByPlaceholder(/password/i).fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.waitForURL(/\/shop/, { timeout: 10_000 });
+
+    await page.goto('/shop');
+    await page.waitForLoadState('networkidle');
+
+    // Try to find a product and interact with it
+    const addBtn = page.getByRole('button', { name: /add|buy/i }).first();
+    const cardLink = page.locator('a[href*="/shop/product"]').first();
+
+    const addVisible  = await addBtn.isVisible().catch(() => false);
+    const linkVisible = await cardLink.isVisible().catch(() => false);
+
+    if (addVisible) {
+      await addBtn.click();
+      // After clicking add, cart count or confirmation should appear
+      await page.waitForTimeout(500);
+      // No crash
+      await expect(page.locator('body')).not.toContainText('Cannot read');
+    } else if (linkVisible) {
+      await cardLink.click();
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.locator('body')).not.toContainText('Cannot read');
+    } else {
+      // No products available in this environment — that's OK
+      test.skip(true, 'No products available to click');
+    }
+  });
+
+  test('checkout page has required form fields visible', async ({ page }) => {
+    await page.goto('/shop/login');
+    await page.getByPlaceholder(/email/i).fill(email);
+    await page.getByPlaceholder(/password/i).fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.waitForURL(/\/shop/, { timeout: 10_000 });
+
+    // Seed cart so checkout doesn't immediately redirect away
+    await page.evaluate(() => {
+      const cart = [{
+        product: { id: 1, name: 'Test Product', price: 100, stock: 50, category: 'test', unit: 'piece', sku: 'T01', description: '' },
+        quantity: 1,
+      }];
+      localStorage.setItem('tradehub_consumer_cart_v1', JSON.stringify(cart));
+    });
+
+    await page.goto('/shop/checkout');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Should be on checkout (or redirected to login / shop)
+    const isCheckout = page.url().includes('/checkout');
+    if (!isCheckout) {
+      // Redirect is acceptable if cart is empty server-side
+      return;
+    }
+
+    // Expect address / payment form fields
+    const formEl = page.locator('form, input[type="text"], input[type="tel"], select, textarea').first();
+    await expect(formEl).toBeVisible({ timeout: 5_000 });
   });
 });

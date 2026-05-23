@@ -6,6 +6,7 @@ const db       = require('../database/db');
 const { createNotification } = require('../services/notificationService');
 const { returnOrderInventory } = require('../services/inventoryService');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
+const { auditLog } = require('../middleware/auditLog');
 
 const router = express.Router();
 
@@ -257,7 +258,7 @@ router.post('/webhook', (req, res) => {
  * Refund a captured payment in full or part. Stores refund_id for
  * webhook reconciliation.
  */
-router.post('/refund', authenticate, requireAdmin, async (req, res) => {
+router.post('/refund', authenticate, requireAdmin, auditLog('refund'), async (req, res) => {
   if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
   const { consumer_order_id, amount, reason } = req.body;
   if (!consumer_order_id) return res.status(400).json({ error: 'consumer_order_id required' });
@@ -475,8 +476,7 @@ router.post('/transfer', authenticate, requireAdmin, async (req, res) => {
  *   skipped     — commissions whose trader has no linked/activated account
  *   errors      — per-commission failures (transfer attempted but Razorpay rejected)
  */
-router.post('/payout-week', authenticate, requireAdmin, async (req, res) => {
-  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+router.post('/payout-week', authenticate, requireAdmin, auditLog('payout-week'), async (req, res) => {
   const { week_start } = req.body;
   if (!week_start || !/^\d{4}-\d{2}-\d{2}$/.test(week_start))
     return res.status(400).json({ error: 'week_start required (YYYY-MM-DD)' });
@@ -494,6 +494,8 @@ router.post('/payout-week', authenticate, requireAdmin, async (req, res) => {
 
   if (pending.length === 0)
     return res.json({ transferred: 0, skipped: 0, errors: [], message: 'No pending commissions for this week' });
+
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
 
   let transferred = 0;
   let skipped = 0;

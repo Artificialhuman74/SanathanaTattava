@@ -15,9 +15,13 @@ const deliveryRoutes     = require('../../src/routes/delivery');
 const publicRoutes       = require('../../src/routes/public');
 const paymentsRoutes     = require('../../src/routes/payments');
 
+const requestId = require('../../src/middleware/requestId');
+const db = require('../../src/database/db');
+
 function createApp() {
   const app = express();
   app.use(cors());
+  app.use(requestId);
   // Webhook needs raw bytes for HMAC verification — mount BEFORE json parser
   app.use('/api/payments/webhook', express.raw({ type: '*/*', limit: '1mb' }));
   app.use(express.json({ limit: '10mb' }));
@@ -33,7 +37,14 @@ function createApp() {
   app.use('/api/public',        publicRoutes);
   app.use('/api/payments',      paymentsRoutes);
 
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/api/health', (_req, res) => {
+    try {
+      db.prepare('SELECT 1').get();
+      res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
+    } catch (err) {
+      res.status(503).json({ status: 'error', db: 'unreachable', error: err.message });
+    }
+  });
 
   // Global error handler — propagate HTTP status codes (e.g. 413 from body parser)
   app.use((err, _req, res, _next) => {
