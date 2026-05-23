@@ -410,25 +410,24 @@ router.post('/add-bank-account', authenticate, requireAdmin, async (req, res) =>
     return res.status(400).json({ error: 'Trader bank details missing' });
 
   try {
-    const bankAccount = await razorpay.accounts.addBankAccount(
+    // Bank account is registered by requesting the "route" product configuration
+    const product = await razorpay.products.requestProductConfiguration(
       trader.razorpay_linked_account_id,
       {
-        ifsc_code:            trader.bank_ifsc,
-        account_number:       trader.bank_account_number,
-        beneficiary_name:     trader.bank_account_name,
-        beneficiary_email:    trader.email,
-        beneficiary_mobile:   trader.phone || '',
-        beneficiary_country:  'IN',
-        beneficiary_city:     'NA',
-        beneficiary_state:    'KA',
-        beneficiary_pin:      trader.pincode || '560001',
-        beneficiary_address1: trader.address || 'NA',
+        product_name: 'route',
+        requested_at: Math.floor(Date.now() / 1000),
+        settlements: {
+          account_number:  trader.bank_account_number,
+          ifsc_code:       trader.bank_ifsc,
+          beneficiary_name: trader.bank_account_name,
+        },
+        tnc_accepted: true,
       },
     );
 
     db.prepare(`UPDATE users SET razorpay_account_status='bank_added' WHERE id=?`).run(trader.id);
 
-    res.json({ success: true, bank_account_id: bankAccount.id, status: bankAccount.status });
+    res.json({ success: true, product_id: product.id, status: product.activation_status });
   } catch (err) {
     console.error('[razorpay] add-bank-account error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to add bank account' });
