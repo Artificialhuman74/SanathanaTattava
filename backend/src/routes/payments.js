@@ -235,7 +235,16 @@ router.post('/verify', authConsumer, async (req, res) => {
     const invoice = await sendOrderInvoice(order.id);
     invoiceUrl = invoice?.short_url || null;
   } catch (err) {
-    console.error('[invoice] post-payment create failed:', err.message);
+    const rzpErr = err?.error || err;
+    console.error('[invoice] post-payment create failed:', {
+      statusCode:  err?.statusCode,
+      code:        rzpErr?.code,
+      description: rzpErr?.description,
+      field:       rzpErr?.field,
+      reason:      rzpErr?.reason,
+      message:     err?.message,
+      raw:         JSON.stringify(err),
+    });
   }
 
   /* Email consumer: order confirmed (with invoice link if available) */

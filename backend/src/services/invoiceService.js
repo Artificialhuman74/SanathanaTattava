@@ -156,7 +156,16 @@ async function sendOrderInvoice(orderId) {
 
       console.log(`[invoice] ${containerInvoice.id} (container) created for order ${order.order_number} (${containerInvoice.status})`);
     } catch (err) {
-      console.error(`[invoice] container invoice failed for order ${order.order_number}:`, err.message);
+      const rzpErr = err?.error || err;
+      console.error(`[invoice] container invoice failed for order ${order.order_number}:`, {
+        statusCode:  err?.statusCode,
+        code:        rzpErr?.code,
+        description: rzpErr?.description,
+        field:       rzpErr?.field,
+        reason:      rzpErr?.reason,
+        message:     err?.message,
+        raw:         JSON.stringify(err),
+      });
     }
   }
 
