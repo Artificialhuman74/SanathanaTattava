@@ -44,16 +44,28 @@ async function sendOrderInvoice(orderId) {
   /* Per-unit price already reflects the discount (we scale by discountFactor). */
   const discountFactor = order.discount_percent > 0 ? (1 - order.discount_percent / 100) : 1;
 
-  const productLineItems = items.map(item => ({
-    name:        item.product_name,
-    description: `per ${item.unit || 'unit'}`,
-    amount:      Math.max(1, Math.round(item.price * discountFactor * 100)), // paise, min 1
-    quantity:    item.quantity,
-  }));
+  /* Razorpay rejects line items below INR 1.00, so we clamp to 100 paise.
+   * Track whether any line was rounded up so we can disclose it on the invoice. */
+  let productsRounded = false;
+  const productLineItems = items.map(item => {
+    const raw     = Math.round(item.price * discountFactor * 100);
+    const clamped = Math.max(100, raw);
+    if (clamped !== raw) productsRounded = true;
+    return {
+      name:        item.product_name,
+      description: `per ${item.unit || 'unit'}`,
+      amount:      clamped,
+      quantity:    item.quantity,
+    };
+  });
 
   const phone = consumer.phone ? consumer.phone.replace(/^(\+91|91)/, '').replace(/\D/g, '') : null;
   const containerTotal = order.container_costs_total || 0;
   const hasContainer = containerTotal > 0;
+  const rawContainerPaise = Math.round(containerTotal * 100);
+  const containerRounded = hasContainer && rawContainerPaise < 100;
+
+  const ROUNDING_NOTE = 'Note: line items below ₹1.00 are shown rounded up to ₹1.00 per unit due to gateway minimums; the actual amount charged matches your order total.';
 
   /* Build address from the order's delivery info; mirror to billing + shipping. */
   const address = order.delivery_address && order.delivery_pincode
@@ -93,9 +105,12 @@ async function sendOrderInvoice(orderId) {
   const expireBy = Math.max(Math.floor(istEndOfDay.getTime() / 1000), nowSec + 900);
 
   /* ── 1) Products invoice ──────────────────────────────────────────────── */
-  const productsTerms = hasContainer
+  const productsBaseTerms = hasContainer
     ? 'A separate invoice for your refundable container deposit will be sent shortly.'
     : 'Thank you for choosing SanathanaTattva.';
+  const productsTerms = productsRounded
+    ? `${productsBaseTerms} ${ROUNDING_NOTE}`
+    : productsBaseTerms;
 
   const productsInvoice = await razorpay.invoices.create({
     type:        'invoice',
@@ -133,14 +148,16 @@ async function sendOrderInvoice(orderId) {
         line_items: [{
           name:        'Refundable Container Deposit',
           description: 'One-time · Refundable if returned undamaged',
-          amount:      Math.round(containerTotal * 100),
+          amount:      Math.max(100, Math.round(containerTotal * 100)), // paise; Razorpay min is INR 1.00
           quantity:    1,
         }],
         currency:   'INR',
         date:       dateSec,
         expire_by:  expireBy,
         ...notifyFlags,
-        terms:      'This container deposit is fully refundable if returned undamaged.',
+        terms:      containerRounded
+          ? `This container deposit is fully refundable if returned undamaged. ${ROUNDING_NOTE}`
+          : 'This container deposit is fully refundable if returned undamaged.',
         notes: {
           order_number: order.order_number,
           order_id:     String(order.id),
