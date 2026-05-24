@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Users, Search, ChevronDown, Star, UserCheck, UserX, Phone, Mail,
-  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2, ShieldCheck, ShieldOff,
+  Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2, ShieldCheck, ShieldOff, RefreshCw,
 } from 'lucide-react';
 
 interface Trader {
@@ -39,6 +39,7 @@ export default function AdminTraders() {
   const [expanded,     setExpanded]     = useState<Set<number>>(new Set());
   const [editRate,     setEditRate]     = useState<{ id: number; value: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Trader | null>(null);
+  const [syncingId,    setSyncingId]    = useState<number | null>(null);
 
   const fetchTraders = useCallback(() => {
     setLoading(true);
@@ -94,6 +95,18 @@ export default function AdminTraders() {
     }
   };
 
+  const syncRazorpay = async (trader: Trader) => {
+    setSyncingId(trader.id);
+    try {
+      const { data } = await api.post('/payments/sync-account', { trader_id: trader.id });
+      if (data.mapped_status === 'activated') toast.success(`${trader.name} is now activated!`);
+      else toast(`Razorpay status: ${data.razorpay_raw_status || data.mapped_status}`, { icon: 'ℹ️' });
+      fetchTraders();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Sync failed');
+    } finally { setSyncingId(null); }
+  };
+
   const deleteTrader = async (trader: Trader) => {
     try {
       await api.delete(`/admin/traders/${trader.id}`);
@@ -139,6 +152,37 @@ export default function AdminTraders() {
               <p className="font-semibold text-slate-900 text-sm">{t.name}</p>
               <p className="text-slate-400 text-xs flex items-center gap-1"><Mail size={10} />{t.email}</p>
               {t.phone && <p className="text-slate-400 text-xs flex items-center gap-1"><Phone size={10} />{t.phone}</p>}
+              {t.razorpay_linked_account_id && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span
+                    className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200"
+                    title="Click to copy"
+                    onClick={() => { navigator.clipboard.writeText(t.razorpay_linked_account_id!); toast.success('Copied!'); }}
+                  >
+                    {t.razorpay_linked_account_id}
+                  </span>
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                    t.razorpay_account_status === 'activated'         ? 'bg-emerald-100 text-emerald-700' :
+                    t.razorpay_account_status === 'stakeholder_added' ? 'bg-purple-100 text-purple-700'  :
+                    t.razorpay_account_status === 'bank_added'        ? 'bg-blue-100 text-blue-700'      :
+                    t.razorpay_account_status === 'under_review'      ? 'bg-amber-100 text-amber-700'    :
+                    'bg-slate-100 text-slate-500'
+                  }`}>
+                    {t.razorpay_account_status || 'created'}
+                  </span>
+                  {t.razorpay_account_status !== 'activated' && (
+                    <button
+                      onClick={() => syncRazorpay(t)}
+                      disabled={syncingId === t.id}
+                      className="flex items-center gap-0.5 text-xs text-slate-400 hover:text-brand-600 transition-colors"
+                      title="Sync status from Razorpay"
+                    >
+                      <RefreshCw size={10} className={syncingId === t.id ? 'animate-spin' : ''} />
+                      {syncingId === t.id ? 'Syncing…' : 'Sync'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </td>
@@ -253,26 +297,6 @@ export default function AdminTraders() {
                 : <><ShieldOff size={12} />No PAN</>
               }
             </button>
-            {t.razorpay_linked_account_id && (
-              <div className="mt-1 space-y-0.5">
-                <p
-                  className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-slate-200 transition-colors"
-                  title="Click to copy Razorpay account ID"
-                  onClick={() => { navigator.clipboard.writeText(t.razorpay_linked_account_id!); toast.success('Copied!'); }}
-                >
-                  {t.razorpay_linked_account_id}
-                </p>
-                <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                  t.razorpay_account_status === 'activated'       ? 'bg-emerald-100 text-emerald-700' :
-                  t.razorpay_account_status === 'bank_added'      ? 'bg-blue-100 text-blue-700' :
-                  t.razorpay_account_status === 'stakeholder_added' ? 'bg-purple-100 text-purple-700' :
-                  t.razorpay_account_status === 'created'         ? 'bg-amber-100 text-amber-700' :
-                  'bg-slate-100 text-slate-500'
-                }`}>
-                  rzp: {t.razorpay_account_status || 'created'}
-                </span>
-              </div>
-            )}
           </div>
         </td>
       </tr>
