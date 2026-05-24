@@ -9,6 +9,9 @@ import { getCartCount } from '../../services/cartStorage';
 interface ConsumerOrder {
   id: number;
   order_number: string;
+  subtotal: number;
+  discount_percent: number;
+  discount_amount: number;
   total_amount: number;
   status: string;
   payment_status: string;
@@ -18,7 +21,8 @@ interface ConsumerOrder {
   dealer_tier: number;
   delivery_dealer_name: string | null;
   delivery_dealer_phone: string | null;
-  consumer_pincode: string;
+  delivery_address: string | null;
+  pincode: string | null;
   items: OrderItem[];
   item_count: number;
 }
@@ -244,30 +248,70 @@ export default function ConsumerOrders() {
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items</p>
                 <div className="space-y-2">
-                  {(selected.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
-                      <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
-                        {item.image_url
-                          ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
-                          : <Package size={16} className="text-gray-300 m-auto mt-3" />
-                        }
+                  {(selected.items || []).map((item, i) => {
+                    const unitValue = parseFloat(String(item.price));
+                    const mrp = unitValue * 1.18;
+                    const lineTotal = unitValue * item.quantity;
+                    return (
+                      <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
+                        <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
+                          {item.image_url
+                            ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+                            : <Package size={16} className="text-gray-300 m-auto mt-3" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate text-gray-900">{item.product_name}</p>
+                          <p className="text-xs text-gray-400">
+                            ₹{unitValue.toFixed(2)} × {item.quantity} {item.unit || ''}
+                            <span className="ml-1 line-through text-gray-300">MRP ₹{mrp.toFixed(2)}</span>
+                          </p>
+                        </div>
+                        <p className="font-bold text-gray-900 flex-shrink-0">₹{lineTotal.toFixed(2)}</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate text-gray-900">{item.product_name}</p>
-                        <p className="text-xs text-gray-400">₹{parseFloat(String(item.price)).toFixed(2)} × {item.quantity} {item.unit || ''}</p>
-                      </div>
-                      <p className="font-bold text-gray-900 flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {(!selected.items || selected.items.length === 0) && (
                     <p className="text-sm text-gray-400 text-center py-4">No item details available</p>
                   )}
-                  <div className="flex justify-between items-center px-3 pt-2 border-t border-gray-100">
-                    <span className="font-semibold text-gray-700">Total</span>
-                    <span className="font-extrabold text-brand-600 text-lg">₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
+
+                  {/* Price breakdown */}
+                  <div className="mt-2 border-t border-gray-100 pt-3 space-y-1.5 text-sm px-1">
+                    {(() => {
+                      const cartValue = parseFloat(String(selected.subtotal || selected.total_amount));
+                      const discount = parseFloat(String(selected.discount_amount || 0));
+                      const discPct = parseFloat(String(selected.discount_percent || 0));
+                      return (
+                        <>
+                          <div className="flex justify-between text-gray-500">
+                            <span>Cart Value</span>
+                            <span>₹{cartValue.toFixed(2)}</span>
+                          </div>
+                          {discount > 0 && (
+                            <div className="flex justify-between text-emerald-600">
+                              <span>Referral Discount ({discPct}%)</span>
+                              <span>−₹{discount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-extrabold text-brand-600 text-base border-t border-gray-100 pt-2 mt-1">
+                            <span>Total Paid</span>
+                            <span>₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
+
+              {/* Delivery Address */}
+              {(selected.delivery_address || selected.pincode) && (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Delivery Address</p>
+                  {selected.delivery_address && <p className="text-sm font-medium text-gray-900">{selected.delivery_address}</p>}
+                  {selected.pincode && <p className="text-xs text-gray-500 mt-0.5">Pincode: {selected.pincode}</p>}
+                </div>
+              )}
 
               {/* Payment */}
               <div className={`px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${

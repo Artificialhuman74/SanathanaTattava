@@ -451,7 +451,7 @@ router.get('/consumers', (req, res) => {
     SELECT c.*, u.name as dealer_name, u.tier as dealer_tier, u.phone as dealer_phone,
            u.referral_code as dealer_code,
            (SELECT COUNT(*) FROM consumer_orders WHERE consumer_id = c.id) as order_count,
-           (SELECT COALESCE(SUM(total_amount),0) FROM consumer_orders WHERE consumer_id = c.id) as total_spent
+           (SELECT COALESCE(SUM(total_amount),0) FROM consumer_orders WHERE consumer_id = c.id AND payment_status = 'paid') as total_spent
     FROM consumers c
     LEFT JOIN users u ON c.linked_dealer_id = u.id
     WHERE 1=1

@@ -15,6 +15,8 @@ interface ConsumerOrder {
   consumer_email: string;
   consumer_address: string;
   consumer_pincode: string;
+  delivery_address: string | null;
+  pincode: string | null;
   dealer_id: number;
   dealer_name: string;
   dealer_phone: string;
@@ -264,17 +266,13 @@ export default function AdminConsumerOrders() {
                     <p className="font-semibold text-slate-900">{selected.consumer_phone}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-xs">Email</p>
-                    <p className="font-semibold text-slate-900">{selected.consumer_email || '—'}</p>
-                  </div>
-                  <div>
                     <p className="text-slate-400 text-xs">Pincode</p>
-                    <p className="font-semibold text-slate-900">{selected.consumer_pincode || '—'}</p>
+                    <p className="font-semibold text-slate-900">{selected.pincode || selected.consumer_pincode || '—'}</p>
                   </div>
-                  {selected.consumer_address && (
+                  {(selected.delivery_address || selected.consumer_address) && (
                     <div className="col-span-2">
-                      <p className="text-slate-400 text-xs">Address</p>
-                      <p className="font-semibold text-slate-900">{selected.consumer_address}</p>
+                      <p className="text-slate-400 text-xs">Delivery Address</p>
+                      <p className="font-semibold text-slate-900">{selected.delivery_address || selected.consumer_address}</p>
                     </div>
                   )}
                 </div>
