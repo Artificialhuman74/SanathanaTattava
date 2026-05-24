@@ -140,7 +140,7 @@ export default function Shop() {
   const [cart, setCart] = useState<CartItem[]>(() => loadCart<Product>());
   const [cartOpen, setCartOpen] = useState(false);
   const [discountPct, setDiscountPct] = useState<number>(0);
-  const [orderedProductIds, setOrderedProductIds] = useState<Set<number>>(new Set());
+  const [orderedProductIds, setOrderedProductIds] = useState<Set<number> | null>(null);
   const [shakingId, setShakingId] = useState<number | null>(null);
   const [cartIconBounce, setCartIconBounce] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -232,7 +232,7 @@ export default function Shop() {
     if (!consumer) { setOrderedProductIds(new Set()); return; }
     consumerApi.get('/consumer/ordered-product-ids')
       .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
-      .catch(() => {});
+      .catch(() => setOrderedProductIds(new Set()));
   }, [consumer]);
 
   const cartInProduct = (id: number) => cart.find(i => i.product.id === id)?.quantity ?? 0;
@@ -537,7 +537,7 @@ export default function Shop() {
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const containerCostsTotal = cart.reduce((s, i) => {
+  const containerCostsTotal = orderedProductIds === null ? null : cart.reduce((s, i) => {
     const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
     return s + (isFirstTime ? i.product.container_cost : 0);
   }, 0);
@@ -688,7 +688,7 @@ export default function Shop() {
                   <div className="mt-2">
                     <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400 truncate">per {p.unit || 'can'}</p>
-                    {(p.container_cost || 0) > 0 && !orderedProductIds.has(p.id) && (
+                    {orderedProductIds !== null && (p.container_cost || 0) > 0 && !orderedProductIds.has(p.id) && (
                       <p className="text-[11px] text-amber-600 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} container (one-time)</p>
                     )}
                   </div>
@@ -780,7 +780,7 @@ export default function Shop() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-xl font-extrabold text-slate-900">₹{selectedProduct.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400">per {selectedProduct.unit || 'can'}</p>
-                    {(selectedProduct.container_cost || 0) > 0 && !orderedProductIds.has(selectedProduct.id) && (
+                    {orderedProductIds !== null && (selectedProduct.container_cost || 0) > 0 && !orderedProductIds.has(selectedProduct.id) && (
                       <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} container (one-time)</p>
                     )}
                   </div>
@@ -943,7 +943,7 @@ export default function Shop() {
                 <p className="text-xs mt-1">Add some products to get started</p>
               </div>
             ) : cart.map(({ product, quantity }) => {
-              const isFirstTime = !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+              const isFirstTime = orderedProductIds !== null && !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
               return (
                 <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
                   <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
@@ -989,7 +989,7 @@ export default function Shop() {
                 <span>{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
                 <span>₹{cartTotal.toFixed(2)}</span>
               </div>
-              {containerCostsTotal > 0 && (
+              {containerCostsTotal !== null && containerCostsTotal > 0 && (
                 <div className="flex justify-between items-center text-sm text-amber-600 font-medium">
                   <span>Container (one-time)</span>
                   <span>+₹{containerCostsTotal.toFixed(2)}</span>
@@ -997,7 +997,9 @@ export default function Shop() {
               )}
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Total</span>
-                <span className="text-xl font-extrabold text-brand-600">₹{(cartTotal + containerCostsTotal).toFixed(2)}</span>
+                <span className="text-xl font-extrabold text-brand-600">
+                  {containerCostsTotal === null ? '…' : `₹${(cartTotal + containerCostsTotal).toFixed(2)}`}
+                </span>
               </div>
               {consumer?.referral_code_used && discountPct > 0 && (
                 <p className="text-xs text-emerald-600 flex items-center gap-1 font-medium">

@@ -53,7 +53,7 @@ export default function Checkout() {
   });
 
   const [discountPct,        setDiscountPct]        = useState(0);
-  const [orderedProductIds,  setOrderedProductIds]  = useState<Set<number>>(new Set());
+  const [orderedProductIds,  setOrderedProductIds]  = useState<Set<number> | null>(null);
   const [savedAddresses,     setSavedAddresses]     = useState<SavedAddress[]>([]);
   const [selectedAddressId,  setSelectedAddressId]  = useState<number | null>(null);
   const [useNewAddress,      setUseNewAddress]      = useState(false);
@@ -99,10 +99,10 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (!consumer) return;
+    if (!consumer) { setOrderedProductIds(new Set()); return; }
     consumerApi.get('/consumer/ordered-product-ids')
       .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
-      .catch(() => {});
+      .catch(() => setOrderedProductIds(new Set()));
   }, [consumer]);
 
   /* Pre-fill from consumer account */
@@ -129,7 +129,7 @@ export default function Checkout() {
 
   /* ── Calculations ──────────────────────────────────────────────────── */
   const cartTotal        = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const containerCostsTotal = cart.reduce((s, i) => {
+  const containerCostsTotal = orderedProductIds === null ? null : cart.reduce((s, i) => {
     const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
     return s + (isFirstTime ? i.product.container_cost : 0);
   }, 0);
@@ -137,7 +137,9 @@ export default function Checkout() {
   const hasReferral      = !!effectiveCode.trim();
   const effectiveDiscount= hasReferral ? discountPct : 0;
   const discountAmt      = parseFloat((cartTotal * effectiveDiscount / 100).toFixed(2));
-  const finalTotal       = parseFloat((cartTotal - discountAmt + containerCostsTotal).toFixed(2));
+  const finalTotal       = containerCostsTotal === null
+    ? null
+    : parseFloat((cartTotal - discountAmt + containerCostsTotal).toFixed(2));
 
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {
@@ -623,7 +625,7 @@ export default function Checkout() {
 
             <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
               {cart.map(({ product, quantity }) => {
-                const isFirstTime = !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+                const isFirstTime = orderedProductIds !== null && !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
                 return (
                   <div key={product.id} className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
@@ -658,7 +660,7 @@ export default function Checkout() {
                   <span>−₹{discountAmt.toFixed(2)}</span>
                 </div>
               )}
-              {containerCostsTotal > 0 && (
+              {containerCostsTotal !== null && containerCostsTotal > 0 && (
                 <div className="flex justify-between text-sm text-amber-600 font-semibold">
                   <span>Container deposit (one-time)</span>
                   <span>+₹{containerCostsTotal.toFixed(2)}</span>
@@ -666,22 +668,24 @@ export default function Checkout() {
               )}
               <div className="flex justify-between font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
                 <span>Total</span>
-                <span className="text-brand-600">₹{finalTotal.toFixed(2)}</span>
+                <span className="text-brand-600">
+                  {finalTotal === null ? '…' : `₹${finalTotal.toFixed(2)}`}
+                </span>
               </div>
-              {containerCostsTotal > 0 && (
+              {containerCostsTotal !== null && containerCostsTotal > 0 && (
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  The container deposit is a one-time charge. When you refill the same product, you won't pay this again.
+                  Container deposit is a one-time charge — you won't pay it again on refills. It's fully refundable if returned undamaged.
                 </p>
               )}
             </div>
 
             <button
               onClick={placeOrder}
-              disabled={placing}
-              className="btn-primary w-full py-4 mt-5 text-base font-bold flex items-center justify-center gap-2"
+              disabled={placing || finalTotal === null}
+              className="btn-primary w-full py-4 mt-5 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {placing && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {placing ? 'Processing…' : consumer ? `Pay ₹${finalTotal.toFixed(2)}` : `Place Order · ₹${finalTotal.toFixed(2)}`}
+              {placing ? 'Processing…' : finalTotal === null ? 'Loading…' : consumer ? `Pay ₹${finalTotal.toFixed(2)}` : `Place Order · ₹${finalTotal.toFixed(2)}`}
             </button>
 
             {!consumer && (
