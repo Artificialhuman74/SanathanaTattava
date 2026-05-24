@@ -511,6 +511,20 @@ function runMigrations(db) {
     WHERE role = 'admin'
   `);
 
+  /* ── Container cost columns ─────────────────────────────────────────── */
+  if (!hasColumn('products', 'container_cost')) {
+    db.exec(`ALTER TABLE products ADD COLUMN container_cost REAL NOT NULL DEFAULT 0`);
+    console.log('[migration] products: added container_cost');
+  }
+  if (!hasColumn('consumer_order_items', 'container_cost')) {
+    db.exec(`ALTER TABLE consumer_order_items ADD COLUMN container_cost REAL NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_order_items: added container_cost');
+  }
+  if (!hasColumn('consumer_orders', 'container_costs_total')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN container_costs_total REAL NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_orders: added container_costs_total');
+  }
+
   console.log('[migration] all migrations applied');
 }
 

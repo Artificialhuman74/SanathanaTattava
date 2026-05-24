@@ -12,6 +12,7 @@ interface ConsumerOrder {
   subtotal: number;
   discount_percent: number;
   discount_amount: number;
+  container_costs_total: number;
   total_amount: number;
   status: string;
   payment_status: string;
@@ -36,6 +37,7 @@ interface OrderItem {
   quantity: number;
   price: number;
   total: number;
+  container_cost: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -252,6 +254,7 @@ export default function ConsumerOrders() {
                     const unitValue = parseFloat(String(item.price));
                     const mrp = unitValue * 1.18;
                     const lineTotal = unitValue * item.quantity;
+                    const containerCost = parseFloat(String(item.container_cost || 0));
                     return (
                       <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
                         <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
@@ -266,6 +269,9 @@ export default function ConsumerOrders() {
                             ₹{unitValue.toFixed(2)} × {item.quantity} {item.unit || ''}
                             <span className="ml-1 line-through text-gray-300">MRP ₹{mrp.toFixed(2)}</span>
                           </p>
+                          {containerCost > 0 && (
+                            <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{containerCost.toFixed(2)} container (one-time)</p>
+                          )}
                         </div>
                         <p className="font-bold text-gray-900 flex-shrink-0">₹{lineTotal.toFixed(2)}</p>
                       </div>
@@ -281,6 +287,7 @@ export default function ConsumerOrders() {
                       const cartValue = parseFloat(String(selected.subtotal || selected.total_amount));
                       const discount = parseFloat(String(selected.discount_amount || 0));
                       const discPct = parseFloat(String(selected.discount_percent || 0));
+                      const containerTotal = parseFloat(String(selected.container_costs_total || 0));
                       return (
                         <>
                           <div className="flex justify-between text-gray-500">
@@ -291,6 +298,12 @@ export default function ConsumerOrders() {
                             <div className="flex justify-between text-emerald-600">
                               <span>Referral Discount ({discPct}%)</span>
                               <span>−₹{discount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {containerTotal > 0 && (
+                            <div className="flex justify-between text-amber-600">
+                              <span>Container deposit (one-time)</span>
+                              <span>+₹{containerTotal.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-extrabold text-brand-600 text-base border-t border-gray-100 pt-2 mt-1">

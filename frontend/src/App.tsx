@@ -87,7 +87,7 @@ const AppRoutes = () => {
           <Route path="orders"          element={<AdminOrders />} />
           <Route path="consumer-orders" element={<AdminConsumerOrders />} />
           <Route path="consumers"       element={<AdminConsumers />} />
-          <Route path="commissions"     element={<AdminCommissions />} />
+          <Route path="commissions"     element={<Navigate to="/admin/payouts" replace />} />
           <Route path="payouts"         element={<AdminPayouts />} />
           <Route path="dealer-inventory" element={<AdminDealerInventory />} />
           <Route path="settings"        element={<AdminSettings />} />

@@ -10,14 +10,14 @@ import {
 
 interface Product {
   id: number; name: string; description: string; category: string; sku: string;
-  price: number; cost_price: number; stock: number; min_stock: number;
+  price: number; cost_price: number; container_cost: number; stock: number; min_stock: number;
   image_url: string; image_urls?: string | null; unit: string; status: string; created_at: string;
 }
 
 const UNITS = ['piece','kg','litre','set','pair','box','bottle','tin','pack'];
 const EMPTY: Partial<Product> = {
   name: '', description: '', category: '', sku: '', price: 0,
-  cost_price: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', status: 'active',
+  cost_price: 0, container_cost: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', status: 'active',
 };
 
 function parseImageUrls(raw?: string | null): string[] {
@@ -124,7 +124,7 @@ export default function AdminInventory() {
   };
 
   const set = (k: keyof Product) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [k]: ['price','cost_price','stock','min_stock'].includes(k) ? Number(e.target.value) : e.target.value }));
+    setForm(f => ({ ...f, [k]: ['price','cost_price','container_cost','stock','min_stock'].includes(k) ? Number(e.target.value) : e.target.value }));
 
   // ── Image upload & crop ───────────────────────────────────────────────────
   const triggerUpload = (target: 'primary' | number) => {
@@ -502,6 +502,11 @@ export default function AdminInventory() {
                 <div>
                   <label className="form-label">Cost Price (₹)</label>
                   <input type="number" min="0" step="0.01" value={form.cost_price || ''} onChange={set('cost_price')} className="form-input" placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="form-label">Container Cost (₹)</label>
+                  <input type="number" min="0" step="0.01" value={form.container_cost || ''} onChange={set('container_cost')} className="form-input" placeholder="0.00" />
+                  <p className="text-xs text-slate-400 mt-1">One-time charge for first order only</p>
                 </div>
                 <div>
                   <label className="form-label">Stock Quantity <span className="text-red-500">*</span></label>

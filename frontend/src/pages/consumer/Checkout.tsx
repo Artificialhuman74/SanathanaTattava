@@ -14,6 +14,7 @@ interface CartItem {
     id: number;
     name: string;
     price: number;
+    container_cost: number;
     unit: string;
     image_url: string;
   };
@@ -52,6 +53,7 @@ export default function Checkout() {
   });
 
   const [discountPct,        setDiscountPct]        = useState(0);
+  const [orderedProductIds,  setOrderedProductIds]  = useState<Set<number>>(new Set());
   const [savedAddresses,     setSavedAddresses]     = useState<SavedAddress[]>([]);
   const [selectedAddressId,  setSelectedAddressId]  = useState<number | null>(null);
   const [useNewAddress,      setUseNewAddress]      = useState(false);
@@ -96,6 +98,13 @@ export default function Checkout() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!consumer) return;
+    consumerApi.get('/consumer/ordered-product-ids')
+      .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
+      .catch(() => {});
+  }, [consumer]);
+
   /* Pre-fill from consumer account */
   useEffect(() => {
     if (consumer) {
@@ -120,11 +129,15 @@ export default function Checkout() {
 
   /* ── Calculations ──────────────────────────────────────────────────── */
   const cartTotal        = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const containerCostsTotal = cart.reduce((s, i) => {
+    const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
+    return s + (isFirstTime ? i.product.container_cost : 0);
+  }, 0);
   const effectiveCode    = consumer?.referral_code_used || (hasCode ? referralCode : '');
   const hasReferral      = !!effectiveCode.trim();
   const effectiveDiscount= hasReferral ? discountPct : 0;
   const discountAmt      = parseFloat((cartTotal * effectiveDiscount / 100).toFixed(2));
-  const finalTotal       = parseFloat((cartTotal - discountAmt).toFixed(2));
+  const finalTotal       = parseFloat((cartTotal - discountAmt + containerCostsTotal).toFixed(2));
 
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {
@@ -609,23 +622,29 @@ export default function Checkout() {
             <h2 className="font-bold text-slate-900 mb-4">Order Summary</h2>
 
             <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-              {cart.map(({ product, quantity }) => (
-                <div key={product.id} className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
-                    {product.image_url
-                      ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                      : <Package size={14} className="text-slate-300 m-auto mt-3" />
-                    }
+              {cart.map(({ product, quantity }) => {
+                const isFirstTime = !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+                return (
+                  <div key={product.id} className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                      {product.image_url
+                        ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                        : <Package size={14} className="text-slate-300 m-auto mt-3" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 leading-snug line-clamp-2">{product.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">×{quantity} · ₹{product.price.toFixed(2)}/{product.unit}</p>
+                      {isFirstTime && (
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{product.container_cost.toFixed(2)} container</p>
+                      )}
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900 flex-shrink-0">
+                      ₹{(product.price * quantity).toFixed(2)}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 leading-snug line-clamp-2">{product.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">×{quantity} · ₹{product.price.toFixed(2)}/{product.unit}</p>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900 flex-shrink-0">
-                    ₹{(product.price * quantity).toFixed(2)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
@@ -639,10 +658,21 @@ export default function Checkout() {
                   <span>−₹{discountAmt.toFixed(2)}</span>
                 </div>
               )}
+              {containerCostsTotal > 0 && (
+                <div className="flex justify-between text-sm text-amber-600 font-semibold">
+                  <span>Container deposit (one-time)</span>
+                  <span>+₹{containerCostsTotal.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
                 <span>Total</span>
                 <span className="text-brand-600">₹{finalTotal.toFixed(2)}</span>
               </div>
+              {containerCostsTotal > 0 && (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  The container deposit is a one-time charge. When you refill the same product, you won't pay this again.
+                </p>
+              )}
             </div>
 
             <button

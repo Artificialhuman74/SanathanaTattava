@@ -408,7 +408,7 @@ router.post('/orders', authConsumer, [
     }
   }
 
-  /* Validate items */
+  /* Validate items (outside transaction — read-only checks) */
   let subtotal = 0;
   const resolved = [];
   for (const item of items) {
@@ -417,28 +417,50 @@ router.post('/orders', authConsumer, [
     if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
     const total = product.price * item.quantity;
     subtotal += total;
-    resolved.push({ ...item, price: product.price, total, name: product.name });
+    resolved.push({ ...item, price: product.price, container_cost: product.container_cost || 0, total, name: product.name });
   }
 
   const discAmt  = parseFloat((subtotal * discPct / 100).toFixed(2));
-  const totalAmt = parseFloat((subtotal - discAmt).toFixed(2));
   const orderNum = `CORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
   const order = db.transaction(() => {
+    /* Container cost check inside the transaction — atomic with the insert,
+       prevents double-charging if two orders are placed simultaneously.
+       Check paid + pending orders so rapid successive placements don't double-charge. */
+    const alreadyOrderedIds = new Set(
+      consumer
+        ? db.prepare(`
+            SELECT DISTINCT coi.product_id
+            FROM consumer_order_items coi
+            JOIN consumer_orders co ON coi.order_id = co.id
+            WHERE co.consumer_id = ? AND co.payment_status IN ('paid', 'pending')
+          `).all(consumer.id).map(r => r.product_id)
+        : []
+    );
+    let containerCostsTotal = 0;
+    const resolvedWithContainer = resolved.map(it => {
+      const itemContainerCost = (!alreadyOrderedIds.has(it.product_id) && it.container_cost > 0)
+        ? parseFloat(it.container_cost.toFixed(2))
+        : 0;
+      containerCostsTotal += itemContainerCost;
+      return { ...it, container_cost: itemContainerCost };
+    });
+    const totalAmt = parseFloat((subtotal - discAmt + containerCostsTotal).toFixed(2));
+
     const or = db.prepare(`
       INSERT INTO consumer_orders
         (order_number,consumer_id,linked_dealer_id,delivery_dealer_id,is_direct,status,payment_status,
-         subtotal,discount_percent,discount_amount,total_amount,pincode,delivery_address,notes,confirmation_sent,
+         subtotal,discount_percent,discount_amount,container_costs_total,total_amount,pincode,delivery_address,notes,confirmation_sent,
          delivery_latitude,delivery_longitude,delivery_h3_index,delivery_distance_km,assignment_status)
-      VALUES (?,?,?,?,?,'pending','pending',?,?,?,?,?,?,?,1,?,?,?,?,?)
+      VALUES (?,?,?,?,?,'pending','pending',?,?,?,?,?,?,?,?,1,?,?,?,?,?)
     `).run(orderNum, consumer.id, linkedDealerId, deliveryDealerId, isDirect,
-           subtotal, discPct, discAmt, totalAmt, pincode, delivery_address, notes||null,
+           subtotal, discPct, discAmt, containerCostsTotal, totalAmt, pincode, delivery_address, notes||null,
            hasGeo ? customerLat : null, hasGeo ? customerLng : null,
            deliveryH3Index, deliveryDistanceKm, assignmentStatus);
 
-    const insI = db.prepare(`INSERT INTO consumer_order_items (order_id,product_id,quantity,price,total) VALUES (?,?,?,?,?)`);
-    for (const it of resolved) {
-      insI.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total);
+    const insI = db.prepare(`INSERT INTO consumer_order_items (order_id,product_id,quantity,price,total,container_cost) VALUES (?,?,?,?,?,?)`);
+    for (const it of resolvedWithContainer) {
+      insI.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total, it.container_cost);
       db.prepare(`UPDATE products SET stock=stock-? WHERE id=?`).run(it.quantity, it.product_id);
     }
 
@@ -518,6 +540,17 @@ router.post('/orders', authConsumer, [
       message: confirmationMsg,
     },
   });
+});
+
+/* ── Auth: Product IDs with active/paid orders (for container cost display) */
+router.get('/ordered-product-ids', authConsumer, (req, res) => {
+  const rows = db.prepare(`
+    SELECT DISTINCT coi.product_id
+    FROM consumer_order_items coi
+    JOIN consumer_orders co ON coi.order_id = co.id
+    WHERE co.consumer_id = ? AND co.payment_status IN ('paid', 'pending')
+  `).all(req.consumer.id);
+  res.json({ product_ids: rows.map(r => r.product_id) });
 });
 
 /* ── Auth: My Orders ──────────────────────────────────────────────────── */

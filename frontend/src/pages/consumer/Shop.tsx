@@ -17,6 +17,7 @@ interface Product {
   description: string;
   category: string;
   price: number;
+  container_cost: number;
   stock: number;
   image_url: string;
   image_urls?: string | null;
@@ -139,6 +140,7 @@ export default function Shop() {
   const [cart, setCart] = useState<CartItem[]>(() => loadCart<Product>());
   const [cartOpen, setCartOpen] = useState(false);
   const [discountPct, setDiscountPct] = useState<number>(0);
+  const [orderedProductIds, setOrderedProductIds] = useState<Set<number>>(new Set());
   const [shakingId, setShakingId] = useState<number | null>(null);
   const [cartIconBounce, setCartIconBounce] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -225,6 +227,13 @@ export default function Shop() {
       .then(r => setDiscountPct(parseFloat(r.data.referral_discount_percent) || 0))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!consumer) { setOrderedProductIds(new Set()); return; }
+    consumerApi.get('/consumer/ordered-product-ids')
+      .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
+      .catch(() => {});
+  }, [consumer]);
 
   const cartInProduct = (id: number) => cart.find(i => i.product.id === id)?.quantity ?? 0;
 
@@ -528,6 +537,10 @@ export default function Shop() {
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const containerCostsTotal = cart.reduce((s, i) => {
+    const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
+    return s + (isFirstTime ? i.product.container_cost : 0);
+  }, 0);
 
   // Persist cart and broadcast cart count to shared header/state listeners.
   useEffect(() => {
@@ -675,6 +688,9 @@ export default function Shop() {
                   <div className="mt-2">
                     <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400 truncate">per {p.unit || 'can'}</p>
+                    {(p.container_cost || 0) > 0 && !orderedProductIds.has(p.id) && (
+                      <p className="text-[11px] text-amber-600 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} container (one-time)</p>
+                    )}
                   </div>
                 </div>
 
@@ -764,6 +780,9 @@ export default function Shop() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-xl font-extrabold text-slate-900">₹{selectedProduct.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400">per {selectedProduct.unit || 'can'}</p>
+                    {(selectedProduct.container_cost || 0) > 0 && !orderedProductIds.has(selectedProduct.id) && (
+                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} container (one-time)</p>
+                    )}
                   </div>
                 </div>
 
@@ -923,46 +942,62 @@ export default function Shop() {
                 <p className="font-medium">Your cart is empty</p>
                 <p className="text-xs mt-1">Add some products to get started</p>
               </div>
-            ) : cart.map(({ product, quantity }) => (
-              <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
-                <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
-                  {getPrimaryImage(product)
-                    ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
-                    : <Package size={18} className="text-slate-300 m-auto mt-4" />
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
-                  <p className="text-xs text-brand-600 font-semibold mt-0.5">₹{product.price.toFixed(2)}/{product.unit || 'unit'}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => updateQty(product.id, quantity - 1)}
-                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
-                    >
-                      <Minus size={12} />
-                    </button>
-                    <span className="text-sm font-bold w-6 text-center">{quantity}</span>
-                    <button
-                      onClick={() => updateQty(product.id, quantity + 1)}
-                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
-                    >
-                      <Plus size={12} />
-                    </button>
-                    <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
+            ) : cart.map(({ product, quantity }) => {
+              const isFirstTime = !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+              return (
+                <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
+                  <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                    {getPrimaryImage(product)
+                      ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
+                      : <Package size={18} className="text-slate-300 m-auto mt-4" />
+                    }
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
+                    <p className="text-xs text-brand-600 font-semibold mt-0.5">₹{product.price.toFixed(2)}/{product.unit || 'unit'}</p>
+                    {isFirstTime && (
+                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{product.container_cost.toFixed(2)} container (one-time)</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => updateQty(product.id, quantity - 1)}
+                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="text-sm font-bold w-6 text-center">{quantity}</span>
+                      <button
+                        onClick={() => updateQty(product.id, quantity + 1)}
+                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                      >
+                        <Plus size={12} />
+                      </button>
+                      <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => removeFromCart(product.id)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
+                    <Trash2 size={15} />
+                  </button>
                 </div>
-                <button onClick={() => removeFromCart(product.id)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {cart.length > 0 && (
-            <div className="p-4 border-t border-slate-100 space-y-3 flex-shrink-0 pb-safe">
+            <div className="p-4 border-t border-slate-100 space-y-2 flex-shrink-0 pb-safe">
+              <div className="flex justify-between items-center text-sm text-slate-500">
+                <span>{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
+                <span>₹{cartTotal.toFixed(2)}</span>
+              </div>
+              {containerCostsTotal > 0 && (
+                <div className="flex justify-between items-center text-sm text-amber-600 font-medium">
+                  <span>Container (one-time)</span>
+                  <span>+₹{containerCostsTotal.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
-                <span className="text-slate-500 text-sm">{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
-                <span className="text-xl font-extrabold text-brand-600">₹{cartTotal.toFixed(2)}</span>
+                <span className="font-bold text-slate-900">Total</span>
+                <span className="text-xl font-extrabold text-brand-600">₹{(cartTotal + containerCostsTotal).toFixed(2)}</span>
               </div>
               {consumer?.referral_code_used && discountPct > 0 && (
                 <p className="text-xs text-emerald-600 flex items-center gap-1 font-medium">

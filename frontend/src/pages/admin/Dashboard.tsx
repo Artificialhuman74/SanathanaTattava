@@ -60,7 +60,7 @@ export default function AdminDashboard() {
     { label: 'B2B Orders',          value: stats.totalOrders,   sub: `${stats.pendingOrders} pending`,                                   icon: ShoppingCart, color: 'violet',  link: '/admin/orders' },
     { label: 'Consumer Orders',     value: stats.consumerOrders, sub: 'Total placed',                                                    icon: ShoppingBag,  color: 'pink',    link: '/admin/consumer-orders' },
     { label: 'Total Revenue',       value: `₹${stats.revenue?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'From delivered orders', icon: TrendingUp, color: 'gold', link: null },
-    { label: 'Pending Commissions', value: `₹${stats.pendingCommissions?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'To be paid out', icon: Wallet, color: 'amber', link: '/admin/commissions' },
+    { label: 'Pending Commissions', value: `₹${stats.pendingCommissions?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'To be paid out', icon: Wallet, color: 'amber', link: '/admin/payouts' },
   ];
 
   const colorMap: Record<string, string> = {
@@ -258,7 +258,7 @@ export default function AdminDashboard() {
             { label: 'Traders',          icon: Users,        path: '/admin/traders',         color: 'bg-brand-50 text-brand-600' },
             { label: 'B2B Orders',       icon: ShoppingCart, path: '/admin/orders',          color: 'bg-violet-50 text-violet-600' },
             { label: 'Consumer Orders',  icon: ShoppingBag,  path: '/admin/consumer-orders', color: 'bg-pink-50 text-pink-600' },
-            { label: 'Commissions',      icon: DollarSign,   path: '/admin/commissions',     color: 'bg-amber-50 text-amber-600' },
+            { label: 'Payouts',          icon: DollarSign,   path: '/admin/payouts',         color: 'bg-amber-50 text-amber-600' },
           ].map(({ label, icon: Icon, path, color }) => (
             <button
               key={label}

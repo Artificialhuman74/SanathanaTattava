@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Users, ShoppingBag,
-  DollarSign, LogOut, Menu, X, ChevronRight,
+  LogOut, Menu, X, ChevronRight,
   UserCheck, Settings, Warehouse, Truck, Landmark,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
@@ -15,7 +15,6 @@ const navItems = [
   { to: '/admin/consumer-orders', icon: ShoppingBag,     label: 'Consumer Orders' },
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
   { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Partner Inventory' },
-  { to: '/admin/commissions',     icon: DollarSign,      label: 'Commissions' },
   { to: '/admin/payouts',         icon: Landmark,        label: 'Payouts' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
   { to: '/delivery/login',        icon: Truck,           label: 'Delivery' },
