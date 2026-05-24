@@ -137,9 +137,11 @@ export default function Checkout() {
   const hasReferral      = !!effectiveCode.trim();
   const effectiveDiscount= hasReferral ? discountPct : 0;
   const discountAmt      = parseFloat((cartTotal * effectiveDiscount / 100).toFixed(2));
+  /* Round UP to whole rupee — must mirror the server's Math.ceil so the
+   * "Pay ₹X" button shows the exact amount Razorpay will charge. */
   const finalTotal       = containerCostsTotal === null
     ? null
-    : parseFloat((cartTotal - discountAmt + containerCostsTotal).toFixed(2));
+    : Math.ceil(cartTotal - discountAmt + containerCostsTotal);
 
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {

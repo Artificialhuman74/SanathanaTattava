@@ -445,7 +445,10 @@ router.post('/orders', authConsumer, [
       containerCostsTotal += itemContainerCost;
       return { ...it, container_cost: itemContainerCost };
     });
-    const totalAmt = parseFloat((subtotal - discAmt + containerCostsTotal).toFixed(2));
+    /* Round the final charge UP to the nearest whole rupee so the consumer is
+     * billed an integer amount and our Razorpay invoice line items (clamped to
+     * ≥ ₹1.00 each by gateway rules) can sum cleanly to the same total. */
+    const totalAmt = Math.ceil(subtotal - discAmt + containerCostsTotal);
 
     const or = db.prepare(`
       INSERT INTO consumer_orders

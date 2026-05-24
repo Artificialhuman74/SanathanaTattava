@@ -998,7 +998,7 @@ export default function Shop() {
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Total</span>
                 <span className="text-xl font-extrabold text-brand-600">
-                  {containerCostsTotal === null ? '…' : `₹${(cartTotal + containerCostsTotal).toFixed(2)}`}
+                  {containerCostsTotal === null ? '…' : `₹${Math.ceil(cartTotal + containerCostsTotal)}`}
                 </span>
               </div>
               {consumer?.referral_code_used && discountPct > 0 && (

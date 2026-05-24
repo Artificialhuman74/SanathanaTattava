@@ -8,22 +8,25 @@ const razorpay = process.env.RAZORPAY_KEY_ID
 const SHOP_URL = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
 
 /**
- * Create Razorpay Invoice(s) for a consumer order after payment is confirmed.
+ * Create a single Razorpay Invoice for an already-paid consumer order.
  *
- * - Normal order  → one invoice (products only), terms = thank-you note.
- * - First-time order containing refundable containers → two invoices:
- *     1) Products invoice  → terms tell consumer the container invoice is coming.
- *     2) Container invoice → separate, refundable-deposit note.
+ * We link to the existing razorpay_order_id so Razorpay marks the invoice as
+ * PAID automatically (no "Proceed to Pay" button — it's a receipt). Razorpay
+ * itself SMS/emails the consumer the hosted invoice link.
  *
- * Only the products invoice is returned to the caller (its short_url is what
- * we embed in the order-confirmation email). Razorpay itself SMS/emails both.
+ * Container deposits (first-time orders) appear as a separate line item with
+ * a refundable-deposit note in the terms.
  */
 async function sendOrderInvoice(orderId) {
   if (!razorpay) return;
 
   const order = db.prepare('SELECT * FROM consumer_orders WHERE id = ?').get(orderId);
   if (!order) return;
-  if (order.razorpay_invoice_id) return; // already created
+  if (order.razorpay_invoice_id) return;             // already created
+  if (!order.razorpay_order_id) {                    // can't link → skip
+    console.log(`[invoice] skipping order ${order.order_number} — no razorpay_order_id`);
+    return;
+  }
 
   const consumer = db.prepare('SELECT * FROM consumers WHERE id = ?').get(order.consumer_id);
   if (!consumer) return;
@@ -45,12 +48,12 @@ async function sendOrderInvoice(orderId) {
   const discountFactor = order.discount_percent > 0 ? (1 - order.discount_percent / 100) : 1;
 
   /* Razorpay rejects line items below INR 1.00, so we clamp to 100 paise.
-   * Track whether any line was rounded up so we can disclose it on the invoice. */
-  let productsRounded = false;
-  const productLineItems = items.map(item => {
+   * Track whether any line was rounded so we can disclose it on the invoice. */
+  let anyRounded = false;
+  const lineItems = items.map(item => {
     const raw     = Math.round(item.price * discountFactor * 100);
     const clamped = Math.max(100, raw);
-    if (clamped !== raw) productsRounded = true;
+    if (clamped !== raw) anyRounded = true;
     return {
       name:        item.product_name,
       description: `per ${item.unit || 'unit'}`,
@@ -59,13 +62,21 @@ async function sendOrderInvoice(orderId) {
     };
   });
 
-  const phone = consumer.phone ? consumer.phone.replace(/^(\+91|91)/, '').replace(/\D/g, '') : null;
   const containerTotal = order.container_costs_total || 0;
   const hasContainer = containerTotal > 0;
-  const rawContainerPaise = Math.round(containerTotal * 100);
-  const containerRounded = hasContainer && rawContainerPaise < 100;
+  if (hasContainer) {
+    const rawContainer     = Math.round(containerTotal * 100);
+    const clampedContainer = Math.max(100, rawContainer);
+    if (clampedContainer !== rawContainer) anyRounded = true;
+    lineItems.push({
+      name:        'Refundable Container Deposit',
+      description: 'One-time · Refundable if returned undamaged',
+      amount:      clampedContainer,
+      quantity:    1,
+    });
+  }
 
-  const ROUNDING_NOTE = 'Note: line items below ₹1.00 are shown rounded up to ₹1.00 per unit due to gateway minimums; the actual amount charged matches your order total.';
+  const phone = consumer.phone ? consumer.phone.replace(/^(\+91|91)/, '').replace(/\D/g, '') : null;
 
   /* Build address from the order's delivery info; mirror to billing + shipping. */
   const address = order.delivery_address && order.delivery_pincode
@@ -82,11 +93,8 @@ async function sendOrderInvoice(orderId) {
     ...(consumer.email ? { email:   consumer.email } : {}),
     ...(address        ? { billing_address: address, shipping_address: address } : {}),
   };
-  const notifyFlags = {
-    sms_notify:   phone          ? 1 : 0,
-    email_notify: consumer.email ? 1 : 0,
-  };
-  /* Issue date = order's created_at (in IST it'll render as the order's day).
+
+  /* Issue date = order's created_at (in IST it renders as the order's day).
    * Expiry  = end of that same IST calendar day (23:59:59 +05:30).
    * SQLite CURRENT_TIMESTAMP is UTC, so parse explicitly as UTC. */
   const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
@@ -99,33 +107,32 @@ async function sendOrderInvoice(orderId) {
     23, 59, 59,
   ) - IST_OFFSET_MS);
 
-  const nowSec   = Math.floor(Date.now() / 1000);
-  const dateSec  = Math.floor(createdUtc.getTime() / 1000);
-  /* Razorpay requires expire_by to be strictly in the future; pad if needed. */
+  const nowSec  = Math.floor(Date.now() / 1000);
+  const dateSec = Math.floor(createdUtc.getTime() / 1000);
   const expireBy = Math.max(Math.floor(istEndOfDay.getTime() / 1000), nowSec + 900);
 
-  /* ── 1) Products invoice ──────────────────────────────────────────────── */
-  const productsBaseTerms = hasContainer
-    ? 'A separate invoice for your refundable container deposit will be sent shortly.'
+  /* Compose terms. */
+  const baseTerms = hasContainer
+    ? 'Thank you for choosing SanathanaTattva. Your container deposit is fully refundable if returned undamaged.'
     : 'Thank you for choosing SanathanaTattva.';
-  const productsTerms = productsRounded
-    ? `${productsBaseTerms} ${ROUNDING_NOTE}`
-    : productsBaseTerms;
+  const ROUNDING_NOTE = 'Note: line items below ₹1.00 are shown rounded up to ₹1.00 per unit due to gateway minimums; the actual amount charged matches your order total.';
+  const terms = anyRounded ? `${baseTerms} ${ROUNDING_NOTE}` : baseTerms;
 
-  const productsInvoice = await razorpay.invoices.create({
+  const invoice = await razorpay.invoices.create({
     type:        'invoice',
+    order_id:    order.razorpay_order_id, // links to the already-paid order → auto-marked PAID
     description: `Order ${order.order_number} — Sanathana Tattva`,
     customer,
-    line_items:  productLineItems,
+    line_items:  lineItems,
     currency:    'INR',
     date:        dateSec,
     expire_by:   expireBy,
-    ...notifyFlags,
-    terms:       productsTerms,
+    sms_notify:   phone          ? 1 : 0,
+    email_notify: consumer.email ? 1 : 0,
+    terms,
     notes: {
       order_number: order.order_number,
       order_id:     String(order.id),
-      kind:         'products',
       track_url:    `${SHOP_URL}/shop/orders`,
     },
   });
@@ -134,59 +141,10 @@ async function sendOrderInvoice(orderId) {
     UPDATE consumer_orders
     SET razorpay_invoice_id = ?, razorpay_invoice_status = ?
     WHERE id = ?
-  `).run(productsInvoice.id, productsInvoice.status, orderId);
+  `).run(invoice.id, invoice.status, orderId);
 
-  console.log(`[invoice] ${productsInvoice.id} (products) created for order ${order.order_number} (${productsInvoice.status})`);
-
-  /* ── 2) Container invoice (only on first-time container orders) ───────── */
-  if (hasContainer) {
-    try {
-      const containerInvoice = await razorpay.invoices.create({
-        type:        'invoice',
-        description: `Container Deposit — Order ${order.order_number}`,
-        customer,
-        line_items: [{
-          name:        'Refundable Container Deposit',
-          description: 'One-time · Refundable if returned undamaged',
-          amount:      Math.max(100, Math.round(containerTotal * 100)), // paise; Razorpay min is INR 1.00
-          quantity:    1,
-        }],
-        currency:   'INR',
-        date:       dateSec,
-        expire_by:  expireBy,
-        ...notifyFlags,
-        terms:      containerRounded
-          ? `This container deposit is fully refundable if returned undamaged. ${ROUNDING_NOTE}`
-          : 'This container deposit is fully refundable if returned undamaged.',
-        notes: {
-          order_number: order.order_number,
-          order_id:     String(order.id),
-          kind:         'container_deposit',
-        },
-      });
-
-      db.prepare(`
-        UPDATE consumer_orders
-        SET razorpay_container_invoice_id = ?, razorpay_container_invoice_status = ?
-        WHERE id = ?
-      `).run(containerInvoice.id, containerInvoice.status, orderId);
-
-      console.log(`[invoice] ${containerInvoice.id} (container) created for order ${order.order_number} (${containerInvoice.status})`);
-    } catch (err) {
-      const rzpErr = err?.error || err;
-      console.error(`[invoice] container invoice failed for order ${order.order_number}:`, {
-        statusCode:  err?.statusCode,
-        code:        rzpErr?.code,
-        description: rzpErr?.description,
-        field:       rzpErr?.field,
-        reason:      rzpErr?.reason,
-        message:     err?.message,
-        raw:         JSON.stringify(err),
-      });
-    }
-  }
-
-  return productsInvoice;
+  console.log(`[invoice] ${invoice.id} created for order ${order.order_number} (${invoice.status})`);
+  return invoice;
 }
 
 module.exports = { sendOrderInvoice };

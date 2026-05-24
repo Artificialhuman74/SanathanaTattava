@@ -28,12 +28,16 @@ async function sendMail({ to, subject, text, html }) {
     body: JSON.stringify({ from: FROM, to, subject, text, html }),
   });
 
+  const bodyText = await res.text();
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend API error ${res.status}: ${err}`);
+    console.error(`[email] FAILED to=${to} subject="${subject}" status=${res.status} body=${bodyText}`);
+    throw new Error(`Resend API error ${res.status}: ${bodyText}`);
   }
 
-  return { dev: false };
+  let id;
+  try { id = JSON.parse(bodyText)?.id; } catch {}
+  console.log(`[email] sent to=${to} subject="${subject}" resend_id=${id || '?'}`);
+  return { dev: false, id };
 }
 
 /* ── Email verification ───────────────────────────────────────────────── */
