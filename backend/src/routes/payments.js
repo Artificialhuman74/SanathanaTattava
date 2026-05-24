@@ -332,8 +332,8 @@ router.post('/refund', authenticate, requireAdmin, auditLog('refund'), async (re
   try {
     const refund = await razorpay.payments.refund(order.razorpay_payment_id, {
       amount: refundAmt,
-      notes:  { reason: reason || 'admin_initiated', order_number: order.order_number },
-    }, { 'X-Razorpay-Idempotency': idempotencyKey('refund', order.id) });
+      notes:  { reason: reason || 'admin_initiated', order_number: order.order_number, idempotency_key: idempotencyKey('refund', order.id) },
+    });
 
     db.prepare(`UPDATE consumer_orders SET refund_id=?, refund_status=?, refund_amount=?, status='cancelled' WHERE id=?`)
       .run(refund.id, refund.status, refund.amount / 100, order.id);
@@ -653,6 +653,36 @@ router.post('/stakeholder', authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[razorpay] stakeholder error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to add stakeholder' });
+  }
+});
+
+/* ── POST /api/payments/sync-transfer (admin) ────────────────────────────
+ * Pull the current transfer status from Razorpay and update the commission.
+ * Useful when the transfer.processed/failed webhook was missed.
+ */
+router.post('/sync-transfer', authenticate, requireAdmin, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { commission_id } = req.body;
+  if (!commission_id) return res.status(400).json({ error: 'commission_id required' });
+
+  const comm = db.prepare('SELECT * FROM commissions WHERE id=?').get(commission_id);
+  if (!comm) return res.status(404).json({ error: 'Commission not found' });
+  if (!comm.razorpay_transfer_id) return res.status(400).json({ error: 'No transfer ID — transfer has not been initiated yet' });
+
+  try {
+    const transfer = await razorpay.transfers.fetch(comm.razorpay_transfer_id);
+    console.log('[sync-transfer] transfer status:', transfer.status, 'for', comm.razorpay_transfer_id);
+
+    const mapped =
+      transfer.status === 'processed' ? 'transferred' :
+      transfer.status === 'failed'    ? 'transfer_failed' :
+      comm.status; // no change for 'created' or unknown
+
+    db.prepare('UPDATE commissions SET status=? WHERE id=?').run(mapped, comm.id);
+    res.json({ success: true, razorpay_status: transfer.status, mapped_status: mapped });
+  } catch (err) {
+    console.error('[razorpay] sync-transfer error:', err.error?.description || err.message);
+    res.status(500).json({ error: err.error?.description || 'Failed to sync transfer status' });
   }
 });
 

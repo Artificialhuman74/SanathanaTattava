@@ -62,10 +62,11 @@ export default function AdminPayouts() {
   const [commissions, setCommissions]       = useState<PendingCommission[]>([]);
   const [loading, setLoading]               = useState(true);
   const [traderFilter, setTraderFilter]     = useState<number | ''>('');
-  const [busyTraderId, setBusyTraderId]         = useState<number | null>(null);
-  const [busyCommissionId, setBusyCommissionId] = useState<number | null>(null);
-  const [busyStep, setBusyStep]                 = useState<string | null>(null);
-  const [payingAll, setPayingAll]           = useState(false);
+  const [busyTraderId, setBusyTraderId]             = useState<number | null>(null);
+  const [busyCommissionId, setBusyCommissionId]     = useState<number | null>(null);
+  const [syncingCommissionId, setSyncingCommissionId] = useState<number | null>(null);
+  const [busyStep, setBusyStep]                     = useState<string | null>(null);
+  const [payingAll, setPayingAll]                   = useState(false);
 
   const fetchAll = useCallback(() => {
     setLoading(true);
@@ -137,6 +138,25 @@ export default function AdminPayouts() {
       toast.error(err?.response?.data?.error || 'Pay all failed');
     } finally {
       setPayingAll(false);
+    }
+  };
+
+  const handleSyncTransfer = async (c: PendingCommission) => {
+    setSyncingCommissionId(c.id);
+    try {
+      const { data } = await api.post('/payments/sync-transfer', { commission_id: c.id });
+      if (data.mapped_status === 'transferred') {
+        toast.success(`Transfer confirmed as processed`);
+      } else if (data.mapped_status === 'transfer_failed') {
+        toast.error(`Transfer failed on Razorpay`);
+      } else {
+        toast(`Transfer status: ${data.razorpay_status}`, { icon: 'ℹ️' });
+      }
+      fetchAll();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to sync transfer');
+    } finally {
+      setSyncingCommissionId(null);
     }
   };
 
@@ -406,6 +426,17 @@ export default function AdminPayouts() {
                             ? <Loader2 size={12} className="animate-spin" />
                             : <Send size={12} />}
                           {busyCommissionId === c.id ? 'Transferring...' : 'Transfer'}
+                        </button>
+                      ) : c.status === 'transferring' && c.razorpay_transfer_id ? (
+                        <button
+                          onClick={() => handleSyncTransfer(c)}
+                          disabled={syncingCommissionId === c.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {syncingCommissionId === c.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <RefreshCw size={12} />}
+                          {syncingCommissionId === c.id ? 'Checking…' : 'Sync'}
                         </button>
                       ) : (
                         <span className="text-xs text-slate-400" title={blockedReason}>{blockedReason || '—'}</span>

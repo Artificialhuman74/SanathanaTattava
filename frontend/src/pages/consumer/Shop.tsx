@@ -892,7 +892,7 @@ export default function Shop() {
         {/* Mobile: bottom sheet | Desktop: right drawer */}
         <div className={`
           absolute bg-white shadow-2xl flex flex-col
-          sm:right-0 sm:top-0 sm:h-full sm:w-full sm:max-w-sm sm:rounded-none sm:rounded-l-2xl
+          sm:left-auto sm:right-0 sm:top-0 sm:h-full sm:max-h-full sm:w-full sm:max-w-sm sm:rounded-none sm:rounded-l-2xl
           inset-x-0 bottom-0 max-h-[88vh] rounded-t-3xl
           sm:transition-transform sm:duration-300 sm:ease-out
           transition-transform duration-300 ease-out
