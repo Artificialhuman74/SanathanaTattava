@@ -13,6 +13,7 @@ const { returnOrderInventory } = require('../services/inventoryService');
 const { emitOrderUpdate } = require('../websocket/socketServer');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
 const { auditLog } = require('../middleware/auditLog');
+const { sendOrderConfirmedEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -216,6 +217,15 @@ router.post('/verify', authConsumer, (req, res) => {
       deliveryDealerId: order.delivery_dealer_id,
       extra: { event: 'order_paid' },
     });
+  } catch { /* non-fatal */ }
+
+  /* Email consumer: order confirmed */
+  try {
+    const consumer = db.prepare('SELECT name, email FROM consumers WHERE id=?').get(order.consumer_id);
+    if (consumer?.email) {
+      sendOrderConfirmedEmail(consumer.email, consumer.name, order.order_number)
+        .catch(err => console.error('[email] order-confirmed failed:', err.message));
+    }
   } catch { /* non-fatal */ }
 
   res.json({ success: true });

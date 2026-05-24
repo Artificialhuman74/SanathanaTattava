@@ -7,7 +7,7 @@ const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
 const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
-const { sendDeliveryOtpEmail } = require('../services/emailService');
+const { sendDeliveryOtpEmail, sendOutForDeliveryEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -294,9 +294,15 @@ router.post('/orders/:id/start-delivery', param('id').isInt(), async (req, res) 
         { orderNumber: order.order_number, delivery_status: 'out_for_delivery', otp }
       );
     }
-    if (order.consumer_email) {
-      sendDeliveryOtpEmail(order.consumer_email, order.consumer_name, otp, order.order_number)
+    // Fetch consumer directly to guarantee email is populated (JOIN alias can be unreliable)
+    const consumer = db.prepare('SELECT name, email FROM consumers WHERE id = ?').get(order.consumer_id);
+    if (consumer?.email) {
+      sendOutForDeliveryEmail(consumer.email, consumer.name, order.order_number)
+        .catch(err => console.error('[delivery] out-for-delivery email failed:', err.message));
+      sendDeliveryOtpEmail(consumer.email, consumer.name, otp, order.order_number)
         .catch(err => console.error('[delivery] OTP email failed:', err.message));
+    } else {
+      console.warn('[delivery] no consumer email found for consumer_id', order.consumer_id);
     }
 
     emitOrderUpdate({

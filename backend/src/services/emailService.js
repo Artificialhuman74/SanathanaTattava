@@ -127,6 +127,66 @@ function buildEmailHtml({ title, preheader, body, footer }) {
 </html>`.trim();
 }
 
+const SHOP_URL = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+
+/* ── Order Confirmed ──────────────────────────────────────────────────── */
+async function sendOrderConfirmedEmail(toEmail, consumerName, orderNumber) {
+  const trackUrl = `${SHOP_URL}/shop/orders`;
+  const subject  = `Order confirmed — ${orderNumber}`;
+  const text     = `Hi ${consumerName || 'there'},\n\nYour order ${orderNumber} has been confirmed and is being prepared.\n\nTrack your order: ${trackUrl}\n\nThank you for shopping with Sanathana Tattva.`;
+  const html     = buildEmailHtml({
+    title:    'Order Confirmed',
+    preheader: `Your order ${orderNumber} is confirmed and being prepared`,
+    body: `
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#0f172a;font-size:15px;line-height:1.6;">
+        Your order <strong style="color:#14532d;">#${orderNumber}</strong> has been <strong>confirmed</strong> and is being prepared for delivery.
+      </p>
+      <div style="text-align:center;margin:0 0 28px;">
+        <a href="${trackUrl}" style="display:inline-block;background:#14532d;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:12px;">
+          Track My Order →
+        </a>
+      </div>
+      <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">
+        You'll receive another email when your order is out for delivery.
+      </p>
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+/* ── Out For Delivery ─────────────────────────────────────────────────── */
+async function sendOutForDeliveryEmail(toEmail, consumerName, orderNumber) {
+  const trackUrl = `${SHOP_URL}/shop/orders`;
+  const subject  = `Your order is on the way — ${orderNumber}`;
+  const text     = `Hi ${consumerName || 'there'},\n\nGreat news! Your order ${orderNumber} is out for delivery and will arrive soon.\n\nTrack your order: ${trackUrl}\n\nYou'll receive a separate message with your delivery OTP code shortly.`;
+  const html     = buildEmailHtml({
+    title:    'Out For Delivery',
+    preheader: `Your order ${orderNumber} is on its way to you`,
+    body: `
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#0f172a;font-size:15px;line-height:1.6;">
+        Great news! Your order <strong style="color:#14532d;">#${orderNumber}</strong> is <strong>out for delivery</strong> and will arrive at your doorstep soon.
+      </p>
+      <div style="text-align:center;margin:0 0 28px;">
+        <a href="${trackUrl}" style="display:inline-block;background:#14532d;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:12px;">
+          Track My Order →
+        </a>
+      </div>
+      <p style="margin:0;color:#64748b;font-size:13px;text-align:center;">
+        You'll receive your delivery OTP code in a separate email — share it only with your delivery agent to confirm receipt.
+      </p>
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
 /* ── Delivery OTP ─────────────────────────────────────────────────────── */
 async function sendDeliveryOtpEmail(toEmail, consumerName, otp, orderNumber) {
   const subject = `Your delivery code — Order ${orderNumber}`;
@@ -304,5 +364,6 @@ async function sendAdminStockAlert({ dealerName, orderNumber, errorMessage }) {
 
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
-  sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert, DEV_MODE,
+  sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
+  sendOrderConfirmedEmail, sendOutForDeliveryEmail, DEV_MODE,
 };
