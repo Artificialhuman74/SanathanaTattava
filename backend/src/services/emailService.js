@@ -130,10 +130,10 @@ function buildEmailHtml({ title, preheader, body, footer }) {
 const SHOP_URL = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
 
 /* ── Order Confirmed ──────────────────────────────────────────────────── */
-async function sendOrderConfirmedEmail(toEmail, consumerName, orderNumber) {
+async function sendOrderConfirmedEmail(toEmail, consumerName, orderNumber, invoiceUrl = null) {
   const trackUrl = `${SHOP_URL}/shop/orders`;
   const subject  = `Order confirmed — ${orderNumber}`;
-  const text     = `Hi ${consumerName || 'there'},\n\nYour order ${orderNumber} has been confirmed and is being prepared.\n\nTrack your order: ${trackUrl}\n\nThank you for shopping with Sanathana Tattva.`;
+  const text     = `Hi ${consumerName || 'there'},\n\nYour order ${orderNumber} has been confirmed and is being prepared.\n\nTrack your order: ${trackUrl}${invoiceUrl ? `\n\nView your invoice: ${invoiceUrl}` : ''}\n\nThank you for shopping with Sanathana Tattva.`;
   const html     = buildEmailHtml({
     title:    'Order Confirmed',
     preheader: `Your order ${orderNumber} is confirmed and being prepared`,
@@ -149,6 +149,13 @@ async function sendOrderConfirmedEmail(toEmail, consumerName, orderNumber) {
           Track My Order →
         </a>
       </div>
+      ${invoiceUrl ? `
+      <div style="text-align:center;margin:0 0 28px;">
+        <a href="${invoiceUrl}" style="display:inline-block;background:#f8fafc;color:#14532d;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:12px;border:1.5px solid #14532d;">
+          View Invoice →
+        </a>
+      </div>
+      ` : ''}
       <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">
         You'll receive another email when your order is out for delivery.
       </p>

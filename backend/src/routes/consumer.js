@@ -540,6 +540,7 @@ router.post('/orders', authConsumer, [
       message: confirmationMsg,
     },
   });
+
 });
 
 /* ── Auth: Product IDs with active/paid orders (for container cost display) */

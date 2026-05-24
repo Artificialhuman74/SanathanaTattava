@@ -511,6 +511,24 @@ function runMigrations(db) {
     WHERE role = 'admin'
   `);
 
+  /* ── Razorpay Invoice columns ───────────────────────────────────────── */
+  if (!hasColumn('consumer_orders', 'razorpay_invoice_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_invoice_id TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_invoice_id');
+  }
+  if (!hasColumn('consumer_orders', 'razorpay_invoice_status')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_invoice_status TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_invoice_status');
+  }
+  if (!hasColumn('consumer_orders', 'razorpay_container_invoice_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_container_invoice_id TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_container_invoice_id');
+  }
+  if (!hasColumn('consumer_orders', 'razorpay_container_invoice_status')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN razorpay_container_invoice_status TEXT`);
+    console.log('[migration] consumer_orders: added razorpay_container_invoice_status');
+  }
+
   /* ── Container cost columns ─────────────────────────────────────────── */
   if (!hasColumn('products', 'container_cost')) {
     db.exec(`ALTER TABLE products ADD COLUMN container_cost REAL NOT NULL DEFAULT 0`);

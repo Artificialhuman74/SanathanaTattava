@@ -14,6 +14,7 @@ const { emitOrderUpdate } = require('../websocket/socketServer');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
 const { auditLog } = require('../middleware/auditLog');
 const { sendOrderConfirmedEmail } = require('../services/emailService');
+const { sendOrderInvoice } = require('../services/invoiceService');
 
 const router = express.Router();
 
@@ -79,7 +80,7 @@ router.post('/create-order', authConsumer, async (req, res) => {
 });
 
 /* ── POST /api/payments/verify ───────────────────────────────────────── */
-router.post('/verify', authConsumer, (req, res) => {
+router.post('/verify', authConsumer, async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, consumer_order_id } = req.body;
 
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !consumer_order_id)
@@ -219,11 +220,20 @@ router.post('/verify', authConsumer, (req, res) => {
     });
   } catch { /* non-fatal */ }
 
-  /* Email consumer: order confirmed */
+  /* Create Razorpay Invoice + send via SMS & email, then include link in confirmation email */
+  let invoiceUrl = null;
+  try {
+    const invoice = await sendOrderInvoice(order.id);
+    invoiceUrl = invoice?.short_url || null;
+  } catch (err) {
+    console.error('[invoice] post-payment create failed:', err.message);
+  }
+
+  /* Email consumer: order confirmed (with invoice link if available) */
   try {
     const consumer = db.prepare('SELECT name, email FROM consumers WHERE id=?').get(order.consumer_id);
     if (consumer?.email) {
-      sendOrderConfirmedEmail(consumer.email, consumer.name, order.order_number)
+      sendOrderConfirmedEmail(consumer.email, consumer.name, order.order_number, invoiceUrl)
         .catch(err => console.error('[email] order-confirmed failed:', err.message));
     }
   } catch { /* non-fatal */ }
@@ -299,6 +309,61 @@ router.post('/webhook', (req, res) => {
         const t = event.payload.transfer.entity;
         const status = event.event === 'transfer.processed' ? 'transferred' : 'transfer_failed';
         db.prepare(`UPDATE commissions SET status=? WHERE razorpay_transfer_id=?`).run(status, t.id);
+        break;
+      }
+      case 'invoice.paid': {
+        const inv = event.payload.invoice.entity;
+        const order = db.prepare('SELECT * FROM consumer_orders WHERE razorpay_invoice_id = ?').get(inv.id);
+        if (!order) { console.log(`[webhook] invoice.paid — no order for invoice ${inv.id}`); break; }
+
+        db.prepare(`UPDATE consumer_orders SET razorpay_invoice_status = 'paid' WHERE id = ?`).run(order.id);
+
+        if (order.payment_status === 'paid') break; // already paid via web checkout
+
+        /* Mark paid + record commissions (same as /verify) */
+        db.transaction(() => {
+          db.prepare(`
+            UPDATE consumer_orders
+            SET payment_status='paid', status='confirmed', razorpay_payment_id=?
+            WHERE id=?
+          `).run(inv.payment_id || null, order.id);
+
+          if (!order.is_direct && order.linked_dealer_id) {
+            const dealer = db.prepare('SELECT * FROM users WHERE id=?').get(order.linked_dealer_id);
+            if (dealer) {
+              const now = new Date();
+              const ws  = new Date(now); ws.setDate(now.getDate() - now.getDay() + 1);
+              const we  = new Date(ws);  we.setDate(ws.getDate() + 6);
+              const commAmt = parseFloat((order.total_amount * dealer.commission_rate / 100).toFixed(2));
+              db.prepare(`
+                INSERT OR IGNORE INTO commissions (trader_id,consumer_order_id,amount,rate,type,status,week_start,week_end)
+                VALUES (?,?,?,?,'direct','pending',?,?)
+              `).run(dealer.id, order.id, commAmt, dealer.commission_rate, ws.toISOString().slice(0,10), we.toISOString().slice(0,10));
+              if (dealer.tier === 2 && dealer.referred_by_id) {
+                const parent    = db.prepare('SELECT * FROM users WHERE id=?').get(dealer.referred_by_id);
+                const parentAmt = parseFloat((order.total_amount * parent.commission_rate / 100).toFixed(2));
+                db.prepare(`
+                  INSERT OR IGNORE INTO commissions (trader_id,consumer_order_id,amount,rate,type,status,week_start,week_end)
+                  VALUES (?,?,?,?,'override','pending',?,?)
+                `).run(parent.id, order.id, parentAmt, parent.commission_rate, ws.toISOString().slice(0,10), we.toISOString().slice(0,10));
+              }
+            }
+          }
+        })();
+
+        /* Notifications */
+        try { emitOrderUpdate({ orderId: order.id, orderNumber: order.order_number, status: 'confirmed', consumerId: order.consumer_id, linkedDealerId: order.linked_dealer_id, deliveryDealerId: order.delivery_dealer_id, extra: { event: 'order_paid' } }); } catch {}
+        try {
+          const c = db.prepare('SELECT name,email FROM consumers WHERE id=?').get(order.consumer_id);
+          if (c?.email) sendOrderConfirmedEmail(c.email, c.name, order.order_number).catch(() => {});
+        } catch {}
+        console.log(`[webhook] invoice.paid → order ${order.order_number} marked paid`);
+        break;
+      }
+      case 'invoice.expired': {
+        const inv = event.payload.invoice.entity;
+        db.prepare(`UPDATE consumer_orders SET razorpay_invoice_status = 'expired' WHERE razorpay_invoice_id = ?`).run(inv.id);
+        console.log(`[webhook] invoice.expired → ${inv.id}`);
         break;
       }
       case 'account.activated':
