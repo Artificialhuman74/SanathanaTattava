@@ -472,18 +472,41 @@ router.post('/sync-account', authenticate, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'No linked account — run onboarding first' });
 
   try {
-    const account = await razorpay.accounts.fetch(trader.razorpay_linked_account_id);
-    console.log('[sync-account] raw response:', JSON.stringify(account));
-    // status is a top-level field on the account entity
-    const rzpStatus = account.status;
-    const mapped = rzpStatus === 'activated'          ? 'activated'
-                 : rzpStatus === 'under_review'        ? 'under_review'
-                 : rzpStatus === 'needs_clarification' ? 'needs_clarification'
-                 : rzpStatus === 'rejected'            ? 'rejected'
-                 : rzpStatus === 'suspended'           ? 'suspended'
+    // account.status is always "created" — real activation lives on the product config
+    // If we have the product ID, fetch it directly; otherwise list all products for the account
+    let activationStatus;
+    if (trader.razorpay_product_id) {
+      const product = await razorpay.products.fetch(
+        trader.razorpay_linked_account_id,
+        trader.razorpay_product_id,
+      );
+      console.log('[sync-account] product fetch:', JSON.stringify(product));
+      activationStatus = product.activation_status;
+    } else {
+      // No stored product_id — call the list endpoint directly
+      const authHeader = 'Basic ' + Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64');
+      const resp = await fetch(
+        `https://api.razorpay.com/v2/accounts/${trader.razorpay_linked_account_id}/products`,
+        { headers: { Authorization: authHeader } },
+      );
+      const data = await resp.json();
+      console.log('[sync-account] products list:', JSON.stringify(data));
+      const routeProduct = (data.items || []).find(p => p.product_name === 'route');
+      if (routeProduct) {
+        activationStatus = routeProduct.activation_status;
+        // Save for future use
+        db.prepare('UPDATE users SET razorpay_product_id=? WHERE id=?').run(routeProduct.id, trader.id);
+      }
+    }
+
+    const mapped = activationStatus === 'activated'          ? 'activated'
+                 : activationStatus === 'under_review'        ? 'under_review'
+                 : activationStatus === 'needs_clarification' ? 'needs_clarification'
+                 : activationStatus === 'suspended'           ? 'suspended'
                  : trader.razorpay_account_status;
-    db.prepare(`UPDATE users SET razorpay_account_status=? WHERE id=?`).run(mapped, trader.id);
-    res.json({ success: true, razorpay_raw_status: rzpStatus, mapped_status: mapped, activated_at: account.activated_at, live: account.live });
+
+    db.prepare('UPDATE users SET razorpay_account_status=? WHERE id=?').run(mapped, trader.id);
+    res.json({ success: true, activation_status: activationStatus, mapped_status: mapped });
   } catch (err) {
     console.error('[razorpay] sync-account error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to sync account status' });
