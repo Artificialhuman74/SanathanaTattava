@@ -4,7 +4,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Clock, CheckCircle2, TrendingUp, Info, AlertCircle,
-  ArrowDownToLine, X, Loader2, Wallet,
+  ArrowDownToLine, X, Loader2, Wallet, RefreshCw,
 } from 'lucide-react';
 
 interface CommissionData {
@@ -36,6 +36,7 @@ interface CommissionEntry {
   rate: number;
   type: 'direct' | 'override';
   status: string;
+  razorpay_transfer_id: string | null;
   created_at: string;
 }
 
@@ -50,10 +51,21 @@ interface WithdrawalEntry {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:  'bg-amber-100 text-amber-700',
-  paid:     'bg-emerald-100 text-emerald-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
+  pending:         'bg-amber-100 text-amber-700',
+  transferring:    'bg-blue-100 text-blue-700',
+  transferred:     'bg-emerald-100 text-emerald-700',
+  transfer_failed: 'bg-red-100 text-red-700',
+  paid:            'bg-emerald-100 text-emerald-700',
+  approved:        'bg-emerald-100 text-emerald-700',
+  rejected:        'bg-red-100 text-red-700',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending:         'Pending',
+  transferring:    'Transferring',
+  transferred:     'Paid to Razorpay',
+  transfer_failed: 'Transfer Failed',
+  paid:            'Paid',
 };
 
 const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -66,6 +78,7 @@ export default function TraderCommissions() {
   const [withdrawAmt, setWithdrawAmt] = useState('');
   const [upiId,      setUpiId]      = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [syncingId,  setSyncingId]  = useState<number | null>(null);
 
   const fetchData = () => {
     setLoading(true);
@@ -75,6 +88,25 @@ export default function TraderCommissions() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const syncTransfer = async (c: CommissionEntry) => {
+    setSyncingId(c.id);
+    try {
+      const { data } = await api.post('/payments/sync-transfer/me', { commission_id: c.id });
+      if (data.mapped_status === 'transferred') {
+        toast.success('Transfer confirmed — money is in your Razorpay account');
+      } else if (data.mapped_status === 'transfer_failed') {
+        toast.error('Transfer failed — contact admin');
+      } else {
+        toast(`Transfer status: ${data.razorpay_status}`, { icon: 'ℹ️' });
+      }
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to sync');
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   const submitWithdrawal = async () => {
     const amt = parseFloat(withdrawAmt);
@@ -219,8 +251,8 @@ export default function TraderCommissions() {
                     <td className="text-center font-semibold">{w.count}</td>
                     <td className="font-bold text-emerald-600">{fmt(parseFloat(String(w.amount)))}</td>
                     <td>
-                      <span className={`badge ${w.status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {w.status}
+                      <span className={`badge ${STATUS_COLORS[w.status] || 'bg-amber-100 text-amber-700'}`}>
+                        {STATUS_LABEL[w.status] || w.status}
                       </span>
                     </td>
                   </tr>
@@ -247,7 +279,7 @@ export default function TraderCommissions() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Order #</th><th>Amount</th><th>Rate</th><th>Type</th><th>Status</th><th>Date</th></tr>
+                <tr><th>Order #</th><th>Amount</th><th>Rate</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr>
               </thead>
               <tbody>
                 {(data?.commissions || []).map(c => (
@@ -261,11 +293,28 @@ export default function TraderCommissions() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
-                        {c.status}
-                      </span>
+                      <div>
+                        <span className={`badge ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                          {STATUS_LABEL[c.status] || c.status}
+                        </span>
+                        {c.status === 'transferred' && (
+                          <p className="text-[10px] text-slate-400 mt-0.5">Bank settlement: 1–2 days</p>
+                        )}
+                      </div>
                     </td>
                     <td className="text-xs text-slate-400">{new Date(c.created_at).toLocaleDateString('en-IN')}</td>
+                    <td>
+                      {c.status === 'transferring' && c.razorpay_transfer_id && (
+                        <button
+                          onClick={() => syncTransfer(c)}
+                          disabled={syncingId === c.id}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {syncingId === c.id ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                          {syncingId === c.id ? 'Checking…' : 'Sync'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

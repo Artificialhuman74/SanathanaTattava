@@ -247,6 +247,7 @@ router.get('/consumer-orders', (req, res) => {
 router.get('/consumer-orders/:id', (req, res) => {
   const order = db.prepare(`
     SELECT co.*, c.name as consumer_name, c.phone as consumer_phone, c.email as consumer_email,
+           c.address as consumer_address, c.pincode as consumer_pincode,
            u.name as dealer_name, u.phone as dealer_phone, u.tier as dealer_tier,
            d2.name as delivery_dealer_name, d2.phone as delivery_dealer_phone,
            p.name as parent_dealer_name, p.phone as parent_dealer_phone
@@ -404,7 +405,7 @@ router.get('/payouts/pending-commissions', (req, res) => {
     JOIN users u ON u.id = cm.trader_id
     LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
     WHERE u.tier = 1
-      AND cm.status IN ('pending', 'transferring', 'transfer_failed')
+      AND cm.status IN ('pending', 'transferring', 'transfer_failed', 'transferred')
   `;
   const params = [];
   if (trader_id) { sql += ` AND cm.trader_id = ?`; params.push(Number(trader_id)); }

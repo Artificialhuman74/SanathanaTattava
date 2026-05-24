@@ -275,7 +275,34 @@ async function sendCommissionDisputeEmail(toEmail, {
   return sendMail({ to: toEmail, subject, text, html });
 }
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'ravigbb@gmail.com';
+
+async function sendAdminStockAlert({ dealerName, orderNumber, errorMessage }) {
+  const subject = `⚠️ Stock shortage — ${dealerName} cannot pack ${orderNumber}`;
+  const text = `Admin alert: ${dealerName} tried to pack order ${orderNumber} but failed due to insufficient stock.\n\nError: ${errorMessage}\n\nPlease restock this dealer from the admin panel.`;
+  const html = buildEmailHtml({
+    title: 'Stock Shortage Alert',
+    preheader: `${dealerName} cannot pack ${orderNumber} — restock needed`,
+    body: `
+      <p style="margin:0 0 16px;color:#0f172a;font-size:15px;">
+        A dealer attempted to pack an order but does not have enough stock.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Dealer</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:700;padding-bottom:6px;">${dealerName.replace(/</g, '&lt;')}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Order</td>
+            <td align="right" style="color:#0f172a;font-size:13px;font-family:monospace;padding-bottom:6px;">${orderNumber}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Error</td>
+            <td align="right" style="color:#b91c1c;font-size:13px;font-weight:600;">${errorMessage.replace(/</g, '&lt;')}</td></tr>
+      </table>
+      <p style="margin:0;color:#64748b;font-size:13px;">Please restock this dealer from the <strong>Admin → Partner Inventory</strong> panel.</p>
+    `,
+    footer: 'Sanathana Tattva',
+  });
+  return sendMail({ to: ADMIN_EMAIL, subject, text, html });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
-  sendCommissionConfirmationEmail, sendCommissionDisputeEmail, DEV_MODE,
+  sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert, DEV_MODE,
 };

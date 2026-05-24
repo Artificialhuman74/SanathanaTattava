@@ -216,6 +216,16 @@ router.put('/consumer-orders/:id/status', [
       try {
         deductOrderInventory(order.id, fulfillDealerId);
       } catch (invErr) {
+        // Email admin about the stock shortage (non-blocking)
+        try {
+          const { sendAdminStockAlert } = require('../services/emailService');
+          const dealer = db.prepare('SELECT name FROM users WHERE id=?').get(fulfillDealerId);
+          sendAdminStockAlert({
+            dealerName:   dealer?.name || `Dealer #${fulfillDealerId}`,
+            orderNumber:  order.order_number,
+            errorMessage: invErr.message,
+          }).catch(() => {});
+        } catch { /* non-fatal */ }
         return res.status(400).json({
           error: invErr.message,
           hint: 'Dealer may need a restock from admin before this order can be packed.',

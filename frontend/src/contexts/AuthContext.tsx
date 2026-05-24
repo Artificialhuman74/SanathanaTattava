@@ -95,6 +95,11 @@ consumerApi.interceptors.response.use(
       cfg.baseURL = getApiHttpBaseUrl();
       return consumerApi.request(cfg);
     }
+    if (err.response?.status === 401) {
+      localStorage.removeItem('consumer_token');
+      localStorage.removeItem('consumer');
+      window.location.href = '/consumer/login';
+    }
     return Promise.reject(err);
   }
 );

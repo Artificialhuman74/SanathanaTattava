@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate, requireTraderOrAdmin } = require('../middleware/auth');
+const { deductOrderInventory } = require('../services/inventoryService');
 const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
@@ -63,6 +64,8 @@ router.get('/orders/assigned', (req, res) => {
       FROM consumer_orders co
       LEFT JOIN consumers c ON c.id = co.consumer_id
       WHERE co.delivery_dealer_id = ?
+        AND co.payment_status = 'paid'
+        AND co.status NOT IN ('cancelled')
     `;
     const params = [dealerId];
 
@@ -197,8 +200,30 @@ router.post('/orders/:id/packed', param('id').isInt(), (req, res) => {
       return res.status(400).json({ error: `Cannot mark as packed with delivery_status '${order.delivery_status}'. Must be 'accepted'.` });
     }
 
+    // Deduct dealer inventory before packing (same check as trader route)
+    const fulfillDealerId = order.delivery_dealer_id || order.linked_dealer_id;
+    if (fulfillDealerId) {
+      try {
+        deductOrderInventory(order.id, fulfillDealerId);
+      } catch (invErr) {
+        // Email admin about the stock shortage (non-blocking)
+        try {
+          const { sendAdminStockAlert } = require('../services/emailService');
+          const dealer = db.prepare('SELECT name FROM users WHERE id=?').get(fulfillDealerId);
+          sendAdminStockAlert({
+            dealerName:   dealer?.name || `Dealer #${fulfillDealerId}`,
+            orderNumber:  order.order_number,
+            errorMessage: invErr.message,
+          }).catch(() => {});
+        } catch { /* non-fatal */ }
+        return res.status(400).json({
+          error: invErr.message,
+          hint: 'Not enough stock to pack this order. Admin needs to restock first.',
+        });
+      }
+    }
+
     const now = new Date().toISOString();
-    const updates = { delivery_status: 'packed', delivery_packed_at: now, updated_at: now };
 
     // Also update main order status if it's 'confirmed'
     let statusUpdate = '';

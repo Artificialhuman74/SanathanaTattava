@@ -136,13 +136,19 @@ router.post('/verify', authConsumer, (req, res) => {
     }
   })();
 
-  /* Notify linked dealer */
+  /* Notify linked dealer — show only their commission, not the customer's payment amount */
   if (order.linked_dealer_id) {
     try {
+      const comm = db.prepare(
+        `SELECT amount FROM commissions WHERE consumer_order_id=? AND trader_id=? AND type='direct'`
+      ).get(order.id, order.linked_dealer_id);
+      const commStr = comm ? `₹${parseFloat(String(comm.amount)).toFixed(2)}` : null;
       createNotification(
         'dealer', order.linked_dealer_id,
-        `Payment received — ${order.order_number}`,
-        `Customer paid ₹${order.total_amount.toFixed(2)} for order ${order.order_number}. Ready to process.`,
+        `New order confirmed — ${order.order_number}`,
+        commStr
+          ? `Order ${order.order_number} is confirmed. Your commission: ${commStr}.`
+          : `Order ${order.order_number} is confirmed. Ready to process.`,
         { order_id: order.id, order_number: order.order_number }
       );
     } catch { /* non-fatal */ }
@@ -153,8 +159,8 @@ router.post('/verify', authConsumer, (req, res) => {
     try {
       createNotification(
         'dealer', order.delivery_dealer_id,
-        `Payment received — ${order.order_number}`,
-        `Payment confirmed for order ${order.order_number}. Prepare for delivery.`,
+        `New order to deliver — ${order.order_number}`,
+        `Order ${order.order_number} is confirmed. Prepare for delivery.`,
         { order_id: order.id, order_number: order.order_number }
       );
     } catch { /* non-fatal */ }
@@ -683,6 +689,32 @@ router.post('/sync-transfer', authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[razorpay] sync-transfer error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to sync transfer status' });
+  }
+});
+
+/* ── POST /api/payments/sync-transfer/me (trader) ────────────────────────
+ * Trader syncs their own commission transfer status from Razorpay.
+ */
+router.post('/sync-transfer/me', authenticate, requireTrader, async (req, res) => {
+  if (!razorpay) return res.status(503).json({ error: 'Payment gateway not configured' });
+  const { commission_id } = req.body;
+  if (!commission_id) return res.status(400).json({ error: 'commission_id required' });
+
+  const comm = db.prepare('SELECT * FROM commissions WHERE id=? AND trader_id=?').get(commission_id, req.user.id);
+  if (!comm) return res.status(404).json({ error: 'Commission not found' });
+  if (!comm.razorpay_transfer_id) return res.status(400).json({ error: 'Transfer not yet initiated' });
+
+  try {
+    const transfer = await razorpay.transfers.fetch(comm.razorpay_transfer_id);
+    const mapped =
+      transfer.status === 'processed' ? 'transferred' :
+      transfer.status === 'failed'    ? 'transfer_failed' :
+      comm.status;
+    db.prepare('UPDATE commissions SET status=? WHERE id=?').run(mapped, comm.id);
+    res.json({ success: true, razorpay_status: transfer.status, mapped_status: mapped });
+  } catch (err) {
+    console.error('[razorpay] sync-transfer/me error:', err.error?.description || err.message);
+    res.status(500).json({ error: err.error?.description || 'Failed to sync transfer' });
   }
 });
 
