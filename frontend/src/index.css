@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+}
+
 @layer base {
   * { @apply box-border; }
   html { @apply scroll-smooth; }
@@ -51,7 +55,8 @@
     border: 1px solid #e8dcc8;
   }
   .form-input {
-    @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 bg-white;
+    @apply w-full px-4 py-3 rounded-xl outline-none transition-all duration-200 bg-white;
+    font-size: 16px;
     border: 1px solid #e8dcc8;
     color: #1c1a14;
   }

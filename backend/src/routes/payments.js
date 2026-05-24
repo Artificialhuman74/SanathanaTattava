@@ -685,9 +685,9 @@ router.post('/transfer', authenticate, requireAdmin, async (req, res) => {
         account:  comm.razorpay_linked_account_id,
         amount:   Math.round(comm.amount * 100),
         currency: 'INR',
-        notes:    { commission_id: String(comm.id), order_number: comm.order_number },
+        notes:    { commission_id: String(comm.id), order_number: comm.order_number, idempotency_key: idempotencyKey('transfer', comm.id) },
       }],
-    }, { 'X-Razorpay-Idempotency': idempotencyKey('transfer', comm.id) });
+    });
 
     const transferId = transfer.items?.[0]?.id || transfer.id;
     db.prepare(`UPDATE commissions SET razorpay_transfer_id=?, status='transferring' WHERE id=?`)
@@ -734,9 +734,9 @@ router.post('/pay-all', authenticate, requireAdmin, auditLog('pay-all'), async (
           account:  comm.razorpay_linked_account_id,
           amount:   Math.round(comm.amount * 100),
           currency: 'INR',
-          notes:    { commission_id: String(comm.id), order_number: comm.order_number },
+          notes:    { commission_id: String(comm.id), order_number: comm.order_number, idempotency_key: idempotencyKey('transfer', comm.id) },
         }],
-      }, { 'X-Razorpay-Idempotency': idempotencyKey('transfer', comm.id) });
+      });
 
       const transferId = transfer.items?.[0]?.id || transfer.id;
       db.prepare(`UPDATE commissions SET razorpay_transfer_id=?, status='transferring' WHERE id=?`)
@@ -805,9 +805,9 @@ router.post('/payout-week', authenticate, requireAdmin, auditLog('payout-week'),
           account:  comm.razorpay_linked_account_id,
           amount:   Math.round(comm.amount * 100),
           currency: 'INR',
-          notes:    { commission_id: String(comm.id), order_number: comm.order_number },
+          notes:    { commission_id: String(comm.id), order_number: comm.order_number, idempotency_key: idempotencyKey('transfer', comm.id) },
         }],
-      }, { 'X-Razorpay-Idempotency': idempotencyKey('transfer', comm.id) });
+      });
 
       const transferId = transfer.items?.[0]?.id || transfer.id;
       db.prepare(`UPDATE commissions SET razorpay_transfer_id=?, status='transferring' WHERE id=?`)

@@ -882,82 +882,100 @@ export default function Shop() {
       </div>
 
       {/* ── Cart Drawer ───────────────────────────────────────────────── */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setCartOpen(false)} />
-          <div className="relative ml-auto w-full max-w-sm bg-white h-full flex flex-col shadow-2xl">
+      <div className={`fixed inset-0 z-50 transition-all duration-300 ${cartOpen ? 'visible' : 'invisible pointer-events-none'}`}>
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${cartOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setCartOpen(false)}
+        />
 
-            <div className="flex items-center justify-between p-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <ShoppingCart size={18} className="text-brand-600" />
-                <h3 className="font-bold text-slate-900">Cart ({cartCount})</h3>
+        {/* Mobile: bottom sheet | Desktop: right drawer */}
+        <div className={`
+          absolute bg-white shadow-2xl flex flex-col
+          sm:right-0 sm:top-0 sm:h-full sm:w-full sm:max-w-sm sm:rounded-none sm:rounded-l-2xl
+          inset-x-0 bottom-0 max-h-[88vh] rounded-t-3xl
+          sm:transition-transform sm:duration-300 sm:ease-out
+          transition-transform duration-300 ease-out
+          ${cartOpen
+            ? 'translate-y-0 sm:translate-x-0'
+            : 'translate-y-full sm:translate-x-full sm:translate-y-0'
+          }
+        `}>
+          {/* Drag handle (mobile only) */}
+          <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+            <div className="w-10 h-1 rounded-full bg-slate-200" />
+          </div>
+
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <ShoppingCart size={18} className="text-brand-600" />
+              <h3 className="font-bold text-slate-900 text-base">Cart ({cartCount})</h3>
+            </div>
+            <button onClick={() => setCartOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain">
+            {cart.length === 0 ? (
+              <div className="text-center py-16 text-slate-400">
+                <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
+                <p className="font-medium">Your cart is empty</p>
+                <p className="text-xs mt-1">Add some products to get started</p>
               </div>
-              <button onClick={() => setCartOpen(false)} className="btn-ghost p-2">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {cart.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <ShoppingCart size={36} className="mx-auto mb-2 opacity-30" />
-                  <p>Your cart is empty</p>
-                  <p className="text-xs mt-1">Add some products to get started</p>
+            ) : cart.map(({ product, quantity }) => (
+              <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
+                <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                  {getPrimaryImage(product)
+                    ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
+                    : <Package size={18} className="text-slate-300 m-auto mt-4" />
+                  }
                 </div>
-              ) : cart.map(({ product, quantity }) => (
-                <div key={product.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                  <div className="w-12 h-12 rounded-lg bg-white border border-slate-100 overflow-hidden flex-shrink-0">
-                    {getPrimaryImage(product)
-                      ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
-                      : <Package size={16} className="text-slate-300 m-auto mt-3.5" />
-                    }
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
+                  <p className="text-xs text-brand-600 font-semibold mt-0.5">₹{product.price.toFixed(2)}/{product.unit || 'unit'}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => updateQty(product.id, quantity - 1)}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span className="text-sm font-bold w-6 text-center">{quantity}</span>
+                    <button
+                      onClick={() => updateQty(product.id, quantity + 1)}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                    >
+                      <Plus size={12} />
+                    </button>
+                    <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
-                    <p className="text-xs text-brand-600 font-semibold">₹{product.price.toFixed(2)}/{product.unit || 'can'}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        onClick={() => updateQty(product.id, quantity - 1)}
-                        className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100"
-                      >
-                        <Minus size={12} />
-                      </button>
-                      <span className="text-sm font-bold w-6 text-center">{quantity}</span>
-                      <button
-                        onClick={() => updateQty(product.id, quantity + 1)}
-                        className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100"
-                      >
-                        <Plus size={12} />
-                      </button>
-                      <span className="ml-auto text-sm font-bold">₹{(product.price * quantity).toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <button onClick={() => removeFromCart(product.id)} className="text-slate-400 hover:text-red-500 transition-colors">
-                    <Trash2 size={14} />
-                  </button>
                 </div>
-              ))}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="p-4 border-t border-slate-100 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 text-sm">{cartCount} items</span>
-                  <span className="text-xl font-extrabold text-brand-600">₹{cartTotal.toFixed(2)}</span>
-                </div>
-                {consumer?.referral_code_used && discountPct > 0 && (
-                  <p className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
-                    <Tag size={11} /> {discountPct}% referral discount applied at checkout
-                  </p>
-                )}
-                <button onClick={goToCheckout} className="btn-primary w-full py-3 text-base font-semibold">
-                  Proceed to Checkout →
+                <button onClick={() => removeFromCart(product.id)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
+                  <Trash2 size={15} />
                 </button>
               </div>
-            )}
+            ))}
           </div>
+
+          {cart.length > 0 && (
+            <div className="p-4 border-t border-slate-100 space-y-3 flex-shrink-0 pb-safe">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 text-sm">{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
+                <span className="text-xl font-extrabold text-brand-600">₹{cartTotal.toFixed(2)}</span>
+              </div>
+              {consumer?.referral_code_used && discountPct > 0 && (
+                <p className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
+                  <Tag size={11} /> {discountPct}% referral discount applied at checkout
+                </p>
+              )}
+              <button onClick={goToCheckout} className="btn-primary w-full py-3.5 text-base font-semibold rounded-2xl active:scale-[0.98] transition-transform">
+                Proceed to Checkout →
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
