@@ -30,9 +30,15 @@ export default function TraderDashboard() {
 
   // Fire confetti once when pan_verified becomes true
   const panCelebKey = user ? `pan_verified_celebrated_${user.id}` : null;
-  const [panCelebrated] = useState(() => panCelebKey ? !!localStorage.getItem(panCelebKey) : true);
+  const prevPanVerified = React.useRef<number | undefined>(undefined);
   React.useEffect(() => {
-    if (user?.pan_verified && !panCelebrated && panCelebKey) {
+    if (!user || !panCelebKey) return;
+    const alreadyCelebrated = !!localStorage.getItem(panCelebKey);
+    const justVerified = prevPanVerified.current !== undefined
+      ? prevPanVerified.current !== 1 && user.pan_verified === 1  // changed to verified this session
+      : user.pan_verified === 1 && !alreadyCelebrated;            // first load and not yet celebrated
+    prevPanVerified.current = user.pan_verified;
+    if (justVerified) {
       localStorage.setItem(panCelebKey, '1');
       confetti({ particleCount: 180, spread: 90, origin: { y: 0.55 } });
       setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.1, y: 0.6 }, angle: 60 }), 300);
@@ -81,52 +87,42 @@ export default function TraderDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Account status banner — hidden once pan_verified AND razorpay activated */}
-      {(!user?.pan_verified || user?.razorpay_account_status !== 'activated') && (
+      {/* Order eligibility banner — only shown until PAN is verified */}
+      {!user?.pan_verified && (
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
-          {user?.pan_verified
+          {user?.pan
             ? <ShieldCheck size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
             : <ShieldAlert size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
           }
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-amber-800 text-sm">
-              {!user?.pan && !user?.pan_verified ? 'Account information needed' : 'Account setup in progress'}
+              {user?.pan ? 'Admin is verifying your PAN' : 'Account information needed'}
             </p>
-            <p className="text-amber-700 text-xs mt-1 mb-2">
-              You need to complete both steps below before you can receive orders.
+            <p className="text-amber-700 text-xs mt-0.5">
+              {user?.pan
+                ? 'Your PAN has been submitted. Once the admin approves it, you will start receiving orders.'
+                : 'Add your PAN in your profile. Orders cannot be assigned to you until your PAN is verified.'}
             </p>
-            <div className="space-y-1.5">
-              {/* Step 1: PAN */}
-              <div className="flex items-center gap-2 text-xs">
-                {user?.pan_verified
-                  ? <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
-                  : <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${user?.pan ? 'border-amber-500' : 'border-slate-300'}`} />
-                }
-                <span className={user?.pan_verified ? 'text-emerald-700 line-through' : 'text-amber-800'}>
-                  Step 1: Add PAN &amp; get admin verification
-                  {user?.pan && !user?.pan_verified && <span className="ml-1 text-amber-600 font-medium">(pending admin approval)</span>}
-                </span>
-              </div>
-              {/* Step 2: Bank / Razorpay */}
-              <div className="flex items-center gap-2 text-xs">
-                {user?.razorpay_account_status === 'activated'
-                  ? <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
-                  : <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${user?.razorpay_account_status ? 'border-amber-500' : 'border-slate-300'}`} />
-                }
-                <span className={user?.razorpay_account_status === 'activated' ? 'text-emerald-700 line-through' : 'text-amber-800'}>
-                  Step 2: Add bank account &amp; complete KYC in Profile
-                  {user?.razorpay_account_status && user?.razorpay_account_status !== 'activated' && (
-                    <span className="ml-1 text-amber-600 font-medium">(status: {user.razorpay_account_status})</span>
-                  )}
-                </span>
-              </div>
-            </div>
           </div>
           {!user?.pan && (
             <Link to="/trader/profile" className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap">
-              Go to Profile →
+              Add PAN →
             </Link>
           )}
+        </div>
+      )}
+
+      {/* Payout setup nudge — separate from order eligibility, shown until bank is set up */}
+      {user?.pan_verified && !user?.bank_account_number && (
+        <div className="flex items-start gap-3 p-3 rounded-2xl bg-blue-50 border border-blue-200">
+          <CheckCircle2 size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-blue-800 text-sm">You're ready to receive orders!</p>
+            <p className="text-blue-700 text-xs mt-0.5">Add your bank account in Profile to enable commission payouts.</p>
+          </div>
+          <Link to="/trader/profile" className="flex-shrink-0 text-xs font-semibold text-blue-700 hover:text-blue-900 underline whitespace-nowrap">
+            Add bank →
+          </Link>
         </div>
       )}
 

@@ -473,14 +473,17 @@ router.post('/sync-account', authenticate, requireAdmin, async (req, res) => {
 
   try {
     const account = await razorpay.accounts.fetch(trader.razorpay_linked_account_id);
-    // Razorpay returns profile.status for linked accounts
-    const rzpStatus = account.profile?.status || account.status;
-    const mapped = rzpStatus === 'activated' ? 'activated'
-                 : rzpStatus === 'under_review' ? 'under_review'
-                 : rzpStatus === 'rejected' ? 'rejected'
-                 : trader.razorpay_account_status; // keep existing if unrecognised
+    console.log('[sync-account] raw response:', JSON.stringify(account));
+    // status is a top-level field on the account entity
+    const rzpStatus = account.status;
+    const mapped = rzpStatus === 'activated'          ? 'activated'
+                 : rzpStatus === 'under_review'        ? 'under_review'
+                 : rzpStatus === 'needs_clarification' ? 'needs_clarification'
+                 : rzpStatus === 'rejected'            ? 'rejected'
+                 : rzpStatus === 'suspended'           ? 'suspended'
+                 : trader.razorpay_account_status;
     db.prepare(`UPDATE users SET razorpay_account_status=? WHERE id=?`).run(mapped, trader.id);
-    res.json({ success: true, razorpay_status: rzpStatus, mapped_status: mapped });
+    res.json({ success: true, razorpay_raw_status: rzpStatus, mapped_status: mapped, activated_at: account.activated_at, live: account.live });
   } catch (err) {
     console.error('[razorpay] sync-account error:', err.error?.description || err.message);
     res.status(500).json({ error: err.error?.description || 'Failed to sync account status' });

@@ -20,6 +20,7 @@ export interface User {
   pan?: string | null;
   pan_verified?: number;
   razorpay_account_status?: string | null;
+  bank_account_number?: string | null;
   status: string;
 }
 
