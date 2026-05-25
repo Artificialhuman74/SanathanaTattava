@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
-import { Warehouse, Search, AlertTriangle, Package, CheckCircle } from 'lucide-react';
+import { Warehouse, Search, AlertTriangle, Package, Bell, Pencil, Check, X, Info } from 'lucide-react';
 
 interface InventoryItem {
   id: number;
@@ -25,9 +25,12 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
 };
 
 export default function TraderInventory() {
-  const [items, setItems]     = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState('');
+  const [items, setItems]       = useState<InventoryItem[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [editingId, setEditing] = useState<number | null>(null);
+  const [draftValue, setDraft]  = useState<string>('');
+  const [saving, setSaving]     = useState(false);
 
   useEffect(() => {
     api.get('/trader/inventory')
@@ -46,6 +49,37 @@ export default function TraderInventory() {
   const lowStock      = items.filter(i => i.stock_status === 'LOW_STOCK').length;
   const outOfStock    = items.filter(i => i.stock_status === 'OUT_OF_STOCK').length;
   const totalUnits    = items.reduce((s, i) => s + i.quantity, 0);
+
+  const startEdit = (item: InventoryItem) => {
+    setEditing(item.product_id);
+    setDraft(String(item.low_stock_threshold));
+  };
+  const cancelEdit = () => { setEditing(null); setDraft(''); };
+
+  const saveEdit = async (item: InventoryItem) => {
+    const n = Number(draftValue);
+    if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+      toast.error('Enter a whole number ≥ 0');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put(`/trader/inventory/${item.product_id}/threshold`, { threshold: n });
+      setItems(prev => prev.map(i => {
+        if (i.product_id !== item.product_id) return i;
+        const newStatus: InventoryItem['stock_status'] =
+          i.quantity <= 0 ? 'OUT_OF_STOCK' :
+          i.quantity <= n ? 'LOW_STOCK' : 'OK';
+        return { ...i, low_stock_threshold: n, stock_status: newStatus };
+      }));
+      toast.success('Alert threshold updated');
+      cancelEdit();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -76,6 +110,15 @@ export default function TraderInventory() {
         ))}
       </div>
 
+      {/* Help banner */}
+      <div className="card p-3 flex items-start gap-2.5 bg-brand-50/50 border border-brand-100">
+        <Info size={16} className="text-brand-600 flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-600 leading-relaxed">
+          <span className="font-semibold text-slate-800">Low stock alert</span> — set the quantity below which the admin gets notified to restock you.
+          Click the pencil next to any product to change it.
+        </p>
+      </div>
+
       {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -93,6 +136,7 @@ export default function TraderInventory() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(item => {
             const st = STATUS_STYLE[item.stock_status] || STATUS_STYLE.OK;
+            const isEditing = editingId === item.product_id;
             return (
               <div key={item.id} className="card overflow-hidden hover:shadow-md transition-shadow">
                 <div className="h-32 bg-slate-100 flex items-center justify-center overflow-hidden">
@@ -122,8 +166,52 @@ export default function TraderInventory() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-slate-400">Threshold</p>
-                      <p className="text-sm font-semibold text-slate-600">{item.low_stock_threshold}</p>
+                      <div className="flex items-center justify-end gap-1 text-xs text-slate-400" title="Admin gets notified when stock drops to this level">
+                        <Bell size={11} /> Low stock alert
+                      </div>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1 mt-1 justify-end">
+                          <input
+                            type="number" min={0} step={1}
+                            value={draftValue}
+                            onChange={e => setDraft(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEdit(item);
+                              if (e.key === 'Escape') cancelEdit();
+                            }}
+                            disabled={saving}
+                            autoFocus
+                            className="form-input w-16 text-sm text-right py-1 px-2"
+                          />
+                          <button
+                            onClick={() => saveEdit(item)}
+                            disabled={saving}
+                            className="p-1 rounded text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                            title="Save"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            className="p-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(item)}
+                          className="flex items-center gap-1.5 mt-0.5 ml-auto group"
+                          title="Edit low stock alert"
+                        >
+                          <span className="text-sm font-semibold text-slate-600 group-hover:text-brand-600">
+                            {item.low_stock_threshold} <span className="text-xs font-normal text-slate-400">{item.unit}s</span>
+                          </span>
+                          <Pencil size={11} className="text-slate-300 group-hover:text-brand-500" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

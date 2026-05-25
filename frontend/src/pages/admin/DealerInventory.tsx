@@ -76,11 +76,11 @@ export default function AdminDealerInventory() {
   const submitDistribute = async () => {
     if (!distProduct) return toast.error('Select a product');
     const valid = distAllocations.filter(a => a.dealer_id > 0 && a.quantity > 0);
-    if (!valid.length) return toast.error('Add at least one dealer allocation');
+    if (!valid.length) return toast.error('Add at least one partner allocation');
     setDistributing(true);
     try {
       const r = await api.post('/admin/inventory/distribute', { product_id: distProduct, allocations: valid });
-      toast.success(`Distributed ${r.data.total} units of ${r.data.product_name} to ${r.data.distributed?.length} dealer(s)`);
+      toast.success(`Distributed ${r.data.total} units of ${r.data.product_name} to ${r.data.distributed?.length} partner(s)`);
       setDistAllocations([]); setDistProduct('');
       fetchOverview(); fetchDealersAndProducts();
     } catch (err: any) { toast.error(err.response?.data?.error || 'Distribution failed'); }
@@ -93,7 +93,7 @@ export default function AdminDealerInventory() {
     setRestockItems(p => p.map((it, i) => i === idx ? { ...it, [field]: value } : it));
 
   const submitRestock = async () => {
-    if (!selDealer) return toast.error('Select a dealer');
+    if (!selDealer) return toast.error('Select a partner');
     const valid = restockItems.filter(i => i.product_id > 0 && i.quantity > 0);
     if (!valid.length) return toast.error('Add at least one product');
     setRestocking(true);
@@ -115,8 +115,8 @@ export default function AdminDealerInventory() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Dealer Inventory</h2>
-          <p className="text-slate-500 text-sm mt-0.5">Distribute warehouse stock to dealers and monitor levels</p>
+          <h2 className="text-2xl font-bold text-slate-900">Partner Inventory</h2>
+          <p className="text-slate-500 text-sm mt-0.5">Distribute warehouse stock to partners and monitor levels</p>
         </div>
         <button onClick={fetchOverview} className="btn-ghost text-sm flex items-center gap-1.5"><RefreshCcw size={14} /> Refresh</button>
       </div>
@@ -124,7 +124,7 @@ export default function AdminDealerInventory() {
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit flex-wrap">
         {([
-          { key: 'overview',   label: 'Dealer Stock',   icon: Package },
+          { key: 'overview',   label: 'Partner Stock',  icon: Package },
           { key: 'warehouse',  label: 'Warehouse',      icon: Warehouse },
           { key: 'distribute', label: 'Distribute',     icon: ArrowRight },
           { key: 'restock',    label: 'Restock (1:1)',  icon: Truck },
@@ -143,7 +143,7 @@ export default function AdminDealerInventory() {
         <>
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input value={search} onChange={e => setSearch(e.target.value)} className="form-input pl-9" placeholder="Search dealer / product..." />
+            <input value={search} onChange={e => setSearch(e.target.value)} className="form-input pl-9" placeholder="Search partner / product..." />
           </div>
           <div className="card">
             {loading ? (
@@ -151,7 +151,7 @@ export default function AdminDealerInventory() {
             ) : (
               <div className="table-wrapper">
                 <table>
-                  <thead><tr><th>Dealer</th><th>Product</th><th>Current Stock</th><th>Threshold</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Partner</th><th>Product</th><th>Current Stock</th><th>Threshold</th><th>Status</th></tr></thead>
                   <tbody>
                     {filtered.map((r, i) => {
                       const st = STATUS_STYLE[r.stock_status] || STATUS_STYLE.OK;
@@ -160,7 +160,7 @@ export default function AdminDealerInventory() {
                           <td>
                             <p className="font-medium text-sm">{r.dealer_name}</p>
                             <span className={`badge text-xs ${r.dealer_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
-                              {r.dealer_tier === 1 ? 'Tier 1' : 'Sub-Dealer'}
+                              {r.dealer_tier === 1 ? 'Tier 1' : 'Sub-Partner'}
                             </span>
                           </td>
                           <td>
@@ -180,7 +180,7 @@ export default function AdminDealerInventory() {
                   </tbody>
                 </table>
                 {filtered.length === 0 && (
-                  <div className="text-center py-16 text-slate-400"><Warehouse size={40} className="mx-auto mb-3 opacity-30" /><p className="font-medium">No dealer inventory found</p></div>
+                  <div className="text-center py-16 text-slate-400"><Warehouse size={40} className="mx-auto mb-3 opacity-30" /><p className="font-medium">No partner inventory found</p></div>
                 )}
               </div>
             )}
@@ -225,7 +225,7 @@ export default function AdminDealerInventory() {
       {/* ── Distribute to Multiple Dealers ───────────────────────────────── */}
       {tab === 'distribute' && (
         <div className="card p-6 space-y-6">
-          <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ArrowRight size={18} className="text-brand-600" /> Distribute One Product to Multiple Dealers</h3>
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ArrowRight size={18} className="text-brand-600" /> Distribute One Product to Multiple Partners</h3>
 
           <div>
             <label className="form-label">Product to Distribute</label>
@@ -239,12 +239,12 @@ export default function AdminDealerInventory() {
             <>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="form-label mb-0">Dealer Allocations</label>
+                  <label className="form-label mb-0">Partner Allocations</label>
                   <button
                     onClick={() => setDistAllocations(p => [...p, { dealer_id: 0, quantity: 1 }])}
                     className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"
                   >
-                    <Plus size={12} /> Add Dealer
+                    <Plus size={12} /> Add Partner
                   </button>
                 </div>
                 {distAllocations.map((a, idx) => (
@@ -254,7 +254,7 @@ export default function AdminDealerInventory() {
                       onChange={e => setDistAllocations(p => p.map((x, i) => i === idx ? { ...x, dealer_id: Number(e.target.value) } : x))}
                       className="form-input flex-1"
                     >
-                      <option value={0}>Select dealer...</option>
+                      <option value={0}>Select partner...</option>
                       {dealers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.tier === 1 ? 'T1' : 'Sub'})</option>)}
                     </select>
                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -270,7 +270,7 @@ export default function AdminDealerInventory() {
                   </div>
                 ))}
                 {distAllocations.length === 0 && (
-                  <p className="text-sm text-slate-400 text-center py-4">Click "Add Dealer" to add allocations</p>
+                  <p className="text-sm text-slate-400 text-center py-4">Click "Add Partner" to add allocations</p>
                 )}
               </div>
 
@@ -279,7 +279,7 @@ export default function AdminDealerInventory() {
                   <div>
                     <p className="text-sm font-semibold text-slate-700">Total to distribute</p>
                     <p className="text-2xl font-extrabold text-brand-600">{distAllocations.reduce((s, a) => s + a.quantity, 0)} cans</p>
-                    <p className="text-xs text-slate-400">across {distAllocations.filter(a => a.dealer_id > 0).length} dealer(s)</p>
+                    <p className="text-xs text-slate-400">across {distAllocations.filter(a => a.dealer_id > 0).length} partner(s)</p>
                   </div>
                   <button
                     onClick={submitDistribute}
@@ -299,12 +299,12 @@ export default function AdminDealerInventory() {
       {/* ── Restock ───────────────────────────────────────────────────────── */}
       {tab === 'restock' && (
         <div className="card p-6 space-y-6">
-          <h3 className="font-semibold text-slate-900 flex items-center gap-2"><Truck size={18} className="text-brand-600" /> Distribute Stock to Dealer</h3>
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2"><Truck size={18} className="text-brand-600" /> Distribute Stock to Partner</h3>
           <div>
-            <label className="form-label">Select Dealer</label>
+            <label className="form-label">Select Partner</label>
             <select value={selDealer} onChange={e => setSelDealer(e.target.value ? Number(e.target.value) : '')} className="form-input max-w-md">
-              <option value="">Choose a dealer...</option>
-              {dealers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.tier === 1 ? 'Tier 1' : 'Sub-Dealer'}) — {d.phone}</option>)}
+              <option value="">Choose a partner...</option>
+              {dealers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.tier === 1 ? 'Tier 1' : 'Sub-Partner'}) — {d.phone}</option>)}
             </select>
           </div>
           <div className="space-y-3">
@@ -344,7 +344,7 @@ export default function AdminDealerInventory() {
             <div className="card p-12 text-center text-slate-400">
               <AlertTriangle size={48} className="mx-auto mb-3 opacity-20" />
               <p className="font-medium text-lg">No low stock alerts</p>
-              <p className="text-sm mt-1">All dealers are well-stocked.</p>
+              <p className="text-sm mt-1">All partners are well-stocked.</p>
             </div>
           ) : alerts.map((a, i) => (
             <div key={i} className={`card p-4 flex items-center gap-4 border-l-4 ${a.stock_status === 'OUT_OF_STOCK' ? 'border-red-500' : 'border-amber-500'}`}>

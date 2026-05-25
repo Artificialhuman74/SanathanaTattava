@@ -543,6 +543,36 @@ function runMigrations(db) {
     console.log('[migration] consumer_orders: added container_costs_total');
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Finance log tables (manual income + trader payments)
+   * ═══════════════════════════════════════════════════════════════════ */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_income (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      source        TEXT    NOT NULL,
+      description   TEXT,
+      amount        REAL    NOT NULL,
+      recorded_date TEXT    NOT NULL,
+      created_by    INTEGER REFERENCES users(id),
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_manual_income_date ON manual_income(recorded_date)`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trader_payments (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      trader_id     INTEGER NOT NULL REFERENCES users(id),
+      amount        REAL    NOT NULL,
+      payment_date  TEXT    NOT NULL,
+      notes         TEXT,
+      created_by    INTEGER REFERENCES users(id),
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_trader_payments_date ON trader_payments(payment_date)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_trader_payments_trader ON trader_payments(trader_id)`);
+
   console.log('[migration] all migrations applied');
 }
 

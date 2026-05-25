@@ -221,7 +221,7 @@ function returnOrderInventory(orderId) {
  */
 function checkLowStockAlerts(dealerId) {
   const lowItems = db.prepare(`
-    SELECT di.*, p.name as product_name, u.name as dealer_name
+    SELECT di.*, p.name as product_name, p.unit, u.name as dealer_name
     FROM dealer_inventory di
     JOIN products p ON di.product_id = p.id
     JOIN users u    ON di.dealer_id = u.id

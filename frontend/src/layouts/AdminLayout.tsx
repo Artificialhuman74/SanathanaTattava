@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Users, ShoppingBag,
   LogOut, Menu, X, ChevronRight,
-  UserCheck, Settings, Warehouse, Truck, Landmark,
+  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
   { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Partner Inventory' },
   { to: '/admin/payouts',         icon: Landmark,        label: 'Payouts' },
+  { to: '/admin/finance',         icon: BarChart3,       label: 'Finance' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
   { to: '/delivery/login',        icon: Truck,           label: 'Delivery' },
 ];

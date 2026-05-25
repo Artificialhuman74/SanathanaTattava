@@ -76,6 +76,7 @@ const notificationRoutes  = require('./routes/notifications');
 const deliveryRoutes      = require('./routes/delivery');
 const paymentRoutes       = require('./routes/payments');
 const publicRoutes        = require('./routes/public');
+const financeRoutes       = require('./routes/finance');
 
 const app  = express();
 const PORT = process.env.PORT || 5001;
@@ -89,7 +90,9 @@ const allowedOrigins = [
   'http://localhost:5001',
   'https://localhost:5001',
 ];
-if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+if (process.env.FRONTEND_URL) {
+  process.env.FRONTEND_URL.split(',').map(s => s.trim()).filter(Boolean).forEach(o => allowedOrigins.push(o));
+}
 // Named Cloudflare tunnel — stays constant, no regex needed
 if (process.env.API_ORIGIN) allowedOrigins.push(process.env.API_ORIGIN);
 
@@ -130,6 +133,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
+app.use('/api/admin/finance', financeRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/trader',        traderRoutes);
 app.use('/api/consumer',      consumerRoutes);
@@ -230,7 +234,8 @@ function scheduleReviewEmails() {
     const db = require('./database/db');
     const crypto = require('crypto');
     const { sendReviewRequestEmail } = require('./services/emailService');
-    const FRONTEND = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+    const { getPublicSiteUrl } = require('./utils/publicUrl');
+    const FRONTEND = getPublicSiteUrl();
 
     const orders = db.prepare(`
       SELECT co.id as order_id, co.consumer_id, c.email, c.name as consumer_name

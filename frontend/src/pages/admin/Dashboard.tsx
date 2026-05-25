@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import {
-  Users, Package, ShoppingCart, ShoppingBag, DollarSign, TrendingUp,
-  AlertTriangle, Clock, ChevronRight, BarChart3, ArrowUpRight, Wallet,
+  Users, Package, ShoppingBag, DollarSign, TrendingUp,
+  AlertTriangle, ChevronRight, BarChart3, ArrowUpRight, Wallet,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -58,7 +58,6 @@ export default function AdminDashboard() {
     { label: 'Total Traders',       value: stats.totalTraders,  sub: `${stats.tier1Traders} Tier 1 · ${stats.tier2Traders} Sub-Dealers`, icon: Users,        color: 'brand',   link: '/admin/traders' },
     { label: 'Consumers',           value: stats.totalConsumers, sub: 'Registered consumers',                                            icon: Users,        color: 'teal',    link: '/admin/consumer-orders' },
     { label: 'Products',            value: stats.totalProducts, sub: `${stats.lowStock} low stock`,                                      icon: Package,      color: 'emerald', link: '/admin/inventory' },
-    { label: 'B2B Orders',          value: stats.totalOrders,   sub: `${stats.pendingOrders} pending`,                                   icon: ShoppingCart, color: 'violet',  link: '/admin/orders' },
     { label: 'Consumer Orders',     value: stats.consumerOrders, sub: 'Total placed',                                                    icon: ShoppingBag,  color: 'pink',    link: '/admin/consumer-orders' },
     { label: 'Total Revenue',       value: `₹${stats.revenue?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'From delivered orders', icon: TrendingUp, color: 'gold', link: null },
     { label: 'Pending Commissions', value: `₹${stats.pendingCommissions?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'To be paid out', icon: Wallet, color: 'amber', link: '/admin/payouts' },
@@ -109,28 +108,16 @@ export default function AdminDashboard() {
       </div>
 
       {/* Alerts */}
-      {(stats.lowStock > 0 || stats.pendingOrders > 0) && (
+      {stats.lowStock > 0 && (
         <div className="flex flex-wrap gap-3">
-          {stats.lowStock > 0 && (
-            <div
-              className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm cursor-pointer hover:bg-amber-100 transition-colors"
-              onClick={() => navigate('/admin/inventory')}
-            >
-              <AlertTriangle size={15} />
-              <span className="font-medium">{stats.lowStock} products running low on stock</span>
-              <ArrowUpRight size={13} />
-            </div>
-          )}
-          {stats.pendingOrders > 0 && (
-            <div
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm cursor-pointer hover:bg-blue-100 transition-colors"
-              onClick={() => navigate('/admin/orders')}
-            >
-              <Clock size={15} />
-              <span className="font-medium">{stats.pendingOrders} B2B orders need attention</span>
-              <ArrowUpRight size={13} />
-            </div>
-          )}
+          <div
+            className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm cursor-pointer hover:bg-amber-100 transition-colors"
+            onClick={() => navigate('/admin/inventory')}
+          >
+            <AlertTriangle size={15} />
+            <span className="font-medium">{stats.lowStock} products running low on stock</span>
+            <ArrowUpRight size={13} />
+          </div>
         </div>
       )}
 
@@ -256,8 +243,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
             { label: 'Inventory',        icon: Package,      path: '/admin/inventory',       color: 'bg-emerald-50 text-emerald-600' },
-            { label: 'Traders',          icon: Users,        path: '/admin/traders',         color: 'bg-brand-50 text-brand-600' },
-            { label: 'B2B Orders',       icon: ShoppingCart, path: '/admin/orders',          color: 'bg-violet-50 text-violet-600' },
+            { label: 'Partners',         icon: Users,        path: '/admin/traders',         color: 'bg-brand-50 text-brand-600' },
             { label: 'Consumer Orders',  icon: ShoppingBag,  path: '/admin/consumer-orders', color: 'bg-pink-50 text-pink-600' },
             { label: 'Payouts',          icon: DollarSign,   path: '/admin/payouts',         color: 'bg-amber-50 text-amber-600' },
           ].map(({ label, icon: Icon, path, color }) => (

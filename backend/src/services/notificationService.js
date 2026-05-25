@@ -155,14 +155,17 @@ function markAllRead(userType, userId) {
 /**
  * Send a low-stock alert to all admin users.
  */
-function notifyAdminLowStock({ dealer_name, product_name, quantity, low_stock_threshold, dealer_id, product_id }) {
+function notifyAdminLowStock({ dealer_name, product_name, quantity, low_stock_threshold, dealer_id, product_id, unit }) {
   const admins = db.prepare(`SELECT id FROM users WHERE role = 'admin' AND status = 'active'`).all();
   const title = `Low stock alert — ${dealer_name}`;
   const body  = `"${product_name}" is at ${quantity} units (threshold: ${low_stock_threshold})`;
   const data  = JSON.stringify({ dealer_id, product_id, quantity, low_stock_threshold });
 
+  // Track whether we created at least one fresh in-app row; if so, we also email
+  // the admin. Reuses the in-app 24h dedupe so we don't spam admins on every
+  // small dip below threshold.
+  let emailed = false;
   for (const admin of admins) {
-    // Avoid duplicate alerts within 24 hours
     const recent = db.prepare(`
       SELECT id FROM notifications
       WHERE user_type = 'admin' AND user_id = ? AND title = ? AND created_at > datetime('now', '-24 hours')
@@ -173,6 +176,22 @@ function notifyAdminLowStock({ dealer_name, product_name, quantity, low_stock_th
       INSERT INTO notifications (user_type, user_id, title, body, data, channel)
       VALUES ('admin', ?, ?, ?, ?, 'in_app')
     `).run(admin.id, title, body, data);
+
+    if (!emailed) {
+      emailed = true;
+      try {
+        const { sendAdminLowStockEmail } = require('./emailService');
+        sendAdminLowStockEmail({
+          dealerName: dealer_name,
+          productName: product_name,
+          quantity,
+          threshold: low_stock_threshold,
+          unit,
+        }).catch(err => console.error('[low-stock email] send failed:', err.message));
+      } catch (err) {
+        console.error('[low-stock email] load failed:', err.message);
+      }
+    }
   }
 
   console.log(`[LOW STOCK] ${dealer_name}: ${product_name} — ${quantity} units`);

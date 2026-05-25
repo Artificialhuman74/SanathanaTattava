@@ -131,7 +131,8 @@ function buildEmailHtml({ title, preheader, body, footer }) {
 </html>`.trim();
 }
 
-const SHOP_URL = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+const { getPublicSiteUrl } = require('../utils/publicUrl');
+const SHOP_URL = getPublicSiteUrl();
 
 /* ── Order Confirmed ──────────────────────────────────────────────────── */
 async function sendOrderConfirmedEmail(toEmail, consumerName, orderNumber, invoiceUrl = null) {
@@ -373,8 +374,44 @@ async function sendAdminStockAlert({ dealerName, orderNumber, errorMessage }) {
   return sendMail({ to: ADMIN_EMAIL, subject, text, html });
 }
 
+async function sendAdminLowStockEmail({ dealerName, productName, quantity, threshold, unit }) {
+  const subject = `⚠️ Low stock — ${dealerName} · ${productName}`;
+  const qtyStr  = `${quantity}${unit ? ' ' + unit + (quantity === 1 ? '' : 's') : ''}`;
+  const thrStr  = `${threshold}${unit ? ' ' + unit + (threshold === 1 ? '' : 's') : ''}`;
+  const text =
+    `Low-stock alert\n\n` +
+    `Partner: ${dealerName}\n` +
+    `Product: ${productName}\n` +
+    `Quantity left: ${qtyStr}\n` +
+    `Alert threshold: ${thrStr}\n\n` +
+    `Restock this partner from the Admin → Partner Inventory panel.`;
+  const html = buildEmailHtml({
+    title:    'Low Stock Alert',
+    preheader: `${dealerName} · ${productName} at ${qtyStr}`,
+    body: `
+      <p style="margin:0 0 16px;color:#0f172a;font-size:15px;">
+        A partner's inventory has dropped to their alert threshold.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Partner</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:700;padding-bottom:6px;">${dealerName.replace(/</g, '&lt;')}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Product</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:6px;">${productName.replace(/</g, '&lt;')}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Quantity left</td>
+            <td align="right" style="color:#b91c1c;font-size:18px;font-weight:800;padding-bottom:6px;">${qtyStr}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Alert threshold</td>
+            <td align="right" style="color:#0f172a;font-size:13px;">${thrStr}</td></tr>
+      </table>
+      <p style="margin:0;color:#64748b;font-size:13px;">Restock from <strong>Admin → Partner Inventory</strong>.</p>
+    `,
+    footer: 'Sanathana Tattva',
+  });
+  return sendMail({ to: ADMIN_EMAIL, subject, text, html });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
   sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
+  sendAdminLowStockEmail,
   sendOrderConfirmedEmail, sendOutForDeliveryEmail, DEV_MODE,
 };

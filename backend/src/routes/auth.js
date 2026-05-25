@@ -317,8 +317,8 @@ router.post('/forgot-password', [
   db.prepare('UPDATE password_resets SET used = 1 WHERE email = ?').run(email);
   db.prepare('INSERT INTO password_resets (email, token_hash, expires_at) VALUES (?, ?, ?)').run(email, hashed, expires);
 
-  const base     = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
-  const resetUrl = `${base}/reset-password?token=${raw}`;
+  const { getPublicSiteUrl } = require('../utils/publicUrl');
+  const resetUrl = `${getPublicSiteUrl()}/reset-password?token=${raw}`;
 
   const response = { success: true };
   if (!process.env.EMAIL_USER) response.dev_token = raw;

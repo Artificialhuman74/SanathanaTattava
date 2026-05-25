@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useRubberBandScroll } from './hooks/useRubberBandScroll';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { PrivateRoute, DeliveryRoute, ConsumerRoute } from './components/RouteGuards';
@@ -27,6 +27,7 @@ import AdminPayouts       from './pages/admin/Payouts';
 import AdminConsumers     from './pages/admin/Consumers';
 import AdminSettings      from './pages/admin/Settings';
 import AdminDealerInventory from './pages/admin/DealerInventory';
+import AdminFinance        from './pages/admin/Finance';
 
 import TraderDashboard     from './pages/trader/Dashboard';
 import TraderProducts      from './pages/trader/Products';
@@ -65,11 +66,37 @@ const AppRoutes = () => {
     <>
       <Toaster
         position="top-right"
-        toastOptions={{
-          duration: 3500,
-          style: { borderRadius: '12px', fontSize: '14px', fontWeight: '500' },
+        toastOptions={{ duration: 3500 }}
+      >
+        {(t) => {
+          const tone =
+            t.type === 'success' ? { dot: 'bg-emerald-500', icon: '✓' } :
+            t.type === 'error'   ? { dot: 'bg-red-500',     icon: '!' } :
+                                   { dot: 'bg-slate-400',   icon: 'i' };
+          const msg = typeof t.message === 'function' ? t.message(t) : t.message;
+          return (
+            <div
+              onClick={() => toast.dismiss(t.id)}
+              className={`flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-xl bg-white shadow-lg border border-slate-200 cursor-pointer max-w-sm ${
+                t.visible ? 'animate-fade-in' : 'opacity-0'
+              }`}
+              style={{ transition: 'opacity 200ms' }}
+            >
+              <span className={`flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold flex-shrink-0 ${tone.dot}`}>
+                {tone.icon}
+              </span>
+              <div className="flex-1 text-sm font-medium text-slate-800">{msg}</div>
+              <button
+                onClick={e => { e.stopPropagation(); toast.dismiss(t.id); }}
+                aria-label="Dismiss"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+          );
         }}
-      />
+      </Toaster>
       <Routes>
         <Route path="/"         element={<Landing />} />
         <Route path="/login"           element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} /> : <Login />} />
@@ -90,6 +117,7 @@ const AppRoutes = () => {
           <Route path="commissions"     element={<Navigate to="/admin/payouts" replace />} />
           <Route path="payouts"         element={<AdminPayouts />} />
           <Route path="dealer-inventory" element={<AdminDealerInventory />} />
+          <Route path="finance"         element={<AdminFinance />} />
           <Route path="settings"        element={<AdminSettings />} />
         </Route>
 

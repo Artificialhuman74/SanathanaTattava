@@ -5,7 +5,8 @@ const razorpay = process.env.RAZORPAY_KEY_ID
   ? new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET })
   : null;
 
-const SHOP_URL = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+const { getPublicSiteUrl } = require('../utils/publicUrl');
+const SHOP_URL = getPublicSiteUrl();
 
 /**
  * Create a single Razorpay Invoice for an already-paid consumer order.

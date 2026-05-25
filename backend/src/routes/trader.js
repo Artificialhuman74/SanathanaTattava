@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate, requireTrader } = require('../middleware/auth');
-const { deductOrderInventory, returnOrderInventory, getDealerInventory } = require('../services/inventoryService');
+const { deductOrderInventory, returnOrderInventory, getDealerInventory, updateThreshold, checkLowStockAlerts } = require('../services/inventoryService');
 const { emitOrderUpdate } = require('../websocket/socketServer');
 
 const router = express.Router();
@@ -456,8 +456,8 @@ router.post('/sub-dealer-commissions/:id/log-payment', async (req, res) => {
   /* Send email to sub-dealer */
   try {
     const { sendCommissionConfirmationEmail } = require('../services/emailService');
-    const FRONTEND = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
-    const confirmUrl = `${FRONTEND}/confirm-commission?token=${encodeURIComponent(token)}`;
+    const { getPublicSiteUrl } = require('../utils/publicUrl');
+    const confirmUrl = `${getPublicSiteUrl()}/confirm-commission?token=${encodeURIComponent(token)}`;
     await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
       subDealerName: comm.sub_dealer_name,
       parentName:    req.user.name,
@@ -504,8 +504,8 @@ router.post('/sub-dealer-commissions/:id/resend-email', async (req, res) => {
 
   try {
     const { sendCommissionConfirmationEmail } = require('../services/emailService');
-    const FRONTEND = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
-    const confirmUrl = `${FRONTEND}/confirm-commission?token=${encodeURIComponent(comm.confirmation_token)}`;
+    const { getPublicSiteUrl } = require('../utils/publicUrl');
+    const confirmUrl = `${getPublicSiteUrl()}/confirm-commission?token=${encodeURIComponent(comm.confirmation_token)}`;
     await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
       subDealerName: comm.sub_dealer_name,
       parentName:    req.user.name,
@@ -568,6 +568,27 @@ router.get('/inventory', (req, res) => {
     const inventory = getDealerInventory(req.user.id);
     res.json({ inventory });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ── Update Low-Stock Alert Threshold ────────────────────────────────── */
+router.put('/inventory/:productId/threshold', (req, res) => {
+  const productId = Number(req.params.productId);
+  const threshold = Number(req.body.threshold);
+  if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid product id' });
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100000) {
+    return res.status(400).json({ error: 'Threshold must be between 0 and 100000' });
+  }
+  const row = db.prepare(`SELECT 1 FROM dealer_inventory WHERE dealer_id=? AND product_id=?`).get(req.user.id, productId);
+  if (!row) return res.status(404).json({ error: 'You do not have this product in inventory' });
+
+  try {
+    updateThreshold(req.user.id, productId, Math.floor(threshold));
+    // If the new threshold puts current stock into low/out, notify admin immediately
+    checkLowStockAlerts(req.user.id);
+    res.json({ success: true, threshold: Math.floor(threshold) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /* ── My Profile (extended with address/location/delivery info) ───────── */
