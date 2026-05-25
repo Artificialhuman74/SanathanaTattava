@@ -326,7 +326,7 @@ describe('Abandoned-order sweeper', () => {
     expect(result.restored).toBe(1);
 
     const row = db.prepare('SELECT status FROM consumer_orders WHERE id=?').get(order.id);
-    expect(row.status).toBe('cancelled');
+    expect(row).toBeUndefined(); // abandoned orders are deleted, not marked cancelled
     expect(stockOf(dealer.user.id, product.id)).toBe(10); // restored
   });
 
@@ -363,8 +363,8 @@ describe('Abandoned-order sweeper', () => {
 
     const result = sweepAbandonedOrders({ staleMinutes: 30 });
     expect(result.cancelled).toBe(1);
-    expect(db.prepare('SELECT status FROM consumer_orders WHERE id=?').get(failed.id).status)
-      .toBe('cancelled');
+    expect(db.prepare('SELECT id FROM consumer_orders WHERE id=?').get(failed.id))
+      .toBeUndefined();
   });
 
   test('Running the sweeper twice on the same stale order is safe', () => {
@@ -385,7 +385,7 @@ describe('Abandoned-order sweeper', () => {
     const r2 = sweepAbandonedOrders({ staleMinutes: 30 });
 
     expect(r1.cancelled).toBe(1);
-    expect(r2.cancelled).toBe(0); // already cancelled
+    expect(r2.cancelled).toBe(0); // already removed
     expect(stockOf(dealer.user.id, product.id)).toBe(10); // restored, not over-restored
   });
 });

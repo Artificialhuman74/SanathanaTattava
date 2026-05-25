@@ -70,9 +70,11 @@ router.get('/summary', (req, res) => {
   `).get(start, end);
 
   const commissionExpense = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) AS s
-    FROM commissions
-    WHERE created_at >= ? AND created_at < ?
+    SELECT COALESCE(SUM(cm.amount), 0) AS s
+    FROM commissions cm
+    LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+    WHERE cm.created_at >= ? AND cm.created_at < ?
+      AND (co.id IS NULL OR co.status != 'cancelled')
   `).get(start, end);
 
   const income  = consumerIncome.s + manualIncome.s + traderPayments.s;
@@ -110,6 +112,7 @@ router.get('/consumer-orders', (req, res) => {
     JOIN consumers c   ON c.id = co.consumer_id
     LEFT JOIN users u  ON u.id = co.linked_dealer_id
     WHERE co.created_at >= ? AND co.created_at < ?
+      AND co.status != 'cancelled'
     ORDER BY co.created_at DESC
   `).all(start, end);
 
@@ -179,8 +182,10 @@ router.get('/monthly', (req, res) => {
       WHERE it.type='restock' AND it.created_at >= ? AND it.created_at < ?
     `).get(start, end).s;
     const commission = db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS s FROM commissions
-      WHERE created_at >= ? AND created_at < ?
+      SELECT COALESCE(SUM(cm.amount), 0) AS s FROM commissions cm
+      LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
+      WHERE cm.created_at >= ? AND cm.created_at < ?
+        AND (co.id IS NULL OR co.status != 'cancelled')
     `).get(start, end).s;
 
     const income  = consumer + manual + traderPay;
