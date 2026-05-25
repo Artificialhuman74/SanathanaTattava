@@ -985,7 +985,7 @@ export default function Shop() {
           </div>
 
           {cart.length > 0 && (() => {
-            const baseSubtotal = cartTotal / 1.18;
+            const baseSubtotal = cartTotal / 1.05;
             const gstAmount    = cartTotal - baseSubtotal;
             const rawTotal     = containerCostsTotal === null ? null : cartTotal + containerCostsTotal;
             const cartFinal    = rawTotal === null ? null : Math.ceil(rawTotal);
@@ -1001,7 +1001,7 @@ export default function Shop() {
                 <span>₹{baseSubtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400 pl-3">
-                <span>GST (18%)</span>
+                <span>GST (5%)</span>
                 <span>₹{gstAmount.toFixed(2)}</span>
               </div>
               {containerCostsTotal !== null && containerCostsTotal > 0 && (

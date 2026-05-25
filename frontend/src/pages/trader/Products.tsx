@@ -59,9 +59,9 @@ export default function TraderProducts() {
 
   const cartTotal     = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const cartItems     = cart.reduce((s, i) => s + i.quantity, 0);
-  /* GST split — MRP includes 18% GST. Mirror the rounding-up the backend
+  /* GST split — MRP includes 5% GST (oils). Mirror the rounding-up the backend
    * applies in trader.js so the displayed total matches what's actually billed. */
-  const baseSubtotal  = cartTotal / 1.18;
+  const baseSubtotal  = cartTotal / 1.05;
   const gstAmount     = cartTotal - baseSubtotal;
   const finalTotal    = Math.ceil(cartTotal);
   const roundingAdj   = finalTotal - cartTotal;
@@ -260,7 +260,7 @@ export default function TraderProducts() {
                     <span>₹{baseSubtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-slate-400 pl-3">
-                    <span>GST (18%)</span>
+                    <span>GST (5%)</span>
                     <span>₹{gstAmount.toFixed(2)}</span>
                   </div>
                   {roundingAdj > 0 && (

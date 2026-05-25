@@ -137,9 +137,9 @@ export default function Checkout() {
   const hasReferral      = !!effectiveCode.trim();
   const effectiveDiscount= hasReferral ? discountPct : 0;
   const discountAmt      = parseFloat((cartTotal * effectiveDiscount / 100).toFixed(2));
-  /* GST split — MRP shown on site already includes 18% GST.
-   *   base = MRP / 1.18 ; gst = MRP − base */
-  const GST_RATE         = 0.18;
+  /* GST split — MRP shown on site already includes 5% GST (oils).
+   *   base = MRP / 1.05 ; gst = MRP − base */
+  const GST_RATE         = 0.05;
   const baseSubtotal     = cartTotal / (1 + GST_RATE);
   const gstAmount        = cartTotal - baseSubtotal;
 
@@ -669,7 +669,7 @@ export default function Checkout() {
                 <span>₹{baseSubtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400 pl-3">
-                <span>GST (18%)</span>
+                <span>GST (5%)</span>
                 <span>₹{gstAmount.toFixed(2)}</span>
               </div>
               {containerCostsTotal !== null && containerCostsTotal > 0 && (
