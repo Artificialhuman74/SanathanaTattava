@@ -11,9 +11,8 @@ const SHOP_URL = getPublicSiteUrl();
 /**
  * Create a single Razorpay Invoice for an already-paid consumer order.
  *
- * We link to the existing razorpay_order_id so Razorpay marks the invoice as
- * PAID automatically (no "Proceed to Pay" button — it's a receipt). Razorpay
- * itself SMS/emails the consumer the hosted invoice link.
+ * Razorpay's invoices.create no longer accepts order_id, so the invoice is
+ * issued unlinked and Razorpay SMS/emails the consumer the hosted invoice link.
  *
  * Container deposits (first-time orders) appear as a separate line item with
  * a refundable-deposit note in the terms.
@@ -121,7 +120,6 @@ async function sendOrderInvoice(orderId) {
 
   const invoice = await razorpay.invoices.create({
     type:        'invoice',
-    order_id:    order.razorpay_order_id, // links to the already-paid order → auto-marked PAID
     description: `Order ${order.order_number} — Sanathana Tattva`,
     customer,
     line_items:  lineItems,
