@@ -6,6 +6,7 @@ import {
   Clock, CheckCircle2, TrendingUp, Info, AlertCircle,
   ArrowDownToLine, X, Loader2, Wallet, RefreshCw,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface CommissionData {
   summary: {
@@ -221,8 +222,8 @@ export default function TraderCommissions() {
                       </span>
                     </td>
                     <td className="text-xs text-slate-500">{w.admin_notes || '—'}</td>
-                    <td className="text-xs text-slate-400">{new Date(w.requested_at).toLocaleDateString('en-IN')}</td>
-                    <td className="text-xs text-slate-400">{w.processed_at ? new Date(w.processed_at).toLocaleDateString('en-IN') : '—'}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(w.requested_at)}</td>
+                    <td className="text-xs text-slate-400">{w.processed_at ? formatIstDate(w.processed_at) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -246,7 +247,7 @@ export default function TraderCommissions() {
                 {(data?.weeklyBreakdown || []).map((w, i) => (
                   <tr key={i}>
                     <td className="text-sm text-slate-600">
-                      {new Date(w.week_start).toLocaleDateString('en-IN')} – {new Date(w.week_end).toLocaleDateString('en-IN')}
+                      {formatIstDate(w.week_start)} – {formatIstDate(w.week_end)}
                     </td>
                     <td className="text-center font-semibold">{w.count}</td>
                     <td className="font-bold text-emerald-600">{fmt(parseFloat(String(w.amount)))}</td>
@@ -302,7 +303,7 @@ export default function TraderCommissions() {
                         )}
                       </div>
                     </td>
-                    <td className="text-xs text-slate-400">{new Date(c.created_at).toLocaleDateString('en-IN')}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(c.created_at)}</td>
                     <td>
                       {c.status === 'transferring' && c.razorpay_transfer_id && (
                         <button

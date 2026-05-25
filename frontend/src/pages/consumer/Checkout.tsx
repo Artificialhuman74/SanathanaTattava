@@ -137,11 +137,19 @@ export default function Checkout() {
   const hasReferral      = !!effectiveCode.trim();
   const effectiveDiscount= hasReferral ? discountPct : 0;
   const discountAmt      = parseFloat((cartTotal * effectiveDiscount / 100).toFixed(2));
-  /* Round UP to whole rupee — must mirror the server's Math.ceil so the
-   * "Pay ₹X" button shows the exact amount Razorpay will charge. */
-  const finalTotal       = containerCostsTotal === null
+  /* GST split — MRP shown on site already includes 18% GST.
+   *   base = MRP / 1.18 ; gst = MRP − base */
+  const GST_RATE         = 0.18;
+  const baseSubtotal     = cartTotal / (1 + GST_RATE);
+  const gstAmount        = cartTotal - baseSubtotal;
+
+  /* Raw total (pre-rounding) and final total (rounded UP to whole rupee).
+   * Server mirrors this Math.ceil so the "Pay ₹X" button matches Razorpay. */
+  const rawTotal         = containerCostsTotal === null
     ? null
-    : Math.ceil(cartTotal - discountAmt + containerCostsTotal);
+    : cartTotal - discountAmt + containerCostsTotal;
+  const finalTotal       = rawTotal === null ? null : Math.ceil(rawTotal);
+  const roundingAdj      = rawTotal === null ? 0 : finalTotal! - rawTotal;
 
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {
@@ -653,27 +661,53 @@ export default function Checkout() {
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
               <div className="flex justify-between text-sm text-slate-600">
-                <span>Subtotal ({cart.reduce((s, i) => s + i.quantity, 0)} items)</span>
+                <span>Subtotal ({cart.reduce((s, i) => s + i.quantity, 0)} items, incl. GST)</span>
                 <span>₹{cartTotal.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between text-xs text-slate-400 pl-3">
+                <span>Base price</span>
+                <span>₹{baseSubtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400 pl-3">
+                <span>GST (18%)</span>
+                <span>₹{gstAmount.toFixed(2)}</span>
+              </div>
+              {containerCostsTotal !== null && containerCostsTotal > 0 && (
+                <div className="flex justify-between items-baseline gap-3 text-xs text-amber-600 font-semibold">
+                  <span className="flex-1 min-w-0 whitespace-nowrap">Container deposit (one-time)</span>
+                  <span className="whitespace-nowrap flex-shrink-0">+ ₹{containerCostsTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {roundingAdj > 0 && (
+                <div className="flex justify-between text-xs text-slate-500 italic">
+                  <span>Rounding (up to nearest ₹)</span>
+                  <span>+₹{roundingAdj.toFixed(2)}</span>
+                </div>
+              )}
               {effectiveDiscount > 0 && (
                 <div className="flex justify-between text-sm text-emerald-600 font-semibold">
                   <span className="flex items-center gap-1.5"><Tag size={11} />Referral discount ({effectiveDiscount}%)</span>
                   <span>−₹{discountAmt.toFixed(2)}</span>
                 </div>
               )}
-              {containerCostsTotal !== null && containerCostsTotal > 0 && (
-                <div className="flex justify-between text-sm text-amber-600 font-semibold">
-                  <span>Container deposit (one-time)</span>
-                  <span>+₹{containerCostsTotal.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
+              <div className="flex justify-between items-baseline font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
                 <span>Total</span>
-                <span className="text-brand-600">
-                  {finalTotal === null ? '…' : `₹${finalTotal.toFixed(2)}`}
+                <span className="flex items-baseline gap-2">
+                  {effectiveDiscount > 0 && finalTotal !== null && (
+                    <span className="text-sm font-medium text-slate-400 line-through">
+                      ₹{Math.ceil(cartTotal + (containerCostsTotal ?? 0))}
+                    </span>
+                  )}
+                  <span className="text-brand-600">
+                    {finalTotal === null ? '…' : `₹${finalTotal}`}
+                  </span>
                 </span>
               </div>
+              {roundingAdj > 0 && (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Your total has been rounded up to the nearest rupee.
+                </p>
+              )}
               {containerCostsTotal !== null && containerCostsTotal > 0 && (
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Container deposit is a one-time charge — you won't pay it again on refills. It's fully refundable if returned undamaged.
@@ -687,7 +721,7 @@ export default function Checkout() {
               className="btn-primary w-full py-4 mt-5 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {placing && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {placing ? 'Processing…' : finalTotal === null ? 'Loading…' : consumer ? `Pay ₹${finalTotal.toFixed(2)}` : `Place Order · ₹${finalTotal.toFixed(2)}`}
+              {placing ? 'Processing…' : finalTotal === null ? 'Loading…' : consumer ? `Pay ₹${finalTotal}` : `Place Order · ₹${finalTotal}`}
             </button>
 
             {!consumer && (

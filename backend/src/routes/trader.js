@@ -111,8 +111,11 @@ router.post('/orders', [
   }
 
   const orderNum = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  /* Round the final charge UP to the nearest whole rupee — keeps totals
+   * in integer rupees so downstream invoices/receipts can match cleanly. */
+  const totalAmt = Math.ceil(subtotal);
   const order = db.transaction(() => {
-    const or = db.prepare(`INSERT INTO orders (order_number,trader_id,status,subtotal,discount,total_amount,notes) VALUES (?,?,'pending',?,0,?,?)`).run(orderNum, req.user.id, subtotal, subtotal, notes||null);
+    const or = db.prepare(`INSERT INTO orders (order_number,trader_id,status,subtotal,discount,total_amount,notes) VALUES (?,?,'pending',?,0,?,?)`).run(orderNum, req.user.id, subtotal, totalAmt, notes||null);
     const ii = db.prepare(`INSERT INTO order_items (order_id,product_id,quantity,price,total) VALUES (?,?,?,?,?)`);
     for (const it of resolved) {
       ii.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total);

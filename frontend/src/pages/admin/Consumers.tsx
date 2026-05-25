@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { Users, Search, Tag, Phone, MapPin, ShoppingBag, TrendingUp, X } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface Consumer {
   id: number;
@@ -262,7 +263,7 @@ export default function AdminConsumers() {
               </div>
 
               <p className="text-xs text-slate-400">
-                Joined {new Date(selected.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                Joined {formatIstDate(selected.created_at)}
               </p>
             </div>
           </div>

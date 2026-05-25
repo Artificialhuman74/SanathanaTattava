@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
+import { formatIstDate } from '../../utils/dateTime';
 
 const STATUS_COLORS: Record<string, string> = {
   pending:    'bg-amber-100 text-amber-700',
@@ -279,7 +280,7 @@ export default function TraderDashboard() {
                     </td>
                     <td className="font-bold">₹{parseFloat(String(o.total_amount)).toFixed(2)}</td>
                     <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span></td>
-                    <td className="text-slate-400 text-xs">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                    <td className="text-slate-400 text-xs">{formatIstDate(o.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

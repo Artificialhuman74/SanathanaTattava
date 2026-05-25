@@ -5,6 +5,7 @@ import {
   DollarSign, ChevronDown, Zap, Check, Clock, RefreshCw,
   Star, AlertCircle, ArrowDownToLine,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface CommissionSummary {
   dealer_id: number;
@@ -280,7 +281,7 @@ export default function AdminCommissions() {
                     </span>
                     {w.admin_notes && <p className="text-xs text-slate-400 mt-0.5">{w.admin_notes}</p>}
                   </td>
-                  <td className="text-xs text-slate-400">{new Date(w.requested_at).toLocaleDateString('en-IN')}</td>
+                  <td className="text-xs text-slate-400">{formatIstDate(w.requested_at)}</td>
                   <td>
                     {w.status === 'pending' && (
                       <div className="flex gap-2">
@@ -305,7 +306,7 @@ export default function AdminCommissions() {
                     )}
                     {w.status !== 'pending' && (
                       <span className="text-xs text-slate-400">
-                        {w.processed_at ? new Date(w.processed_at).toLocaleDateString('en-IN') : '—'}
+                        {w.processed_at ? formatIstDate(w.processed_at) : '—'}
                       </span>
                     )}
                   </td>
@@ -372,7 +373,7 @@ export default function AdminCommissions() {
                     </span>
                   </td>
                   <td className="text-xs text-slate-500">
-                    {new Date(p.week_start).toLocaleDateString('en-IN')} – {new Date(p.week_end).toLocaleDateString('en-IN')}
+                    {formatIstDate(p.week_start)} – {formatIstDate(p.week_end)}
                   </td>
                   <td className="text-center text-sm font-medium">{p.order_count}</td>
                   <td className="font-bold text-emerald-600">
@@ -384,7 +385,7 @@ export default function AdminCommissions() {
                     </span>
                   </td>
                   <td className="text-xs text-slate-400">
-                    {p.processed_at ? new Date(p.processed_at).toLocaleDateString('en-IN') : '—'}
+                    {p.processed_at ? formatIstDate(p.processed_at) : '—'}
                   </td>
                   <td>
                     <button

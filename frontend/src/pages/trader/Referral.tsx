@@ -7,6 +7,7 @@ import {
   Share2, Copy, CheckCircle2, Users, ShoppingCart, Star,
   UserCheck, Phone, Mail, Calendar, Lock, TrendingUp,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 export default function TraderReferral() {
   const { user, isTier1 } = useAuth();
@@ -204,7 +205,7 @@ export default function TraderReferral() {
                     </td>
                     <td className="font-semibold">{t.order_count}</td>
                     <td className="text-xs text-slate-400">
-                      <span className="flex items-center gap-1"><Calendar size={10} />{new Date(t.created_at).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1"><Calendar size={10} />{formatIstDate(t.created_at)}</span>
                     </td>
                   </tr>
                 ))}

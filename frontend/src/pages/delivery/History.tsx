@@ -5,6 +5,7 @@ import {
   CheckCircle2, XCircle, Loader2, AlertCircle, Clock,
   TrendingUp, Package,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 export default function DeliveryHistory() {
   const navigate = useNavigate();
@@ -116,7 +117,7 @@ export default function DeliveryHistory() {
                           {order.consumer_name || 'Customer'}
                         </p>
                         <p className="text-[10px] text-slate-400 flex-shrink-0 ml-2">
-                          {date ? new Date(date).toLocaleDateString('en-IN') : ''}
+                          {date ? formatIstDate(date) : ''}
                         </p>
                       </div>
                     </div>

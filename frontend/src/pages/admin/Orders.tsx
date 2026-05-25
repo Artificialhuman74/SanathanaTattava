@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { ShoppingCart, Search, ChevronDown, Eye, X } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface Order {
   id: number; order_number: string; trader_name: string; trader_email: string;
@@ -135,7 +136,7 @@ export default function AdminOrders() {
                         {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td className="text-xs text-slate-400">{new Date(o.created_at).toLocaleDateString()}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                     <td>
                       <button onClick={() => viewDetail(o.id)} className="btn-ghost p-2 text-brand-600">
                         <Eye size={14} />
@@ -172,7 +173,7 @@ export default function AdminOrders() {
                 <div><p className="text-slate-400 text-xs">Trader</p><p className="font-semibold">{detail.order.trader_name}</p></div>
                 <div><p className="text-slate-400 text-xs">Status</p><span className={`badge ${STATUS_COLORS[detail.order.status]}`}>{detail.order.status}</span></div>
                 <div><p className="text-slate-400 text-xs">Tier</p><p className="font-semibold">Tier {detail.order.tier}</p></div>
-                <div><p className="text-slate-400 text-xs">Date</p><p className="font-semibold">{new Date(detail.order.created_at).toLocaleDateString()}</p></div>
+                <div><p className="text-slate-400 text-xs">Date</p><p className="font-semibold">{formatIstDate(detail.order.created_at)}</p></div>
               </div>
               {detail.order.notes && (
                 <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">

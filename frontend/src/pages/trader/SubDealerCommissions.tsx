@@ -5,6 +5,7 @@ import {
   Users, Banknote, Mail, RefreshCw, AlertCircle, Check, Clock,
   Loader2, X, AlertTriangle, ShieldAlert,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 type Status = 'pending' | 'awaiting_confirmation' | 'paid' | 'disputed';
 
@@ -212,7 +213,7 @@ export default function SubDealerCommissions() {
                         : <span className="text-slate-400">—</span>}
                     </td>
                     <td className="text-xs text-slate-400">
-                      {c.paid_at_offline ? new Date(c.paid_at_offline).toLocaleDateString('en-IN') : '—'}
+                      {c.paid_at_offline ? formatIstDate(c.paid_at_offline) : '—'}
                     </td>
                     <td>
                       {c.status === 'pending' && (
@@ -237,7 +238,7 @@ export default function SubDealerCommissions() {
                       )}
                       {c.status === 'paid' && (
                         <span className="text-xs text-emerald-600 font-medium">
-                          Confirmed {c.confirmed_at ? new Date(c.confirmed_at).toLocaleDateString('en-IN') : ''}
+                          Confirmed {c.confirmed_at ? formatIstDate(c.confirmed_at) : ''}
                         </span>
                       )}
                       {c.status === 'disputed' && (

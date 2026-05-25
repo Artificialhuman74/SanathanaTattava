@@ -5,6 +5,7 @@ import {
   Users, Search, ChevronDown, Star, UserCheck, UserX, Phone, Mail,
   Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2, ShieldCheck, ShieldOff, RefreshCw,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface Trader {
   id: number;
@@ -259,7 +260,7 @@ export default function AdminTraders() {
           </span>
         </td>
         <td className="text-xs text-slate-400 whitespace-nowrap">
-          <span className="flex items-center gap-1"><Calendar size={10} />{new Date(t.created_at).toLocaleDateString('en-IN')}</span>
+          <span className="flex items-center gap-1"><Calendar size={10} />{formatIstDate(t.created_at)}</span>
         </td>
         <td>
           <div className="flex flex-col gap-1">

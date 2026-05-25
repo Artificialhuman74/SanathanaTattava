@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface AdminStats {
   totalTraders: number;
@@ -235,7 +236,7 @@ export default function AdminDashboard() {
                       {o.status}
                     </span>
                   </td>
-                  <td className="text-slate-400 text-xs">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                  <td className="text-slate-400 text-xs">{formatIstDate(o.created_at)}</td>
                 </tr>
               ))}
             </tbody>

@@ -9,6 +9,7 @@ import {
   Landmark, PartyPopper,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { parseDbDate } from '../../utils/dateTime';
 
 interface ProfileData {
   user: {
@@ -238,7 +239,7 @@ export default function TraderProfile() {
                 {user.status}
               </span>
             </div>
-            <p className="text-sm text-slate-500 mt-1">Member since {new Date(user.created_at).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+            <p className="text-sm text-slate-500 mt-1">Member since {parseDbDate(user.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' })}</p>
           </div>
           {/* Referral Code */}
           <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3 border border-slate-200">

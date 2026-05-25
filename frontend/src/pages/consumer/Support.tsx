@@ -6,6 +6,7 @@ import {
   Phone, Mail, MessageCircle, Package, Truck,
   ChevronRight, X, ShoppingBag, RotateCcw,
 } from 'lucide-react';
+import { formatIst, formatIstDate } from '../../utils/dateTime';
 
 interface ConsumerOrder {
   id: number;
@@ -168,7 +169,7 @@ export default function Support() {
                     <p className="text-xs text-gray-400 mt-0.5">
                       {order.order_number}
                       {' · '}
-                      {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {formatIstDate(order.created_at)}
                     </p>
                   </div>
                   <ChevronRight size={16} className="text-gray-300 flex-shrink-0" />
@@ -203,7 +204,7 @@ export default function Support() {
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
               <div>
                 <p className="font-bold text-gray-900">{selected.order_number}</p>
-                <p className="text-xs text-gray-400">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400">{formatIst(selected.created_at)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>

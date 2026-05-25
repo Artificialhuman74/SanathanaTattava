@@ -475,6 +475,7 @@ router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
       const account = await razorpay.accounts.create({
         email:               trader.email,
         phone:               trader.phone,
+        type:                'route',
         legal_business_name: trader.bank_account_name || trader.name,
         business_type:       'individual',
         contact_name:        trader.name,
@@ -492,6 +493,7 @@ router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
             },
           },
         },
+        legal_info: {},
       });
       accountId = account.id;
       db.prepare(`UPDATE users SET razorpay_linked_account_id=?, razorpay_account_status='created' WHERE id=?`)

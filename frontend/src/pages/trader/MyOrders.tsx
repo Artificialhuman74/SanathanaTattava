@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { ShoppingCart, X, Package, ChevronDown } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -73,7 +74,7 @@ export default function MyOrders() {
                     <td className="font-mono text-brand-600 font-medium">{o.order_number}</td>
                     <td className="font-bold">₹{o.total_amount.toFixed(2)}</td>
                     <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span></td>
-                    <td className="text-xs text-slate-400">{new Date(o.created_at).toLocaleDateString()}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                     <td>
                       <button onClick={() => viewDetail(o.id)} className="btn-ghost text-brand-600 text-xs font-semibold">
                         View

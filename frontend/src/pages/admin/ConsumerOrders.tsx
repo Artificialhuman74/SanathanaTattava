@@ -5,6 +5,7 @@ import {
   ShoppingBag, Search, ChevronDown, X, Phone, MapPin, Package,
   User, Star, Truck, Clock, CheckCircle2, XCircle,
 } from 'lucide-react';
+import { formatIst, formatIstDate } from '../../utils/dateTime';
 
 interface ConsumerOrder {
   id: number;
@@ -211,7 +212,7 @@ export default function AdminConsumerOrders() {
                         {PAYMENT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td className="text-xs text-slate-400">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                     <td onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => setSelected(o)}
@@ -243,7 +244,7 @@ export default function AdminConsumerOrders() {
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{formatIst(selected.created_at)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`badge ${STATUS_COLORS[selected.status]}`}>{selected.status}</span>

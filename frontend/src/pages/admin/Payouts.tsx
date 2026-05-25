@@ -5,6 +5,7 @@ import {
   Landmark, Link2, Send, RefreshCw, AlertCircle, Check, Clock,
   Loader2, Wallet, Users as UsersIcon, UserCheck, ChevronRight,
 } from 'lucide-react';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface PayoutTrader {
   id: number;
@@ -414,7 +415,7 @@ export default function AdminPayouts() {
                         <p className="text-xs font-mono text-slate-400 mt-0.5">{c.razorpay_transfer_id}</p>
                       )}
                     </td>
-                    <td className="text-xs text-slate-400">{new Date(c.created_at).toLocaleDateString('en-IN')}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(c.created_at)}</td>
                     <td>
                       {canTransfer ? (
                         <button

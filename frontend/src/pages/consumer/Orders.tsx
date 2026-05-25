@@ -5,6 +5,7 @@ import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import toast from 'react-hot-toast';
 import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw } from 'lucide-react';
 import { getCartCount } from '../../services/cartStorage';
+import { formatIst, formatIstDate } from '../../utils/dateTime';
 
 interface ConsumerOrder {
   id: number;
@@ -179,7 +180,7 @@ export default function ConsumerOrders() {
                   {' · '}
                   {order.item_count ?? (order.items?.length ?? 0)} {(order.item_count ?? (order.items?.length ?? 0)) === 1 ? 'item' : 'items'}
                   {' · '}
-                  {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {formatIstDate(order.created_at)}
                 </p>
               </div>
 
@@ -233,7 +234,7 @@ export default function ConsumerOrders() {
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
               <div>
                 <p className="font-bold text-gray-900">{selected.order_number}</p>
-                <p className="text-xs text-gray-400">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400">{formatIst(selected.created_at)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>

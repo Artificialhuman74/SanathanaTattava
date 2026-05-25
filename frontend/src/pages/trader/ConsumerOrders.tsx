@@ -7,6 +7,7 @@ import {
   ShoppingBag, Search, ChevronDown, X, Phone, MapPin, Package,
   User, Truck, AlertTriangle, CheckCircle2, ChevronRight,
 } from 'lucide-react';
+import { formatIst, formatIstDate } from '../../utils/dateTime';
 
 interface ConsumerOrder {
   id: number;
@@ -276,7 +277,7 @@ const totalOrders   = orders.length;
                     <td>
                       <span className={`badge ${PAYMENT_COLORS[o.payment_status] || 'bg-slate-100 text-slate-600'}`}>{o.payment_status}</span>
                     </td>
-                    <td className="text-xs text-slate-400">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                    <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -299,7 +300,7 @@ const totalOrders   = orders.length;
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
-                <p className="text-xs text-slate-400">{new Date(selected.created_at).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-slate-400">{formatIst(selected.created_at)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`badge ${STATUS_COLORS[selected.status]}`}>{selected.status}</span>

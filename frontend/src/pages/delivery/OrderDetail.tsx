@@ -7,6 +7,7 @@ import {
   Truck, Loader2, AlertCircle, X, User, ShoppingBag,
   XCircle, Navigation, Send,
 } from 'lucide-react';
+import { formatIst } from '../../utils/dateTime';
 
 const DELIVERY_STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700',
@@ -340,31 +341,31 @@ export default function DeliveryOrderDetail() {
               {timeline.created_at && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500">Order Created</span>
-                  <span className="text-slate-400">{new Date(timeline.created_at).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400">{formatIst(timeline.created_at)}</span>
                 </div>
               )}
               {timeline.delivery_accepted_at && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-blue-600 font-medium">Accepted</span>
-                  <span className="text-slate-400">{new Date(timeline.delivery_accepted_at).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400">{formatIst(timeline.delivery_accepted_at)}</span>
                 </div>
               )}
               {timeline.delivery_packed_at && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-purple-600 font-medium">Packed</span>
-                  <span className="text-slate-400">{new Date(timeline.delivery_packed_at).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400">{formatIst(timeline.delivery_packed_at)}</span>
                 </div>
               )}
               {timeline.delivery_started_at && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-orange-600 font-medium">Out for Delivery</span>
-                  <span className="text-slate-400">{new Date(timeline.delivery_started_at).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400">{formatIst(timeline.delivery_started_at)}</span>
                 </div>
               )}
               {timeline.delivery_verified_at && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-emerald-600 font-medium">Delivered</span>
-                  <span className="text-slate-400">{new Date(timeline.delivery_verified_at).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400">{formatIst(timeline.delivery_verified_at)}</span>
                 </div>
               )}
             </div>
@@ -440,7 +441,7 @@ export default function DeliveryOrderDetail() {
             Delivered Successfully
             {order.delivery_verified_at && (
               <span className="text-sm font-normal text-emerald-600 ml-1">
-                at {new Date(order.delivery_verified_at).toLocaleString('en-IN')}
+                at {formatIst(order.delivery_verified_at)}
               </span>
             )}
           </div>

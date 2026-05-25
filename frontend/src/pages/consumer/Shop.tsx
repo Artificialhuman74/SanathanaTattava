@@ -10,6 +10,7 @@ import {
   ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, ChevronDown, Info, Star, MessageSquare,
 } from 'lucide-react';
 import { consumerApi } from '../../contexts/AuthContext';
+import { formatIstDate } from '../../utils/dateTime';
 
 interface Product {
   id: number;
@@ -983,24 +984,49 @@ export default function Shop() {
             })}
           </div>
 
-          {cart.length > 0 && (
+          {cart.length > 0 && (() => {
+            const baseSubtotal = cartTotal / 1.18;
+            const gstAmount    = cartTotal - baseSubtotal;
+            const rawTotal     = containerCostsTotal === null ? null : cartTotal + containerCostsTotal;
+            const cartFinal    = rawTotal === null ? null : Math.ceil(rawTotal);
+            const cartRounding = rawTotal === null ? 0 : cartFinal! - rawTotal;
+            return (
             <div className="p-4 border-t border-slate-100 space-y-2 flex-shrink-0 pb-safe">
               <div className="flex justify-between items-center text-sm text-slate-500">
-                <span>{cartCount} item{cartCount !== 1 ? 's' : ''}</span>
+                <span>{cartCount} item{cartCount !== 1 ? 's' : ''} (incl. GST)</span>
                 <span>₹{cartTotal.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between text-xs text-slate-400 pl-3">
+                <span>Base price</span>
+                <span>₹{baseSubtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400 pl-3">
+                <span>GST (18%)</span>
+                <span>₹{gstAmount.toFixed(2)}</span>
+              </div>
               {containerCostsTotal !== null && containerCostsTotal > 0 && (
-                <div className="flex justify-between items-center text-sm text-amber-600 font-medium">
-                  <span>Container (one-time)</span>
-                  <span>+₹{containerCostsTotal.toFixed(2)}</span>
+                <div className="flex justify-between items-baseline gap-3 text-sm text-amber-600 font-medium">
+                  <span className="flex-1 min-w-0">Container (one-time)</span>
+                  <span className="whitespace-nowrap flex-shrink-0">+ ₹{containerCostsTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {cartRounding > 0 && (
+                <div className="flex justify-between text-xs text-slate-500 italic">
+                  <span>Rounding (up to nearest ₹)</span>
+                  <span>+₹{cartRounding.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Total</span>
                 <span className="text-xl font-extrabold text-brand-600">
-                  {containerCostsTotal === null ? '…' : `₹${Math.ceil(cartTotal + containerCostsTotal)}`}
+                  {cartFinal === null ? '…' : `₹${cartFinal}`}
                 </span>
               </div>
+              {cartRounding > 0 && (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Your total has been rounded up to the nearest rupee.
+                </p>
+              )}
               {consumer?.referral_code_used && discountPct > 0 && (
                 <p className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
                   <Tag size={11} /> {discountPct}% referral discount applied at checkout
@@ -1010,7 +1036,8 @@ export default function Shop() {
                 Proceed to Checkout →
               </button>
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -1113,7 +1140,7 @@ function ProductReviews({ productId, consumer }: { productId: number; consumer: 
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <StarRow rating={r.rating} size={11} />
                     <span className="text-[10px] text-slate-400">
-                      {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {formatIstDate(r.created_at)}
                     </span>
                   </div>
                 </div>

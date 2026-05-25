@@ -5,6 +5,7 @@ import { getApiHttpBaseUrl } from '../config/apiBase';
 import {
   Check, X, ShieldAlert, Loader2, Banknote, AlertCircle, Mail,
 } from 'lucide-react';
+import { parseDbDate } from '../utils/dateTime';
 
 interface Loaded {
   commission: {
@@ -154,7 +155,7 @@ export default function ConfirmCommission() {
               <Row label="Method" value={c.payment_method === 'cash' ? '💵 Cash (in person)' : '🏦 Bank transfer'} />
               {c.order_number && <Row label="Order" value={c.order_number} valueClass="font-mono text-sm" />}
               {c.paid_at_offline && (
-                <Row label="Marked paid on" value={new Date(c.paid_at_offline).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })} />
+                <Row label="Marked paid on" value={parseDbDate(c.paid_at_offline).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} />
               )}
               {c.payment_note && (
                 <div className="pt-2 border-t border-emerald-200">

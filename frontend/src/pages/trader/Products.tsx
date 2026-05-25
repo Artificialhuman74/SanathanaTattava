@@ -57,8 +57,14 @@ export default function TraderProducts() {
 
   const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
 
-  const cartTotal   = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const cartItems   = cart.reduce((s, i) => s + i.quantity, 0);
+  const cartTotal     = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const cartItems     = cart.reduce((s, i) => s + i.quantity, 0);
+  /* GST split — MRP includes 18% GST. Mirror the rounding-up the backend
+   * applies in trader.js so the displayed total matches what's actually billed. */
+  const baseSubtotal  = cartTotal / 1.18;
+  const gstAmount     = cartTotal - baseSubtotal;
+  const finalTotal    = Math.ceil(cartTotal);
+  const roundingAdj   = finalTotal - cartTotal;
 
   const placeOrder = async () => {
     if (cart.length === 0) { toast.error('Cart is empty'); return; }
@@ -244,10 +250,35 @@ export default function TraderProducts() {
                   className="form-input resize-none text-sm"
                   rows={2} placeholder="Order notes (optional)..."
                 />
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-900">Total</span>
-                  <span className="text-xl font-extrabold text-brand-600">₹{cartTotal.toFixed(2)}</span>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>Subtotal (incl. GST)</span>
+                    <span>₹{cartTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 pl-3">
+                    <span>Base price</span>
+                    <span>₹{baseSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 pl-3">
+                    <span>GST (18%)</span>
+                    <span>₹{gstAmount.toFixed(2)}</span>
+                  </div>
+                  {roundingAdj > 0 && (
+                    <div className="flex justify-between text-xs text-slate-500 italic">
+                      <span>Rounding (up to nearest ₹)</span>
+                      <span>+₹{roundingAdj.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                  <span className="font-bold text-slate-900">Total</span>
+                  <span className="text-xl font-extrabold text-brand-600">₹{finalTotal}</span>
+                </div>
+                {roundingAdj > 0 && (
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Your total has been rounded up to the nearest rupee.
+                  </p>
+                )}
                 <button onClick={placeOrder} disabled={placing} className="btn-primary w-full py-3 text-base">
                   {placing ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <CheckCircle2 size={16} />}
                   {placing ? 'Placing Order...' : 'Place Order'}
