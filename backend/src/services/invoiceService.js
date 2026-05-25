@@ -1,149 +1,181 @@
-const Razorpay = require('razorpay');
-const db = require('../database/db');
-
-const razorpay = process.env.RAZORPAY_KEY_ID
-  ? new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET })
-  : null;
-
-const { getPublicSiteUrl } = require('../utils/publicUrl');
-const SHOP_URL = getPublicSiteUrl();
-
 /**
- * Create a single Razorpay Invoice for an already-paid consumer order.
+ * Self-generated GST-compliant invoice flow.
  *
- * Razorpay's invoices.create no longer accepts order_id, so the invoice is
- * issued unlinked and Razorpay SMS/emails the consumer the hosted invoice link.
+ * Replaces the prior Razorpay Invoices API integration. Triggered from the
+ * `payment.captured` webhook (idempotent — skips if invoice already exists
+ * for the order).
  *
- * Container deposits (first-time orders) appear as a separate line item with
- * a refundable-deposit note in the terms.
+ * Pipeline:
+ *   1. Pull order + items + consumer
+ *   2. Allocate sequential invoice number (FY-scoped, resets every April 1)
+ *   3. Compute taxable/CGST/SGST/IGST split (MRP is GST-inclusive)
+ *   4. Insert row in `invoices` table
+ *   5. Render PDF via pdfkit, save to disk
+ *   6. Email PDF as attachment via Resend
  */
-async function sendOrderInvoice(orderId) {
-  if (!razorpay) return;
 
-  const order = db.prepare('SELECT * FROM consumer_orders WHERE id = ?').get(orderId);
-  if (!order) return;
-  if (order.razorpay_invoice_id) return;             // already created
-  if (!order.razorpay_order_id) {                    // can't link → skip
-    console.log(`[invoice] skipping order ${order.order_number} — no razorpay_order_id`);
-    return;
+const db = require('../database/db');
+const fs = require('fs');
+const { renderInvoicePdf } = require('./invoicePdf');
+const { stateFromPincode } = require('./pincodeState');
+const { sendInvoiceEmail } = require('./emailService');
+
+const BUSINESS_STATE = process.env.BUSINESS_STATE || 'Karnataka';
+
+/* ── Invoice number generator (FY-scoped, sequential) ───────────────── */
+function currentFY() {
+  const now = new Date();
+  const m = now.getMonth(), y = now.getFullYear();
+  const start = m >= 3 ? y : y - 1; // April = month index 3
+  return `${String(start).slice(-2)}${String(start + 1).slice(-2)}`;
+}
+
+const allocateInvoiceNumber = db.transaction(() => {
+  const fy = currentFY();
+  const key = `invoice_seq_${fy}`;
+  const row = db.prepare(`SELECT value FROM settings WHERE key=?`).get(key);
+  const next = (row ? parseInt(row.value, 10) : 0) + 1;
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP
+  `).run(key, String(next));
+  return `INV-${fy}-${String(next).padStart(4, '0')}`;
+});
+
+/* ── Main entry point ───────────────────────────────────────────────── */
+async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
+  const existing = db.prepare(`SELECT * FROM invoices WHERE order_id=?`).get(orderId);
+  if (existing) {
+    console.log(`[invoice] order ${orderId} already has invoice ${existing.invoice_number} — skipping`);
+    return existing;
   }
 
-  const consumer = db.prepare('SELECT * FROM consumers WHERE id = ?').get(order.consumer_id);
-  if (!consumer) return;
+  const order = db.prepare(`SELECT * FROM consumer_orders WHERE id=?`).get(orderId);
+  if (!order) { console.log(`[invoice] order ${orderId} not found`); return null; }
 
-  const hasContact = !!(consumer.phone || consumer.email);
-  if (!hasContact) {
-    console.log(`[invoice] skipping order ${order.order_number} — no consumer phone or email`);
-    return;
-  }
+  const consumer = db.prepare(`SELECT * FROM consumers WHERE id=?`).get(order.consumer_id);
+  if (!consumer) { console.log(`[invoice] consumer ${order.consumer_id} not found`); return null; }
 
   const items = db.prepare(`
-    SELECT oi.*, p.name as product_name, p.unit
+    SELECT oi.product_id, oi.quantity, oi.price AS unit_price,
+           p.name, p.hsn_code, p.unit
     FROM consumer_order_items oi
     JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = ?
   `).all(orderId);
 
-  /* Per-unit price already reflects the discount (we scale by discountFactor). */
-  const discountFactor = order.discount_percent > 0 ? (1 - order.discount_percent / 100) : 1;
+  if (!items.length) { console.log(`[invoice] order ${orderId} has no items — skipping`); return null; }
 
-  /* Razorpay rejects line items below INR 1.00, so we clamp to 100 paise.
-   * Track whether any line was rounded so we can disclose it on the invoice. */
-  let anyRounded = false;
-  const lineItems = items.map(item => {
-    const raw     = Math.round(item.price * discountFactor * 100);
-    const clamped = Math.max(100, raw);
-    if (clamped !== raw) anyRounded = true;
+  /* ── Tax computation ─────────────────────────────────────────────────
+   * Prices stored on consumer_order_items are GST-inclusive at the rate
+   * declared on the product (default 5% for oils — HSN 1512).
+   * For each item: gross = unit_price * qty; taxable = gross / (1+rate/100). */
+  const DEFAULT_TAX_RATE = 5;
+
+  const customerState = stateFromPincode(order.pincode);
+  const isIntraState  = !!customerState && customerState === BUSINESS_STATE;
+
+  let totalTaxable = 0, totalTax = 0, grossTotal = 0;
+  const invoiceItems = items.map(it => {
+    const rate    = DEFAULT_TAX_RATE; // oils — same rate across the SKU range
+    const gross   = it.unit_price * it.quantity;
+    const taxable = +(gross / (1 + rate / 100)).toFixed(2);
+    const tax     = +(gross - taxable).toFixed(2);
+    totalTaxable += taxable;
+    totalTax     += tax;
+    grossTotal   += gross;
     return {
-      name:        item.product_name,
-      description: `per ${item.unit || 'unit'}`,
-      amount:      clamped,
-      quantity:    item.quantity,
+      name:           it.name,
+      hsn_code:       it.hsn_code || null,
+      quantity:       it.quantity,
+      unit_price:     it.unit_price,
+      tax_rate:       rate,
+      taxable_amount: taxable,
+      tax_amount:     tax,
     };
   });
 
-  const containerTotal = order.container_costs_total || 0;
-  const hasContainer = containerTotal > 0;
-  if (hasContainer) {
-    const rawContainer     = Math.round(containerTotal * 100);
-    const clampedContainer = Math.max(100, rawContainer);
-    if (clampedContainer !== rawContainer) anyRounded = true;
-    lineItems.push({
-      name:        'Refundable Container Deposit',
-      description: 'One-time · Refundable if returned undamaged',
-      amount:      clampedContainer,
-      quantity:    1,
+  totalTaxable = +totalTaxable.toFixed(2);
+  totalTax     = +totalTax.toFixed(2);
+  const totalAmount = order.total_amount; // already rounded by checkout
+
+  const cgst = isIntraState ? +(totalTax / 2).toFixed(2) : 0;
+  const sgst = isIntraState ? +(totalTax - cgst).toFixed(2) : 0;
+  const igst = isIntraState ? 0 : totalTax;
+
+  /* Refundable container deposit — not part of taxable supply.
+   * Safe under CGST Act §2(31) Explanation: refundable deposits aren't
+   * "consideration" until forfeited. Must be refunded on undamaged return. */
+  const containerDeposit = +(order.container_costs_total || 0).toFixed(2);
+
+  const invoiceNumber = allocateInvoiceNumber();
+
+  /* ── Persist row ─────────────────────────────────────────────────── */
+  const insert = db.prepare(`
+    INSERT INTO invoices (
+      invoice_number, order_id,
+      customer_name, customer_email, customer_phone, customer_address, customer_state, customer_gstin,
+      items_json, taxable_amount, cgst_amount, sgst_amount, igst_amount, container_deposit, total_amount,
+      razorpay_payment_id
+    ) VALUES (?,?, ?,?,?,?,?,?, ?,?,?,?,?,?,?, ?)
+  `);
+  const result = insert.run(
+    invoiceNumber, orderId,
+    consumer.name, consumer.email || null, consumer.phone || null,
+    order.delivery_address || null, customerState || null, consumer.gstin || null,
+    JSON.stringify(invoiceItems),
+    totalTaxable, cgst, sgst, igst, containerDeposit, totalAmount,
+    paymentId || order.razorpay_payment_id || null
+  );
+  const invoiceId = result.lastInsertRowid;
+
+  /* ── Render PDF ──────────────────────────────────────────────────── */
+  let pdfPath = null;
+  try {
+    pdfPath = await renderInvoicePdf({
+      invoice_number:      invoiceNumber,
+      order_number:        order.order_number,
+      created_at:          new Date().toISOString(),
+      customer_name:       consumer.name,
+      customer_email:      consumer.email,
+      customer_phone:      consumer.phone,
+      customer_address:    order.delivery_address,
+      customer_state:      customerState,
+      customer_gstin:      consumer.gstin,
+      items:               invoiceItems,
+      taxable_amount:      totalTaxable,
+      cgst_amount:         cgst,
+      sgst_amount:         sgst,
+      igst_amount:         igst,
+      container_deposit:   containerDeposit,
+      total_amount:        totalAmount,
+      razorpay_payment_id: paymentId || order.razorpay_payment_id || null,
     });
+    db.prepare(`UPDATE invoices SET pdf_path=? WHERE id=?`).run(pdfPath, invoiceId);
+  } catch (err) {
+    console.error(`[invoice] PDF render failed for ${invoiceNumber}:`, err.message);
   }
 
-  const phone = consumer.phone ? consumer.phone.replace(/^(\+91|91)/, '').replace(/\D/g, '') : null;
+  /* ── Email PDF (best-effort) ─────────────────────────────────────── */
+  if (consumer.email && pdfPath) {
+    try {
+      const pdfBuffer = fs.readFileSync(pdfPath);
+      await sendInvoiceEmail({
+        to:             consumer.email,
+        consumerName:   consumer.name,
+        invoiceNumber,
+        orderNumber:    order.order_number,
+        totalAmount,
+        pdfBuffer,
+        pdfFilename:    `${invoiceNumber}.pdf`,
+      });
+    } catch (err) {
+      console.error(`[invoice] email send failed for ${invoiceNumber}:`, err.message);
+    }
+  }
 
-  /* Build address from the order's delivery info; mirror to billing + shipping. */
-  const address = order.delivery_address && order.delivery_pincode
-    ? {
-        line1:   order.delivery_address,
-        zipcode: String(order.delivery_pincode),
-        country: 'India',
-      }
-    : null;
-
-  const customer = {
-    name:    consumer.name,
-    ...(phone          ? { contact: `+91${phone}` } : {}),
-    ...(consumer.email ? { email:   consumer.email } : {}),
-    ...(address        ? { billing_address: address, shipping_address: address } : {}),
-  };
-
-  /* Issue date = order's created_at (in IST it renders as the order's day).
-   * Expiry  = end of that same IST calendar day (23:59:59 +05:30).
-   * SQLite CURRENT_TIMESTAMP is UTC, so parse explicitly as UTC. */
-  const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
-  const createdUtc    = new Date(String(order.created_at).replace(' ', 'T') + 'Z');
-  const createdIst    = new Date(createdUtc.getTime() + IST_OFFSET_MS);
-  const istEndOfDay   = new Date(Date.UTC(
-    createdIst.getUTCFullYear(),
-    createdIst.getUTCMonth(),
-    createdIst.getUTCDate(),
-    23, 59, 59,
-  ) - IST_OFFSET_MS);
-
-  const nowSec  = Math.floor(Date.now() / 1000);
-  const dateSec = Math.floor(createdUtc.getTime() / 1000);
-  const expireBy = Math.max(Math.floor(istEndOfDay.getTime() / 1000), nowSec + 900);
-
-  /* Compose terms. */
-  const baseTerms = hasContainer
-    ? 'Thank you for choosing SanathanaTattva. Your container deposit is fully refundable if returned undamaged.'
-    : 'Thank you for choosing SanathanaTattva.';
-  const ROUNDING_NOTE = 'Note: line items below ₹1.00 are shown rounded up to ₹1.00 per unit due to gateway minimums; the actual amount charged matches your order total.';
-  const terms = anyRounded ? `${baseTerms} ${ROUNDING_NOTE}` : baseTerms;
-
-  const invoice = await razorpay.invoices.create({
-    type:        'invoice',
-    description: `Order ${order.order_number} — Sanathana Tattva`,
-    customer,
-    line_items:  lineItems,
-    currency:    'INR',
-    date:        dateSec,
-    expire_by:   expireBy,
-    sms_notify:   phone          ? 1 : 0,
-    email_notify: consumer.email ? 1 : 0,
-    terms,
-    notes: {
-      order_number: order.order_number,
-      order_id:     String(order.id),
-      track_url:    `${SHOP_URL}/shop/orders`,
-    },
-  });
-
-  db.prepare(`
-    UPDATE consumer_orders
-    SET razorpay_invoice_id = ?, razorpay_invoice_status = ?
-    WHERE id = ?
-  `).run(invoice.id, invoice.status, orderId);
-
-  console.log(`[invoice] ${invoice.id} created for order ${order.order_number} (${invoice.status})`);
-  return invoice;
+  console.log(`[invoice] ${invoiceNumber} created for order ${order.order_number} (intra-state=${isIntraState})`);
+  return db.prepare(`SELECT * FROM invoices WHERE id=?`).get(invoiceId);
 }
 
-module.exports = { sendOrderInvoice };
+module.exports = { generateInvoiceForOrder, allocateInvoiceNumber };

@@ -14,7 +14,8 @@ const { emitOrderUpdate } = require('../websocket/socketServer');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
 const { auditLog } = require('../middleware/auditLog');
 const { sendOrderConfirmedEmail } = require('../services/emailService');
-const { sendOrderInvoice } = require('../services/invoiceService');
+const { generateInvoiceForOrder } = require('../services/invoiceService');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -229,29 +230,11 @@ router.post('/verify', authConsumer, async (req, res) => {
     });
   } catch { /* non-fatal */ }
 
-  /* Create Razorpay Invoice + send via SMS & email, then include link in confirmation email */
-  let invoiceUrl = null;
-  try {
-    const invoice = await sendOrderInvoice(order.id);
-    invoiceUrl = invoice?.short_url || null;
-  } catch (err) {
-    const rzpErr = err?.error || err;
-    console.error('[invoice] post-payment create failed:', {
-      statusCode:  err?.statusCode,
-      code:        rzpErr?.code,
-      description: rzpErr?.description,
-      field:       rzpErr?.field,
-      reason:      rzpErr?.reason,
-      message:     err?.message,
-      raw:         JSON.stringify(err),
-    });
-  }
-
-  /* Email consumer: order confirmed (with invoice link if available) */
+  /* Order-confirmed email (invoice goes out separately from the webhook handler) */
   try {
     const consumer = db.prepare('SELECT name, email FROM consumers WHERE id=?').get(order.consumer_id);
     if (consumer?.email) {
-      sendOrderConfirmedEmail(consumer.email, consumer.name, order.order_number, invoiceUrl)
+      sendOrderConfirmedEmail(consumer.email, consumer.name, order.order_number)
         .catch(err => console.error('[email] order-confirmed failed:', err.message));
     }
   } catch { /* non-fatal */ }
@@ -298,6 +281,11 @@ router.post('/webhook', (req, res) => {
           db.prepare(`UPDATE consumer_orders SET payment_status='paid', status='confirmed', razorpay_payment_id=? WHERE id=?`)
             .run(p.id, order.id);
           console.log(`[webhook] payment.captured → order ${order.order_number} marked paid (safety net)`);
+        }
+        /* Generate GST-compliant invoice + email PDF (idempotent — skips if invoice row already exists) */
+        if (order) {
+          generateInvoiceForOrder(order.id, { paymentId: p.id })
+            .catch(err => console.error(`[webhook] invoice gen failed for ${order.order_number}:`, err.message));
         }
         break;
       }

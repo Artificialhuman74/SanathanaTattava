@@ -28,6 +28,7 @@ import AdminConsumers     from './pages/admin/Consumers';
 import AdminSettings      from './pages/admin/Settings';
 import AdminDealerInventory from './pages/admin/DealerInventory';
 import AdminFinance        from './pages/admin/Finance';
+import AdminContainerDeposits from './pages/admin/ContainerDeposits';
 
 import TraderDashboard     from './pages/trader/Dashboard';
 import TraderProducts      from './pages/trader/Products';
@@ -118,6 +119,7 @@ const AppRoutes = () => {
           <Route path="payouts"         element={<AdminPayouts />} />
           <Route path="dealer-inventory" element={<AdminDealerInventory />} />
           <Route path="finance"         element={<AdminFinance />} />
+          <Route path="container-deposits" element={<AdminContainerDeposits />} />
           <Route path="settings"        element={<AdminSettings />} />
         </Route>
 

@@ -11,13 +11,13 @@ import {
 interface Product {
   id: number; name: string; description: string; category: string; sku: string;
   price: number; cost_price: number; container_cost: number; stock: number; min_stock: number;
-  image_url: string; image_urls?: string | null; unit: string; status: string; created_at: string;
+  image_url: string; image_urls?: string | null; unit: string; hsn_code?: string | null; status: string; created_at: string;
 }
 
 const UNITS = ['piece','kg','litre','set','pair','box','bottle','tin','pack'];
 const EMPTY: Partial<Product> = {
   name: '', description: '', category: '', sku: '', price: 0,
-  cost_price: 0, container_cost: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', status: 'active',
+  cost_price: 0, container_cost: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', hsn_code: '', status: 'active',
 };
 
 function parseImageUrls(raw?: string | null): string[] {
@@ -521,6 +521,11 @@ export default function AdminInventory() {
                   <select value={form.unit || 'piece'} onChange={set('unit')} className="form-input">
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="form-label">HSN Code</label>
+                  <input type="text" value={form.hsn_code || ''} onChange={set('hsn_code' as keyof Product)} className="form-input font-mono" placeholder="e.g. 1512 for sunflower oil" />
+                  <p className="text-xs text-slate-400 mt-1">Used on GST invoices. Edible oils = 1512.</p>
                 </div>
                 <div>
                   <label className="form-label">Status</label>

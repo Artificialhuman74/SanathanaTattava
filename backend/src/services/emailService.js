@@ -13,10 +13,18 @@ const DEV_MODE = !process.env.RESEND_API_KEY;
 const FROM = process.env.EMAIL_FROM || 'Sanathana Tattva <namaste@sanathanatattva.shop>';
 
 /* ── Generic send helper ──────────────────────────────────────────────── */
-async function sendMail({ to, subject, text, html }) {
+async function sendMail({ to, subject, text, html, attachments }) {
   if (DEV_MODE) {
-    console.log(`\n📧 [EMAIL DEV] To: ${to} | Subject: ${subject}\n`);
+    console.log(`\n📧 [EMAIL DEV] To: ${to} | Subject: ${subject}${attachments?.length ? ` | attachments=${attachments.length}` : ''}\n`);
     return { dev: true };
+  }
+
+  const payload = { from: FROM, to, subject, text, html };
+  if (attachments?.length) {
+    payload.attachments = attachments.map(a => ({
+      filename: a.filename,
+      content:  Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content,
+    }));
   }
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -25,7 +33,7 @@ async function sendMail({ to, subject, text, html }) {
       'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: FROM, to, subject, text, html }),
+    body: JSON.stringify(payload),
   });
 
   const bodyText = await res.text();
@@ -409,9 +417,86 @@ async function sendAdminLowStockEmail({ dealerName, productName, quantity, thres
   return sendMail({ to: ADMIN_EMAIL, subject, text, html });
 }
 
+/* ── GST Invoice (PDF attached) ───────────────────────────────────────── */
+async function sendInvoiceEmail({ to, consumerName, invoiceNumber, orderNumber, totalAmount, pdfBuffer, pdfFilename, supplementary = false, parentInvoiceNumber = null }) {
+  const businessName = process.env.BUSINESS_NAME  || 'Gravity Traders';
+  const brandName    = process.env.BUSINESS_BRAND || 'SanathanaTattva';
+  const amtStr = `Rs. ${Number(totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  const subject = supplementary
+    ? `Supplementary Tax Invoice ${invoiceNumber} — forfeited container deposit`
+    : `Your Invoice from ${brandName} - ${invoiceNumber}`;
+  const text = supplementary
+    ? `Hi ${consumerName || 'there'},\n\n` +
+      `This is a supplementary tax invoice (${invoiceNumber}) for the forfeited container deposit ` +
+      `on your earlier order ${orderNumber} (invoice ${parentInvoiceNumber || ''}).\n\n` +
+      `Amount recognised as taxable: ${amtStr}.\n\n` +
+      `This deposit was already paid by you at the time of purchase, so no new payment is required. ` +
+      `We are issuing this invoice purely to comply with GST law, which requires us to record the ` +
+      `forfeited deposit as a taxable supply.\n\n` +
+      `The PDF is attached for your records.\n\n` +
+      `— ${brandName} (a brand of ${businessName})`
+    : `Hi ${consumerName || 'there'},\n\n` +
+      `Thank you for choosing ${brandName}! We are truly grateful for your trust in our pure, cold-pressed oils.\n\n` +
+      `Your tax invoice ${invoiceNumber} for order ${orderNumber} (${amtStr}) is attached as a PDF.\n\n` +
+      `Payment has already been received — this is a receipt, no further action is needed.\n\n` +
+      `We look forward to serving you again.\n\n` +
+      `— ${brandName} (a brand of ${businessName})`;
+  const html = buildEmailHtml({
+    title:    supplementary ? 'Supplementary Tax Invoice' : 'Your Tax Invoice',
+    preheader: supplementary
+      ? `Supplementary invoice ${invoiceNumber} · forfeited deposit ${amtStr}`
+      : `Invoice ${invoiceNumber} · ${amtStr} · Payment received`,
+    body: supplementary ? `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},
+      </p>
+      <p style="margin:0 0 20px;color:#0f172a;font-size:15px;line-height:1.6;">
+        This is a <strong>supplementary tax invoice</strong> (<strong>${invoiceNumber}</strong>) issued for the
+        <strong>forfeited container deposit</strong> on your earlier order
+        <strong>#${orderNumber}</strong>${parentInvoiceNumber ? ` (original invoice <strong>${parentInvoiceNumber}</strong>)` : ''}.
+      </p>
+      <p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+        The deposit was already paid by you at the time of purchase, so <strong>no new payment is required</strong>.
+        We are issuing this invoice purely to comply with GST law, which requires the forfeited deposit
+        to be recorded as a taxable supply.
+      </p>
+    ` : `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${consumerName || 'there'},
+      </p>
+      <p style="margin:0 0 16px;color:#0f172a;font-size:16px;line-height:1.6;font-weight:600;">
+        Thank you for choosing <span style="color:#14532d;">${brandName}</span>! 🙏
+      </p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        We are truly grateful for your trust in our pure, cold-pressed oils, and we look forward to serving you again.
+      </p>
+      <p style="margin:0 0 20px;color:#0f172a;font-size:15px;line-height:1.6;">
+        Your tax invoice <strong>${invoiceNumber}</strong> for order
+        <strong>#${orderNumber}</strong> is attached as a PDF.
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px 22px;margin:0 0 22px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Amount</td>
+              <td align="right" style="color:#15803d;font-size:22px;font-weight:800;padding-bottom:6px;">${amtStr}</td></tr>
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Status</td>
+              <td align="right" style="color:#15803d;font-size:14px;font-weight:700;">Payment Received</td></tr>
+        </table>
+      </div>
+      <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">
+        This is a tax receipt. No further payment is due.
+      </p>
+    `,
+    footer: `${brandName} — a brand of ${businessName}`,
+  });
+  return sendMail({
+    to, subject, text, html,
+    attachments: [{ filename: pdfFilename, content: pdfBuffer }],
+  });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
   sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
   sendAdminLowStockEmail,
-  sendOrderConfirmedEmail, sendOutForDeliveryEmail, DEV_MODE,
+  sendOrderConfirmedEmail, sendOutForDeliveryEmail, sendInvoiceEmail, DEV_MODE,
 };

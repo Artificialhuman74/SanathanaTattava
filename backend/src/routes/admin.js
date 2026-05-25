@@ -86,27 +86,27 @@ router.post('/products', [
 ], (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
-  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit } = req.body;
+  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit, hsn_code } = req.body;
   if (db.prepare(`SELECT id FROM products WHERE sku = ?`).get(sku)) return res.status(409).json({ error: 'SKU already exists' });
   const result = db.prepare(`
-    INSERT INTO products (name,description,category,sku,price,cost_price,container_cost,stock,min_stock,image_url,image_urls,unit,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'active')
-  `).run(name, description||null, category, sku, price, cost_price||null, container_cost||0, stock||0, min_stock||10, image_url||null, image_urls||null, unit||'piece');
+    INSERT INTO products (name,description,category,sku,price,cost_price,container_cost,stock,min_stock,image_url,image_urls,unit,hsn_code,status)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'active')
+  `).run(name, description||null, category, sku, price, cost_price||null, container_cost||0, stock||0, min_stock||10, image_url||null, image_urls||null, unit||'piece', hsn_code||null);
   res.status(201).json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(result.lastInsertRowid) });
 });
 
 router.put('/products/:id', (req, res) => {
   const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
-  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit, status } = req.body;
+  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit, status, hsn_code } = req.body;
   if (sku && sku !== product.sku && db.prepare(`SELECT id FROM products WHERE sku = ? AND id != ?`).get(sku, product.id))
     return res.status(409).json({ error: 'SKU already in use' });
   db.prepare(`
-    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,container_cost=?,stock=?,min_stock=?,image_url=?,image_urls=?,unit=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,container_cost=?,stock=?,min_stock=?,image_url=?,image_urls=?,unit=?,hsn_code=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
   `).run(name??product.name, description??product.description, category??product.category, sku??product.sku,
          price??product.price, cost_price??product.cost_price, container_cost??product.container_cost??0,
          stock??product.stock, min_stock??product.min_stock,
-         image_url??product.image_url, image_urls??product.image_urls, unit??product.unit, status??product.status, product.id);
+         image_url??product.image_url, image_urls??product.image_urls, unit??product.unit, hsn_code??product.hsn_code, status??product.status, product.id);
   res.json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(product.id) });
 });
 
@@ -658,6 +658,60 @@ router.get('/inventory/transactions', (req, res) => {
   sql += ` ORDER BY it.created_at DESC LIMIT ?`;
   params.push(Number(lim) || 100);
   res.json({ transactions: db.prepare(sql).all(...params) });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Container Deposit lifecycle
+ * Refund: deposit returned to customer (no GST impact)
+ * Forfeit: container not returned/damaged → deposit becomes taxable supply,
+ *          a supplementary tax invoice is issued (CGST Act §15)
+ * ═══════════════════════════════════════════════════════════════════════ */
+const { refundDeposit, forfeitDeposit, DEFAULT_FORFEIT_TAX_RATE } = require('../services/containerDepositService');
+
+router.get('/container-deposits', (req, res) => {
+  const rows = db.prepare(`
+    SELECT i.id, i.invoice_number, i.order_id, i.customer_name, i.customer_email,
+           i.customer_phone, i.customer_address, i.container_deposit,
+           i.container_deposit_status, i.container_deposit_resolved_at,
+           i.container_deposit_notes, i.created_at,
+           co.order_number, co.status AS order_status,
+           sup.id AS supplementary_invoice_id, sup.invoice_number AS supplementary_invoice_number,
+           u.name AS resolved_by_name
+      FROM invoices i
+      JOIN consumer_orders co ON co.id = i.order_id
+      LEFT JOIN invoices sup ON sup.parent_invoice_id = i.id AND sup.invoice_type='supplementary'
+      LEFT JOIN users u ON u.id = i.container_deposit_resolved_by
+     WHERE i.invoice_type='tax' AND i.container_deposit > 0
+     ORDER BY
+       CASE i.container_deposit_status WHEN 'held' THEN 0 WHEN 'refunded' THEN 1 ELSE 2 END,
+       i.created_at DESC
+  `).all();
+  res.json({ deposits: rows, defaultForfeitTaxRate: DEFAULT_FORFEIT_TAX_RATE });
+});
+
+router.post('/container-deposits/:invoiceId/refund', (req, res) => {
+  try {
+    const updated = refundDeposit(Number(req.params.invoiceId), {
+      adminId: req.user.id,
+      notes:   req.body?.notes || null,
+    });
+    res.json({ success: true, invoice: updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/container-deposits/:invoiceId/forfeit', async (req, res) => {
+  try {
+    const result = await forfeitDeposit(Number(req.params.invoiceId), {
+      adminId: req.user.id,
+      taxRate: req.body?.tax_rate,
+      notes:   req.body?.notes || null,
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

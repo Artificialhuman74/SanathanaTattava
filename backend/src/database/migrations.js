@@ -573,6 +573,136 @@ function runMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_trader_payments_date ON trader_payments(payment_date)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_trader_payments_trader ON trader_payments(trader_id)`);
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * GST-compliant self-generated invoices (replaces Razorpay Invoices API)
+   * ═══════════════════════════════════════════════════════════════════ */
+  if (!hasColumn('products', 'hsn_code')) {
+    db.exec(`ALTER TABLE products ADD COLUMN hsn_code TEXT`);
+    console.log('[migration] products: added hsn_code');
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_number       TEXT    NOT NULL UNIQUE,
+      order_id             INTEGER NOT NULL UNIQUE REFERENCES consumer_orders(id),
+      customer_name        TEXT    NOT NULL,
+      customer_email       TEXT,
+      customer_phone       TEXT,
+      customer_address     TEXT,
+      customer_state       TEXT,
+      customer_gstin       TEXT,
+      items_json           TEXT    NOT NULL,
+      taxable_amount       REAL    NOT NULL,
+      cgst_amount          REAL    NOT NULL DEFAULT 0,
+      sgst_amount          REAL    NOT NULL DEFAULT 0,
+      igst_amount          REAL    NOT NULL DEFAULT 0,
+      total_amount         REAL    NOT NULL,
+      razorpay_payment_id  TEXT,
+      pdf_path             TEXT,
+      created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_invoices_order ON invoices(order_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_invoices_number ON invoices(invoice_number)`);
+
+  if (!hasColumn('invoices', 'container_deposit')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN container_deposit REAL NOT NULL DEFAULT 0`);
+    console.log('[migration] invoices: added container_deposit');
+  }
+
+  /* Deposit lifecycle: 'held' (default after delivery) → 'refunded' or 'forfeited'.
+   * 'none' = no deposit was ever charged on this invoice. */
+  if (!hasColumn('invoices', 'container_deposit_status')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN container_deposit_status TEXT NOT NULL DEFAULT 'none'`);
+    db.exec(`UPDATE invoices SET container_deposit_status='held' WHERE container_deposit > 0`);
+    console.log('[migration] invoices: added container_deposit_status');
+  }
+  if (!hasColumn('invoices', 'container_deposit_resolved_at')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN container_deposit_resolved_at DATETIME`);
+    console.log('[migration] invoices: added container_deposit_resolved_at');
+  }
+  if (!hasColumn('invoices', 'container_deposit_resolved_by')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN container_deposit_resolved_by INTEGER REFERENCES users(id)`);
+    console.log('[migration] invoices: added container_deposit_resolved_by');
+  }
+  if (!hasColumn('invoices', 'container_deposit_notes')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN container_deposit_notes TEXT`);
+    console.log('[migration] invoices: added container_deposit_notes');
+  }
+  /* Supplementary tax invoice issued when a deposit is forfeited (parent → child link). */
+  if (!hasColumn('invoices', 'parent_invoice_id')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN parent_invoice_id INTEGER REFERENCES invoices(id)`);
+    console.log('[migration] invoices: added parent_invoice_id');
+  }
+  if (!hasColumn('invoices', 'invoice_type')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN invoice_type TEXT NOT NULL DEFAULT 'tax'`);
+    console.log('[migration] invoices: added invoice_type');
+  }
+
+  /* Drop UNIQUE constraint on invoices.order_id so we can issue supplementary
+   * invoices (deposit-forfeit debit notes) tied to the same original order.
+   * SQLite has no DROP CONSTRAINT — must rebuild the table. */
+  const idxList = db.prepare(`PRAGMA index_list('invoices')`).all();
+  const hasOrderIdUnique = idxList.some(idx => {
+    if (!idx.unique) return false;
+    const cols = db.prepare(`PRAGMA index_info('${idx.name}')`).all();
+    return cols.length === 1 && cols[0].name === 'order_id';
+  });
+  if (hasOrderIdUnique) {
+    console.log('[migration] invoices: rebuilding to drop UNIQUE on order_id…');
+    db.exec(`
+      BEGIN;
+      CREATE TABLE invoices_new (
+        id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_number                TEXT    NOT NULL UNIQUE,
+        order_id                      INTEGER NOT NULL REFERENCES consumer_orders(id),
+        customer_name                 TEXT    NOT NULL,
+        customer_email                TEXT,
+        customer_phone                TEXT,
+        customer_address              TEXT,
+        customer_state                TEXT,
+        customer_gstin                TEXT,
+        items_json                    TEXT    NOT NULL,
+        taxable_amount                REAL    NOT NULL,
+        cgst_amount                   REAL    NOT NULL DEFAULT 0,
+        sgst_amount                   REAL    NOT NULL DEFAULT 0,
+        igst_amount                   REAL    NOT NULL DEFAULT 0,
+        container_deposit             REAL    NOT NULL DEFAULT 0,
+        total_amount                  REAL    NOT NULL,
+        razorpay_payment_id           TEXT,
+        pdf_path                      TEXT,
+        container_deposit_status      TEXT    NOT NULL DEFAULT 'none',
+        container_deposit_resolved_at DATETIME,
+        container_deposit_resolved_by INTEGER REFERENCES users(id),
+        container_deposit_notes       TEXT,
+        parent_invoice_id             INTEGER REFERENCES invoices(id),
+        invoice_type                  TEXT    NOT NULL DEFAULT 'tax',
+        created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO invoices_new
+        SELECT id, invoice_number, order_id, customer_name, customer_email, customer_phone,
+               customer_address, customer_state, customer_gstin, items_json,
+               taxable_amount, cgst_amount, sgst_amount, igst_amount,
+               container_deposit, total_amount, razorpay_payment_id, pdf_path,
+               container_deposit_status, container_deposit_resolved_at,
+               container_deposit_resolved_by, container_deposit_notes,
+               parent_invoice_id, invoice_type, created_at
+        FROM invoices;
+      DROP TABLE invoices;
+      ALTER TABLE invoices_new RENAME TO invoices;
+      CREATE INDEX idx_invoices_order  ON invoices(order_id);
+      CREATE INDEX idx_invoices_number ON invoices(invoice_number);
+      CREATE INDEX idx_invoices_parent ON invoices(parent_invoice_id);
+      COMMIT;
+    `);
+    /* Re-enforce idempotency on original tax invoices via a partial unique index. */
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_tax_order ON invoices(order_id) WHERE invoice_type='tax'`);
+    console.log('[migration] invoices: rebuild done');
+  } else {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_tax_order ON invoices(order_id) WHERE invoice_type='tax'`);
+  }
+
   console.log('[migration] all migrations applied');
 }
 

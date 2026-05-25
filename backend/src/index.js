@@ -141,6 +141,7 @@ app.use('/api/location',      locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/delivery',      deliveryRoutes);
 app.use('/api/payments',      paymentRoutes);
+app.use('/api/invoice',       require('./routes/invoices'));
 app.use('/api/public',        publicRoutes);
 
 app.get('/api/health', (_req, res) => {
