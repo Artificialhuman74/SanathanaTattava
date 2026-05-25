@@ -48,7 +48,7 @@ export default function TraderProfile() {
   // Bank details states
   const [bankEditing, setBankEditing] = useState(false);
   const [bankSaving, setBankSaving]   = useState(false);
-  const [bankForm, setBankForm]       = useState({ bank_account_name: '', bank_account_number: '', bank_ifsc: '', pan: '' });
+  const [bankForm, setBankForm]       = useState({ bank_account_name: '', bank_account_number: '', bank_account_number_confirm: '', bank_ifsc: '', bank_ifsc_confirm: '', pan: '' });
 
   // Razorpay activation celebration (show once per trader)
   const [showActivationBanner, setShowActivationBanner] = useState(false);
@@ -81,10 +81,12 @@ export default function TraderProfile() {
           pincode: r.data.user.pincode || '',
         });
         setBankForm({
-          bank_account_name:   r.data.user.bank_account_name   || '',
-          bank_account_number: r.data.user.bank_account_number || '',
-          bank_ifsc:           r.data.user.bank_ifsc           || '',
-          pan:                 r.data.user.pan                 || '',
+          bank_account_name:           r.data.user.bank_account_name   || '',
+          bank_account_number:         r.data.user.bank_account_number || '',
+          bank_account_number_confirm: r.data.user.bank_account_number || '',
+          bank_ifsc:                   r.data.user.bank_ifsc           || '',
+          bank_ifsc_confirm:           r.data.user.bank_ifsc           || '',
+          pan:                         r.data.user.pan                 || '',
         });
       })
       .catch(() => toast.error('Failed to load profile'))
@@ -94,9 +96,13 @@ export default function TraderProfile() {
   const handleBankSave = async () => {
     const name = bankForm.bank_account_name.trim();
     const number = bankForm.bank_account_number.trim();
+    const numberConfirm = bankForm.bank_account_number_confirm.trim();
     const ifsc = bankForm.bank_ifsc.trim().toUpperCase();
+    const ifscConfirm = bankForm.bank_ifsc_confirm.trim().toUpperCase();
     const pan = bankForm.pan.trim().toUpperCase();
     if (!name || !number || !ifsc) { toast.error('All bank fields are required'); return; }
+    if (number !== numberConfirm) { toast.error('Account numbers do not match'); return; }
+    if (ifsc !== ifscConfirm) { toast.error('IFSC codes do not match'); return; }
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) { toast.error('Invalid IFSC code'); return; }
     if (!/^\d{9,18}$/.test(number)) { toast.error('Invalid account number (9–18 digits)'); return; }
     if (pan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) { toast.error('Invalid PAN format (e.g. ABCDE1234F)'); return; }
@@ -568,6 +574,27 @@ export default function TraderProfile() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Confirm Account Number</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bankForm.bank_account_number_confirm}
+                  onChange={e => setBankForm(f => ({ ...f, bank_account_number_confirm: e.target.value.replace(/\D/g, '') }))}
+                  onPaste={e => { e.preventDefault(); toast.error('Please re-type the account number'); }}
+                  className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 font-mono ${
+                    bankForm.bank_account_number_confirm && bankForm.bank_account_number_confirm !== bankForm.bank_account_number
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-slate-200 focus:ring-brand-500 focus:border-brand-500'
+                  }`}
+                  placeholder="Re-enter to confirm"
+                  maxLength={18}
+                  autoComplete="off"
+                />
+                {bankForm.bank_account_number_confirm && bankForm.bank_account_number_confirm !== bankForm.bank_account_number && (
+                  <p className="text-xs text-red-600 mt-1">Account numbers don't match</p>
+                )}
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">IFSC Code</label>
                 <input
                   type="text"
@@ -577,6 +604,26 @@ export default function TraderProfile() {
                   placeholder="e.g. HDFC0001234"
                   maxLength={11}
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Confirm IFSC Code</label>
+                <input
+                  type="text"
+                  value={bankForm.bank_ifsc_confirm}
+                  onChange={e => setBankForm(f => ({ ...f, bank_ifsc_confirm: e.target.value.toUpperCase() }))}
+                  onPaste={e => { e.preventDefault(); toast.error('Please re-type the IFSC code'); }}
+                  className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 font-mono uppercase ${
+                    bankForm.bank_ifsc_confirm && bankForm.bank_ifsc_confirm !== bankForm.bank_ifsc
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : 'border-slate-200 focus:ring-brand-500 focus:border-brand-500'
+                  }`}
+                  placeholder="Re-enter to confirm"
+                  maxLength={11}
+                  autoComplete="off"
+                />
+                {bankForm.bank_ifsc_confirm && bankForm.bank_ifsc_confirm !== bankForm.bank_ifsc && (
+                  <p className="text-xs text-red-600 mt-1">IFSC codes don't match</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">PAN <span className="text-slate-400 font-normal">(required for KYC)</span></label>
@@ -607,10 +654,12 @@ export default function TraderProfile() {
                   onClick={() => {
                     setBankEditing(false);
                     setBankForm({
-                      bank_account_name:   user.bank_account_name   || '',
-                      bank_account_number: user.bank_account_number || '',
-                      bank_ifsc:           user.bank_ifsc           || '',
-                      pan:                 user.pan        || '',
+                      bank_account_name:           user.bank_account_name   || '',
+                      bank_account_number:         user.bank_account_number || '',
+                      bank_account_number_confirm: user.bank_account_number || '',
+                      bank_ifsc:                   user.bank_ifsc           || '',
+                      bank_ifsc_confirm:           user.bank_ifsc           || '',
+                      pan:                         user.pan        || '',
                     });
                   }}
                   className="px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"

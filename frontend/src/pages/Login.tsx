@@ -2,15 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, Shield, Users, ArrowLeft, ShoppingBag } from 'lucide-react';
-
-type Tab = 'trader' | 'admin';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, ShoppingBag } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [tab,         setTab]         = useState<Tab>('trader');
   const [email,       setEmail]       = useState('');
   const [password,    setPassword]    = useState('');
   const [showPw,      setShowPw]      = useState(false);
@@ -55,25 +52,6 @@ export default function Login() {
         </div>
 
         <div className="card p-6 sm:p-8">
-          {/* Tabs */}
-          <div className="flex rounded-xl bg-slate-100 p-1 mb-6">
-            {[
-              { id: 'trader' as Tab, icon: Users,  label: 'Partner Login' },
-              { id: 'admin'  as Tab, icon: Shield, label: 'Admin Login' },
-            ].map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => { setTab(id); setEmail(''); setPassword(''); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  tab === id ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon size={15} />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="form-label">Email Address</label>
@@ -128,16 +106,14 @@ export default function Login() {
             </div>
           </form>
 
-          {tab === 'trader' && (
-            <div className="mt-5 pt-5 border-t border-slate-100 text-center">
-              <p className="text-sm text-slate-500">
-                Don't have an account?{' '}
-                <Link to="/register" className="text-brand-600 font-semibold hover:text-brand-700">
-                  Create one
-                </Link>
-              </p>
-            </div>
-          )}
+          <div className="mt-5 pt-5 border-t border-slate-100 text-center">
+            <p className="text-sm text-slate-500">
+              Don't have an account?{' '}
+              <Link to="/register" className="text-brand-600 font-semibold hover:text-brand-700">
+                Create one
+              </Link>
+            </p>
+          </div>
 
           {/* Consumer shop link */}
           <div className="mt-4 flex items-center justify-center">
