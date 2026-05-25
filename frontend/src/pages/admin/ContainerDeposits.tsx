@@ -106,34 +106,56 @@ export default function ContainerDeposits() {
         <div className="flex items-start gap-3">
           <Info className="w-6 h-6 text-amber-700 flex-shrink-0 mt-0.5" />
           <div className="text-[15px] leading-relaxed text-amber-900">
-            <p className="font-bold mb-2">What is this page for?</p>
+            <p className="font-bold mb-2">How container deposits work</p>
             <p className="mb-2">
-              When a customer places a first-time order, they pay a small <strong>refundable deposit</strong> for
-              the oil container. This deposit is <strong>NOT a sale</strong> — we owe it back to them.
+              When a customer orders an oil for the <strong>first time</strong>, they pay a one-time
+              <strong> refundable deposit</strong> for the container. The customer <strong>keeps that container</strong>
+              and we re-fill it on every future order — no new deposit is charged on later orders.
+            </p>
+            <p className="mb-2 font-semibold text-amber-900">
+              ⚠️ Do nothing on this page during normal business.
             </p>
             <p className="mb-2">
-              When the container comes back from a delivery:
+              These "Held" deposits are <strong>liabilities</strong> we owe back to customers — they should
+              stay "Held" for as long as the customer is still buying from us. Only take action when:
             </p>
             <ul className="list-disc pl-6 space-y-1 mb-2">
               <li>
-                <strong className="text-emerald-700">If it is undamaged →</strong> click the GREEN button to refund the deposit.
+                <strong className="text-emerald-700">The customer says "I don't want to buy any more"</strong> and returns the container undamaged →
+                click the GREEN button to refund the deposit.
               </li>
               <li>
-                <strong className="text-red-700">If it is broken / not returned →</strong> click the RED button. The system will
-                automatically create a tax invoice (with GST) for the deposit amount — this is required by Indian GST law.
+                <strong className="text-red-700">The container is broken, lost, or the customer refuses to return it</strong> →
+                click the RED button. A supplementary GST invoice is created automatically (required by Indian GST law).
               </li>
             </ul>
             <p className="text-sm text-amber-800">
-              You only need to do this <em>after</em> the customer's container has been returned to us (or confirmed not coming back).
+              <strong>Repeat customers</strong> never appear in the green/red flow — they keep the container indefinitely.
             </p>
           </div>
         </div>
       </div>
 
+      {/* Liability summary */}
+      {counts.held > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+            <Package className="w-6 h-6 text-amber-700" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Total deposits currently held (liability)</p>
+            <p className="text-2xl font-extrabold text-slate-900">
+              {inr(rows.filter(r => r.container_deposit_status === 'held').reduce((s, r) => s + r.container_deposit, 0))}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">across {counts.held} {counts.held === 1 ? 'customer-container' : 'customer-containers'}</p>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-200">
         <TabBtn active={tab === 'held'}      onClick={() => setTab('held')}
-                color="amber" count={counts.held}      label="Action Needed" />
+                color="amber" count={counts.held}      label="Active (Held)" />
         <TabBtn active={tab === 'refunded'}  onClick={() => setTab('refunded')}
                 color="emerald" count={counts.refunded}  label="Refunded" />
         <TabBtn active={tab === 'forfeited'} onClick={() => setTab('forfeited')}
@@ -151,7 +173,7 @@ export default function ContainerDeposits() {
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
           <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500">
-            {tab === 'held'      && 'No deposits waiting for action right now. 👍'}
+            {tab === 'held'      && 'No customers currently hold a container deposit.'}
             {tab === 'refunded'  && 'No refunded deposits yet.'}
             {tab === 'forfeited' && 'No forfeited deposits yet.'}
           </p>
@@ -175,7 +197,7 @@ export default function ContainerDeposits() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Refund Container Deposit</h2>
-                <p className="text-sm text-slate-500">Confirm the container came back undamaged.</p>
+                <p className="text-sm text-slate-500">Customer is leaving and has returned the container undamaged.</p>
               </div>
             </div>
 
@@ -390,12 +412,12 @@ function DepositCard({ d, inr, onRefund, onForfeit }: {
             <button onClick={onRefund}
               className="w-full px-4 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center justify-center gap-2 text-sm shadow-sm">
               <CheckCircle2 className="w-5 h-5" />
-              Container Came Back — Refund
+              Customer Quit — Refund Deposit
             </button>
             <button onClick={onForfeit}
               className="w-full px-4 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 flex items-center justify-center gap-2 text-sm shadow-sm">
               <AlertTriangle className="w-5 h-5" />
-              Container Lost / Damaged
+              Container Broken / Lost
             </button>
           </div>
         )}
