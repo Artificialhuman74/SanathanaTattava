@@ -528,25 +528,35 @@ router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
     // Step 3: Add stakeholder for KYC (skip if already done)
     const status2 = db.prepare('SELECT razorpay_account_status FROM users WHERE id=?').get(trader.id);
     if (!['stakeholder_added', 'activated'].includes(status2.razorpay_account_status)) {
-      const stakeholder = await razorpay.stakeholders.create(accountId, {
-        name:                 trader.name,
-        email:                trader.email,
-        percentage_ownership: 100,
-        relationship:         { director: true },
-        phone:                { primary: trader.phone || '' },
-        addresses: {
-          residential: {
-            street:      trader.address || 'NA',
-            city:        'NA',
-            state:       'Karnataka',
-            postal_code: trader.pincode || '560001',
-            country:     'IN',
+      try {
+        const stakeholder = await razorpay.stakeholders.create(accountId, {
+          name:                 trader.name,
+          email:                trader.email,
+          percentage_ownership: 100,
+          relationship:         { director: true },
+          phone:                { primary: trader.phone || '' },
+          addresses: {
+            residential: {
+              street:      trader.address || 'NA',
+              city:        'NA',
+              state:       'Karnataka',
+              postal_code: trader.pincode || '560001',
+              country:     'IN',
+            },
           },
-        },
-        kyc: { pan: trader.pan },
-      });
-      db.prepare(`UPDATE users SET razorpay_account_status='stakeholder_added' WHERE id=?`).run(trader.id);
-      steps.push(`stakeholder_created:${stakeholder.id}`);
+          kyc: { pan: trader.pan },
+        });
+        db.prepare(`UPDATE users SET razorpay_account_status='stakeholder_added' WHERE id=?`).run(trader.id);
+        steps.push(`stakeholder_created:${stakeholder.id}`);
+      } catch (skErr) {
+        const desc = skErr?.error?.description || skErr?.message || '';
+        if (/already exists/i.test(desc)) {
+          db.prepare(`UPDATE users SET razorpay_account_status='stakeholder_added' WHERE id=?`).run(trader.id);
+          steps.push('stakeholder_already_exists_on_razorpay');
+        } else {
+          throw skErr;
+        }
+      }
     } else {
       steps.push('stakeholder_already_added');
     }
