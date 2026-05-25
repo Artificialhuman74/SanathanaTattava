@@ -503,9 +503,11 @@ router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
       steps.push('linked_account_exists');
     }
 
-    // Step 2: Register Route product + bank details (skip if already done)
+    // Step 2: Register Route product + bank details (skip if already done).
+    // Gate on razorpay_product_id presence — if Razorpay already has the product
+    // config, never re-submit (re-submission resets their review to needs_clarification).
     const status = db.prepare('SELECT razorpay_account_status, razorpay_product_id FROM users WHERE id=?').get(trader.id);
-    if (!['bank_added', 'stakeholder_added', 'activated'].includes(status.razorpay_account_status)) {
+    if (!status.razorpay_product_id) {
       const product = await razorpay.products.requestProductConfiguration(accountId, {
         product_name: 'route',
         tnc_accepted: true,

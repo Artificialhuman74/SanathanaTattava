@@ -259,6 +259,8 @@ export default function AdminPayouts() {
                     if (status === 'bank_added')        return <span className="badge bg-indigo-100 text-indigo-700">Bank registered</span>;
                     if (status === 'stakeholder_added') return <span className="badge bg-purple-100 text-purple-700">KYC submitted</span>;
                     if (status === 'under_review')      return <span className="badge bg-amber-100 text-amber-700">Under review</span>;
+                    if (status === 'needs_clarification') return <span className="badge bg-orange-100 text-orange-700">Needs clarification</span>;
+                    if (status === 'suspended')         return <span className="badge bg-red-100 text-red-700">Suspended</span>;
                     if (activated) return (
                       <div className="flex flex-col gap-0.5">
                         <span className="badge bg-emerald-100 text-emerald-700 w-fit"><Check size={10} /> Active</span>
@@ -278,20 +280,30 @@ export default function AdminPayouts() {
                         View commissions <ChevronRight size={12} />
                       </button>
                     );
-                    // Awaiting Razorpay to activate after KYC submitted — show sync button
-                    if (status === 'stakeholder_added' || status === 'under_review') return (
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs text-slate-400 italic">Awaiting Razorpay…</span>
-                        <button
-                          onClick={() => handleSyncStatus(t)}
-                          disabled={syncBusy}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {syncBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          {syncBusy ? 'Checking…' : 'Sync Status'}
-                        </button>
-                      </div>
-                    );
+                    // Awaiting Razorpay to activate after KYC submitted — show sync button.
+                    // `needs_clarification` and `suspended` are also Razorpay-side states where
+                    // re-submitting docs resets review, so we never offer Resume Onboarding here.
+                    if (status === 'stakeholder_added' || status === 'under_review' ||
+                        status === 'needs_clarification' || status === 'suspended') {
+                      const label = status === 'needs_clarification'
+                        ? 'Fix in Razorpay dashboard'
+                        : status === 'suspended'
+                          ? 'Contact Razorpay support'
+                          : 'Awaiting Razorpay…';
+                      return (
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-xs text-slate-400 italic">{label}</span>
+                          <button
+                            onClick={() => handleSyncStatus(t)}
+                            disabled={syncBusy}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {syncBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                            {syncBusy ? 'Checking…' : 'Sync Status'}
+                          </button>
+                        </div>
+                      );
+                    }
                     // Not yet onboarded or partially done — single onboard button
                     return (
                       <button
