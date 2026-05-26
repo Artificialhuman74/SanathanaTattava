@@ -230,7 +230,7 @@ router.post('/verify', authConsumer, async (req, res) => {
     });
   } catch { /* non-fatal */ }
 
-  /* Order-confirmed email (invoice goes out separately from the webhook handler) */
+  /* Order-confirmed email */
   try {
     const consumer = db.prepare('SELECT name, email FROM consumers WHERE id=?').get(order.consumer_id);
     if (consumer?.email) {
@@ -238,6 +238,11 @@ router.post('/verify', authConsumer, async (req, res) => {
         .catch(err => console.error('[email] order-confirmed failed:', err.message));
     }
   } catch { /* non-fatal */ }
+
+  /* Generate GST invoice + email PDF. Idempotent — the webhook handler also calls
+   * this as a safety net; the second call short-circuits if an invoice row exists. */
+  generateInvoiceForOrder(order.id, { paymentId: razorpay_payment_id })
+    .catch(err => console.error(`[verify] invoice gen failed for ${order.order_number}:`, err.message));
 
   res.json({ success: true });
 });
