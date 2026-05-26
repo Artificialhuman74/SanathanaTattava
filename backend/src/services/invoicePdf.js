@@ -50,7 +50,7 @@ function renderInvoicePdf(inv) {
     const isSupplementary = inv.invoice_type === 'supplementary';
     doc.fontSize(isSupplementary ? 15 : 18).font('Helvetica-Bold')
        .fillColor(isSupplementary ? '#b91c1c' : '#14532d')
-       .text(isSupplementary ? 'SUPPLEMENTARY TAX INVOICE' : 'TAX INVOICE', { align: 'center' });
+       .text(isSupplementary ? 'SUPPLEMENTARY TAX INVOICE' : 'TAX INVOICE / RECEIPT', { align: 'center' });
     doc.moveDown(0.3);
     doc.fontSize(9).font('Helvetica').fillColor('#475569')
        .text(isSupplementary
