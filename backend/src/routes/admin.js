@@ -735,7 +735,7 @@ router.get('/manual-refunds', (req, res) => {
 router.post(
   '/manual-refunds/:holdingId/settle',
   body('utr').isString().trim().isLength({ min: 4 }),
-  body('notes').optional().isString(),
+  body('notes').optional({ nullable: true, checkFalsy: true }).isString(),
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -804,7 +804,7 @@ router.post(
   '/holdings/:id/override',
   body('new_status').isIn(VALID_STATUSES),
   body('new_destination').optional({ nullable: true }).isIn(VALID_DESTINATIONS),
-  body('notes').optional().isString().isLength({ max: 500 }),
+  body('notes').optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 500 }),
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -897,7 +897,7 @@ router.get('/container-deposits/pending-reimbursement', (req, res) => {
 router.post(
   '/container-deposits/holdings/:id/verify-proof',
   body('approved').isBoolean(),
-  body('notes').optional().isString().isLength({ max: 500 }),
+  body('notes').optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 500 }),
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -935,8 +935,8 @@ router.post(
 
 router.post(
   '/container-deposits/holdings/:id/reimburse-driver',
-  body('amount').optional().isFloat({ gt: 0 }),
-  body('notes').optional().isString().isLength({ max: 500 }),
+  body('amount').optional({ nullable: true, checkFalsy: true }).isFloat({ gt: 0 }),
+  body('notes').optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 500 }),
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -984,7 +984,7 @@ router.get('/damage-disputes', (req, res) => {
 router.post(
   '/damage-disputes/:id/resolve',
   body('resolution').isIn(['upheld', 'rejected']),
-  body('notes').optional().isString().isLength({ max: 500 }),
+  body('notes').optional({ nullable: true, checkFalsy: true }).isString().isLength({ max: 500 }),
   (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });

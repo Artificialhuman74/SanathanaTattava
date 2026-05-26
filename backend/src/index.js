@@ -136,14 +136,39 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Static uploads (refund proof + damage photos) ────────────────────────
 // Lives on the same DATA_DIR volume as the SQLite DB so it survives redeploys.
 const { UPLOADS_DIR } = require('./middleware/uploadProof');
-app.use('/uploads', express.static(UPLOADS_DIR, {
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(UPLOADS_DIR, {
   maxAge: '7d',
-  fallthrough: false,
-  setHeaders: (res) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  },
-}));
+  fallthrough: true,
+  dotfiles: 'ignore',
+}), (req, res) => {
+  const resolved = path.join(UPLOADS_DIR, req.path);
+  console.warn(`[uploads] miss ${req.path} (resolved=${resolved}, exists=${fs.existsSync(resolved)})`);
+  res.status(404).json({ error: 'File not found', path: req.path });
+});
+
+// Diagnostic: lists which subdirs/files exist under UPLOADS_DIR on the
+// running container — confirms volume mount + file persistence.
+app.get('/api/__uploads-debug', (_req, res) => {
+  try {
+    const tree = {};
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      return res.json({ UPLOADS_DIR, exists: false });
+    }
+    for (const sub of fs.readdirSync(UPLOADS_DIR)) {
+      const subPath = path.join(UPLOADS_DIR, sub);
+      if (fs.statSync(subPath).isDirectory()) {
+        tree[sub] = fs.readdirSync(subPath).slice(0, 50);
+      }
+    }
+    res.json({ UPLOADS_DIR, exists: true, tree, DATA_DIR: process.env.DATA_DIR || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
