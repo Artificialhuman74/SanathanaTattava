@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import {
   Package, CheckCircle2, AlertTriangle, Info, FileText,
   Phone, MapPin, Calendar, RefreshCcw, X, Download,
+  ShieldCheck, IndianRupee, Image as ImageIcon, Loader2, ShieldAlert,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
 
@@ -151,6 +152,9 @@ export default function ContainerDeposits() {
           </div>
         </div>
       )}
+
+      {/* Phase 9 — UPI refund verification + driver reimbursement queues */}
+      <Phase9Queues onRefresh={load} />
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-200">
@@ -445,6 +449,270 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between items-baseline">
       <span className="text-slate-500">{label}</span>
       <span className="text-slate-900 font-medium">{value}</span>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Phase 9 — UPI refund verification + driver reimbursement queues
+ *
+ * Two stacked tables. (1) Pending verification: driver paid via their
+ * own UPI and uploaded a screenshot. Admin clicks Approve/Reject after
+ * eyeballing the screenshot. (2) Pending reimbursement: proofs that
+ * passed verification. Admin transfers the deposit back to the driver
+ * out-of-band and clicks Reimburse to stamp the audit trail.
+ * (3) Damage disputes: 48h consumer protest window resolution.
+ * ───────────────────────────────────────────────────────────────────── */
+interface PendingVerification {
+  id: number;
+  consumer_name: string;
+  consumer_phone: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  container_type: string;
+  deposit_amount: number;
+  refund_proof_url: string | null;
+  resolved_at: string;
+  notes: string | null;
+}
+interface PendingReimbursement {
+  id: number;
+  consumer_name: string;
+  driver_name: string | null;
+  driver_phone: string | null;
+  container_type: string;
+  deposit_amount: number;
+  refund_proof_url: string | null;
+  admin_verified_at: string;
+  verified_by_name: string;
+}
+interface Dispute {
+  id: number;
+  consumer_id: number;
+  consumer_name: string;
+  consumer_phone: string | null;
+  deposit_amount: number;
+  damage_photo_url: string | null;
+  damage_dispute_status: string;
+  dispute_deadline: string | null;
+  dispute_opened_at: string | null;
+  notes: string | null;
+}
+
+function Phase9Queues({ onRefresh }: { onRefresh: () => void }) {
+  const [pendingV, setPendingV] = useState<PendingVerification[]>([]);
+  const [pendingR, setPendingR] = useState<PendingReimbursement[]>([]);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [totalOwed, setTotalOwed] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const apiBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
+  const fullUrl = (u: string | null) => u ? (u.startsWith('http') ? u : `${apiBase}${u}`) : null;
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [v, r, d] = await Promise.all([
+        api.get('/admin/container-deposits/pending-verification'),
+        api.get('/admin/container-deposits/pending-reimbursement'),
+        api.get('/admin/damage-disputes'),
+      ]);
+      setPendingV(v.data.pending || []);
+      setPendingR(r.data.pending || []);
+      setTotalOwed(r.data.totalOwedDriver || 0);
+      setDisputes((d.data.disputes || []).filter((x: Dispute) => x.damage_dispute_status === 'open'));
+    } catch {
+      // non-fatal
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const verify = async (id: number, approved: boolean) => {
+    const reason = approved ? null : prompt('Why are you rejecting this proof?');
+    if (!approved && !reason) return;
+    setBusyId(id);
+    try {
+      await api.post(`/admin/container-deposits/holdings/${id}/verify-proof`, {
+        approved, notes: reason,
+      });
+      await load();
+      onRefresh();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Failed');
+    } finally { setBusyId(null); }
+  };
+
+  const reimburse = async (id: number, amount: number) => {
+    const confirmed = window.confirm(`Confirm you have paid ₹${amount.toFixed(2)} to the driver?`);
+    if (!confirmed) return;
+    setBusyId(id);
+    try {
+      await api.post(`/admin/container-deposits/holdings/${id}/reimburse-driver`, {});
+      await load();
+      onRefresh();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Failed');
+    } finally { setBusyId(null); }
+  };
+
+  const resolveDispute = async (id: number, resolution: 'upheld' | 'rejected') => {
+    const notes = prompt(resolution === 'upheld'
+      ? 'Notes — siding with the consumer (deposit will be returned manually):'
+      : 'Notes — siding with the driver (forfeit stands):');
+    if (notes === null) return;
+    setBusyId(id);
+    try {
+      await api.post(`/admin/damage-disputes/${id}/resolve`, { resolution, notes });
+      await load();
+      onRefresh();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Failed');
+    } finally { setBusyId(null); }
+  };
+
+  if (loading) {
+    return <div className="text-sm text-slate-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading driver UPI queues…</div>;
+  }
+
+  if (pendingV.length === 0 && pendingR.length === 0 && disputes.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4">
+      {pendingV.length > 0 && (
+        <div className="bg-white border border-blue-200 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-blue-700" />
+            <h2 className="font-bold text-blue-900">Driver UPI proofs awaiting your check ({pendingV.length})</h2>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {pendingV.map(p => (
+              <div key={p.id} className="p-4 flex flex-col md:flex-row gap-4">
+                <button
+                  onClick={() => setPreviewUrl(fullUrl(p.refund_proof_url))}
+                  className="w-24 h-24 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 flex-shrink-0 hover:ring-2 hover:ring-blue-300"
+                >
+                  {p.refund_proof_url
+                    ? <img src={fullUrl(p.refund_proof_url) || ''} alt="proof" className="w-full h-full object-cover" />
+                    : <ImageIcon className="w-6 h-6 text-slate-300 mx-auto mt-7" />
+                  }
+                </button>
+                <div className="flex-1 min-w-0 text-sm">
+                  <p className="font-semibold text-slate-800">{p.consumer_name} · {p.container_type}</p>
+                  <p className="text-xs text-slate-500">Driver: {p.driver_name || 'unknown'} {p.driver_phone && `· ${p.driver_phone}`}</p>
+                  <p className="text-xs text-slate-500">Deposit: <strong className="text-slate-800">₹{Number(p.deposit_amount).toFixed(2)}</strong></p>
+                  <p className="text-xs text-slate-400 mt-1">Uploaded {formatIstDate(p.resolved_at)}</p>
+                  {p.notes && <p className="text-xs text-slate-600 italic mt-1">"{p.notes}"</p>}
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => verify(p.id, true)}
+                    disabled={busyId === p.id}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => verify(p.id, false)}
+                    disabled={busyId === p.id}
+                    className="px-3 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-sm font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingR.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <IndianRupee className="w-5 h-5 text-amber-700" />
+              <h2 className="font-bold text-amber-900">Drivers awaiting reimbursement ({pendingR.length})</h2>
+            </div>
+            <p className="text-sm font-bold text-amber-900">You owe drivers: ₹{Number(totalOwed).toFixed(2)}</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {pendingR.map(p => (
+              <div key={p.id} className="p-4 flex items-center gap-3">
+                <div className="flex-1 min-w-0 text-sm">
+                  <p className="font-semibold text-slate-800">{p.driver_name || 'unknown driver'}</p>
+                  <p className="text-xs text-slate-500">Paid {p.consumer_name} ₹{Number(p.deposit_amount).toFixed(2)} via UPI — proof verified by {p.verified_by_name} on {formatIstDate(p.admin_verified_at)}</p>
+                  {p.driver_phone && <p className="text-xs text-slate-500">Driver: {p.driver_phone}</p>}
+                </div>
+                <button
+                  onClick={() => reimburse(p.id, p.deposit_amount)}
+                  disabled={busyId === p.id}
+                  className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 flex-shrink-0"
+                >
+                  Mark reimbursed
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {disputes.length > 0 && (
+        <div className="bg-white border border-red-200 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-red-700" />
+            <h2 className="font-bold text-red-900">Open damage disputes ({disputes.length})</h2>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {disputes.map(d => (
+              <div key={d.id} className="p-4 flex flex-col md:flex-row gap-4">
+                <button
+                  onClick={() => setPreviewUrl(fullUrl(d.damage_photo_url))}
+                  className="w-24 h-24 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 flex-shrink-0 hover:ring-2 hover:ring-red-300"
+                >
+                  {d.damage_photo_url
+                    ? <img src={fullUrl(d.damage_photo_url) || ''} alt="damage" className="w-full h-full object-cover" />
+                    : <ImageIcon className="w-6 h-6 text-slate-300 mx-auto mt-7" />
+                  }
+                </button>
+                <div className="flex-1 min-w-0 text-sm">
+                  <p className="font-semibold text-slate-800">{d.consumer_name} disputes forfeit · ₹{Number(d.deposit_amount).toFixed(2)}</p>
+                  {d.consumer_phone && <p className="text-xs text-slate-500">{d.consumer_phone}</p>}
+                  <p className="text-xs text-slate-400">Opened {d.dispute_opened_at ? formatIstDate(d.dispute_opened_at) : '—'} · Deadline {d.dispute_deadline ? formatIstDate(d.dispute_deadline) : '—'}</p>
+                  {d.notes && <p className="text-xs text-slate-600 italic mt-1 whitespace-pre-wrap">{d.notes}</p>}
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => resolveDispute(d.id, 'upheld')}
+                    disabled={busyId === d.id}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    Side with consumer
+                  </button>
+                  <button
+                    onClick={() => resolveDispute(d.id, 'rejected')}
+                    disabled={busyId === d.id}
+                    className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    Uphold forfeit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
+          <img src={previewUrl} alt="full" className="max-w-full max-h-full rounded-xl" />
+          <button onClick={() => setPreviewUrl(null)} className="absolute top-4 right-4 bg-white/90 p-2 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

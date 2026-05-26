@@ -264,6 +264,32 @@ export default function DeliveryOrderDetail() {
           )}
         </div>
 
+        {/* Container summary — quick breakdown so the driver knows what
+         * to load and what to expect to pick up at the consumer's place. */}
+        {items.some((it: any) => it.container_type) && (() => {
+          const containerLines = items.filter((it: any) => it.container_type);
+          const refillUnits = containerLines
+            .filter((it: any) => it.is_refill)
+            .reduce((s: number, it: any) => s + Number(it.quantity || 0), 0);
+          const newUnits = containerLines
+            .filter((it: any) => !it.is_refill)
+            .reduce((s: number, it: any) => s + Number(it.quantity || 0), 0);
+          return (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800">
+              <p className="font-semibold mb-1">Container plan for this stop</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span><strong>{newUnits}</strong> new container{newUnits === 1 ? '' : 's'} to deliver</span>
+                <span><strong>{refillUnits}</strong> refill{refillUnits === 1 ? '' : 's'} → bring full, swap with empty</span>
+              </div>
+              {refillUnits > 0 && (
+                <p className="text-[11px] mt-1 text-emerald-700">
+                  Collect the empty containers from the consumer when you swap in the refills.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Order Items */}
         <div className="bg-white rounded-xl border border-slate-100 p-4">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">

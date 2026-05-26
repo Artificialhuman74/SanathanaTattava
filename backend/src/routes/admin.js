@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { emitOrderUpdate } = require('../websocket/socketServer');
+const { emitOrderUpdate, emitContainerHoldingUpdate } = require('../websocket/socketServer');
 const {
   restockDealer,
   getInventoryOverview,
@@ -763,6 +763,9 @@ const {
   listAllHoldings,
   getHoldingDetail,
   adminOverrideHolding,
+  adminVerifyRefundProof,
+  adminReimburseDriver,
+  getDamageDisputes,
   VALID_STATUSES,
   VALID_DESTINATIONS,
 } = require('../services/containerHoldingsService');
@@ -824,5 +827,238 @@ router.post(
     }
   }
 );
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Phase 9 — UPI refund verification + driver reimbursement
+ *
+ * Lifecycle (when delivery agent picks up a container and the consumer
+ * elected an immediate UPI refund):
+ *   1. Driver pays via their own UPI, uploads screenshot
+ *      → container_holdings.refund_proof_url set, refund_paid_via='manual_upi'
+ *   2. Admin opens Container Deposits, verifies the proof matches the
+ *      deposit amount → admin_verified_at stamped (event: admin_verified_upi_proof)
+ *   3. Admin reimburses the driver out-of-band, then clicks "Reimburse"
+ *      → driver_reimbursed_at + amount stamped (event: driver_reimbursed)
+ *
+ * Damage path: driver marks forfeited, uploads damage photo, holding gets
+ * dispute_deadline = now + 48h. Consumer can dispute via their UI until
+ * then; admin resolves disputes through /holdings/:id/resolve-dispute.
+ * ═════════════════════════════════════════════════════════════════════ */
+
+router.get('/container-deposits/pending-verification', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT h.id, h.consumer_id, h.deposit_amount, h.container_type,
+             h.refund_proof_url, h.refund_paid_via, h.refund_destination,
+             h.driver_user_id, h.requested_at, h.resolved_at, h.notes,
+             c.name AS consumer_name, c.phone AS consumer_phone,
+             u.name AS driver_name, u.phone AS driver_phone
+        FROM container_holdings h
+        JOIN consumers c ON c.id = h.consumer_id
+        LEFT JOIN users u ON u.id = h.driver_user_id
+       WHERE h.refund_paid_via='manual_upi'
+         AND h.refund_proof_url IS NOT NULL
+         AND h.admin_verified_at IS NULL
+       ORDER BY h.resolved_at DESC, h.id DESC
+    `).all();
+    res.json({ pending: rows });
+  } catch (err) {
+    console.error('GET /admin/container-deposits/pending-verification error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/container-deposits/pending-reimbursement', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT h.id, h.consumer_id, h.deposit_amount, h.container_type,
+             h.refund_proof_url, h.driver_user_id, h.admin_verified_at,
+             h.resolved_at, h.notes,
+             c.name AS consumer_name, c.phone AS consumer_phone,
+             u.name AS driver_name, u.phone AS driver_phone,
+             COALESCE(av.name, 'admin') AS verified_by_name
+        FROM container_holdings h
+        JOIN consumers c ON c.id = h.consumer_id
+        LEFT JOIN users u  ON u.id  = h.driver_user_id
+        LEFT JOIN users av ON av.id = h.admin_verified_by
+       WHERE h.refund_paid_via='manual_upi'
+         AND h.admin_verified_at IS NOT NULL
+         AND h.driver_reimbursed_at IS NULL
+       ORDER BY h.admin_verified_at ASC
+    `).all();
+    const totalOwedDriver = rows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0);
+    res.json({ pending: rows, totalOwedDriver });
+  } catch (err) {
+    console.error('GET /admin/container-deposits/pending-reimbursement error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/container-deposits/holdings/:id/verify-proof',
+  body('approved').isBoolean(),
+  body('notes').optional().isString().isLength({ max: 500 }),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const id = parseInt(req.params.id, 10);
+      const result = adminVerifyRefundProof({
+        holdingId:   id,
+        adminUserId: req.user.id,
+        approved:    !!req.body.approved,
+        notes:       req.body.notes || null,
+      });
+      try {
+        const ctx = db.prepare(`
+          SELECT h.consumer_id, h.driver_user_id, c.linked_dealer_id
+            FROM container_holdings h
+            JOIN consumers c ON c.id=h.consumer_id WHERE h.id=?
+        `).get(id);
+        emitContainerHoldingUpdate({
+          holdingId: id,
+          consumerId: ctx?.consumer_id,
+          linkedDealerId: ctx?.driver_user_id || ctx?.linked_dealer_id,
+          event: req.body.approved ? 'proof_verified' : 'proof_rejected',
+        });
+      } catch (_) {}
+      res.json(result);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND')   return res.status(404).json({ error: err.message });
+      if (err.code === 'WRONG_FLOW')  return res.status(400).json({ error: err.message });
+      if (err.code === 'NO_PROOF')    return res.status(400).json({ error: err.message });
+      console.error('POST /admin/.../verify-proof error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+router.post(
+  '/container-deposits/holdings/:id/reimburse-driver',
+  body('amount').optional().isFloat({ gt: 0 }),
+  body('notes').optional().isString().isLength({ max: 500 }),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const id = parseInt(req.params.id, 10);
+      const result = adminReimburseDriver({
+        holdingId:   id,
+        adminUserId: req.user.id,
+        amount:      req.body.amount,
+        notes:       req.body.notes || null,
+      });
+      try {
+        const ctx = db.prepare(`
+          SELECT h.consumer_id, h.driver_user_id FROM container_holdings h WHERE h.id=?
+        `).get(id);
+        emitContainerHoldingUpdate({
+          holdingId: id,
+          consumerId: ctx?.consumer_id,
+          linkedDealerId: ctx?.driver_user_id,
+          event: 'driver_reimbursed',
+        });
+      } catch (_) {}
+      res.json(result);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND')      return res.status(404).json({ error: err.message });
+      if (err.code === 'WRONG_FLOW')     return res.status(400).json({ error: err.message });
+      if (err.code === 'NOT_VERIFIED')   return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_AMOUNT') return res.status(400).json({ error: err.message });
+      console.error('POST /admin/.../reimburse-driver error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/* Damage disputes — list open + resolve (uphold/reverse). */
+router.get('/damage-disputes', (req, res) => {
+  try {
+    res.json({ disputes: getDamageDisputes() });
+  } catch (err) {
+    console.error('GET /admin/damage-disputes error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/damage-disputes/:id/resolve',
+  body('resolution').isIn(['upheld', 'rejected']),
+  body('notes').optional().isString().isLength({ max: 500 }),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const id = parseInt(req.params.id, 10);
+    const row = db.prepare(`
+      SELECT id, consumer_id, damage_dispute_status, status
+        FROM container_holdings WHERE id=?
+    `).get(id);
+    if (!row) return res.status(404).json({ error: 'holding not found' });
+    if (row.status !== 'forfeited') {
+      return res.status(400).json({ error: 'only forfeited holdings can be resolved' });
+    }
+    if (row.damage_dispute_status !== 'open') {
+      return res.status(409).json({ error: `dispute is ${row.damage_dispute_status || 'not open'}` });
+    }
+    const resolution = req.body.resolution; // 'upheld' = consumer wins, 'rejected' = forfeit stands
+    const tx = db.transaction(() => {
+      db.prepare(`
+        UPDATE container_holdings
+           SET damage_dispute_status=?,
+               dispute_resolved_at=CURRENT_TIMESTAMP,
+               dispute_resolved_by=?,
+               notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+               updated_at=CURRENT_TIMESTAMP
+         WHERE id=?
+      `).run(resolution, req.user.id, req.body.notes || null, id);
+      db.prepare(`
+        INSERT INTO container_finance_log
+          (holding_id, consumer_id, event_type, amount, direction, actor_user_id)
+        VALUES (?, ?, ?, 0, 'dispute', ?)
+      `).run(id, row.consumer_id, `admin_dispute_${resolution}`, req.user.id);
+    });
+    try {
+      tx();
+      res.json({ ok: true, resolution });
+    } catch (err) {
+      console.error('POST /admin/damage-disputes/:id/resolve error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/* Finance log — append-only money trail for Phase 9 events. Drives the
+ * "Container finance" tab on the admin Finance page. */
+router.get('/container-finance/log', (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit, 10)  || 100, 500);
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const rows = db.prepare(`
+      SELECT l.id, l.holding_id, l.consumer_id, l.driver_user_id,
+             l.event_type, l.amount, l.direction, l.actor_user_id,
+             l.reference, l.created_at,
+             c.name AS consumer_name,
+             u.name AS driver_name,
+             a.name AS actor_name
+        FROM container_finance_log l
+        LEFT JOIN consumers c ON c.id = l.consumer_id
+        LEFT JOIN users u     ON u.id = l.driver_user_id
+        LEFT JOIN users a     ON a.id = l.actor_user_id
+       ORDER BY l.created_at DESC, l.id DESC
+       LIMIT ? OFFSET ?
+    `).all(limit, offset);
+    const totals = db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN event_type='driver_reimbursed' THEN amount END),0) AS driver_paid_total,
+        COALESCE(SUM(CASE WHEN event_type='admin_verified_upi_proof' THEN amount END),0) AS verified_total,
+        COUNT(*) AS total_events
+        FROM container_finance_log
+    `).get();
+    res.json({ events: rows, totals });
+  } catch (err) {
+    console.error('GET /admin/container-finance/log error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 module.exports = router;

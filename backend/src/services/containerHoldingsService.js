@@ -128,6 +128,8 @@ function getAllHoldingsForConsumer(consumerId) {
     SELECT h.id, h.invoice_id, h.container_type, h.deposit_amount, h.status,
            h.refund_destination, h.requested_at, h.resolved_at,
            h.notes, h.created_at, h.updated_at,
+           h.damage_photo_url, h.damage_dispute_status,
+           h.dispute_deadline, h.dispute_opened_at, h.dispute_resolved_at,
            p_cur.name  AS current_product_name,
            p_orig.name AS original_product_name
       FROM container_holdings h
@@ -279,16 +281,30 @@ function requestSwap({ holdingId, consumerId, targetProductId }) {
  * dealer. Admin override is allowed (admins can resolve on behalf of a
  * dealer if needed). authorizedUserId/role come from the route layer.
  */
+/* Phase 9 valid refund destinations. manual_upi is the new driver-fronted
+ * flow: the driver pays the consumer via their own UPI, uploads a
+ * screenshot proof, and admin later reimburses them. */
+const VALID_FINALIZE_DESTINATIONS = ['manual_bank', 'store_credit', 'manual_upi'];
+const DISPUTE_WINDOW_HOURS = 48;
+
 function finalizeRefund({
   holdingId,
   resolvedByUserId,
   resolvedByRole,    // 'trader' | 'admin'
   outcome,           // 'refunded' | 'forfeited'
   notes,
+  refundProofUrl,    // Phase 9 — required when outcome=refunded + destination=manual_upi
+  damagePhotoUrl,    // Phase 9 — optional but strongly encouraged for forfeited
+  overrideDestination, // Phase 9 — driver may pick manual_upi at pickup time
 }) {
   if (!['refunded', 'forfeited'].includes(outcome)) {
     const err = new Error(`invalid outcome: ${outcome}`);
     err.code = 'INVALID_OUTCOME';
+    throw err;
+  }
+  if (overrideDestination && !VALID_FINALIZE_DESTINATIONS.includes(overrideDestination)) {
+    const err = new Error(`invalid destination: ${overrideDestination}`);
+    err.code = 'INVALID_DESTINATION';
     throw err;
   }
   const row = db.prepare(`
@@ -317,22 +333,54 @@ function finalizeRefund({
     throw err;
   }
 
+  /* If the driver supplied a destination at pickup time, that wins over
+   * whatever the consumer chose at refund-request time — the consumer
+   * may have asked for bank transfer but the driver paid UPI on the spot. */
+  const effectiveDestination = overrideDestination || row.refund_destination;
+  if (outcome === 'refunded' && effectiveDestination === 'manual_upi' && !refundProofUrl) {
+    const err = new Error('UPI refunds require a proof screenshot');
+    err.code = 'PROOF_REQUIRED';
+    throw err;
+  }
+
   const tx = db.transaction(() => {
     db.prepare(`
       UPDATE container_holdings
          SET status=?,
+             refund_destination=?,
+             refund_paid_via=?,
+             refund_proof_url=COALESCE(?, refund_proof_url),
+             damage_photo_url=COALESCE(?, damage_photo_url),
+             driver_user_id=COALESCE(?, driver_user_id),
              resolved_at=CURRENT_TIMESTAMP,
              resolved_by=?,
              updated_at=CURRENT_TIMESTAMP,
-             notes=COALESCE(?, notes)
+             notes=COALESCE(?, notes),
+             dispute_deadline=CASE WHEN ?='forfeited'
+                                   THEN datetime(CURRENT_TIMESTAMP, '+${DISPUTE_WINDOW_HOURS} hours')
+                                   ELSE dispute_deadline END,
+             damage_dispute_status=CASE WHEN ?='forfeited' THEN 'open'
+                                        ELSE damage_dispute_status END
        WHERE id=?
-    `).run(outcome, resolvedByUserId, notes || null, holdingId);
+    `).run(
+      outcome,
+      effectiveDestination,
+      outcome === 'refunded' ? effectiveDestination : null,
+      refundProofUrl || null,
+      damagePhotoUrl || null,
+      resolvedByUserId, // driver_user_id — the agent doing the pickup
+      resolvedByUserId,
+      notes || null,
+      outcome, outcome,
+      holdingId,
+    );
 
     /* Store-credit refunds are settled atomically with the status flip so
      * a partial failure can't leave a "refunded" holding with no credit
      * entry. Manual bank refunds are recorded by the admin via a
-     * separate flow. */
-    if (outcome === 'refunded' && row.refund_destination === 'store_credit') {
+     * separate flow. UPI refunds wait for admin verification before any
+     * money movement (the driver paid out-of-pocket; admin reimburses). */
+    if (outcome === 'refunded' && effectiveDestination === 'store_credit') {
       db.prepare(`
         INSERT INTO consumer_store_credit_ledger
           (consumer_id, delta, reason, source_type, source_id, created_by)
@@ -345,9 +393,178 @@ function finalizeRefund({
         resolvedByUserId,
       );
     }
+
+    /* Phase 9 finance log — one row per real-world money movement or
+     * lifecycle event. Read by /admin/finance. */
+    const eventType =
+      outcome === 'forfeited' ? 'container_forfeited' :
+      effectiveDestination === 'manual_upi' ? 'driver_upi_paid_consumer' :
+      effectiveDestination === 'manual_bank' ? 'bank_refund_pending' :
+      'store_credit_issued';
+    db.prepare(`
+      INSERT INTO container_finance_log
+        (holding_id, consumer_id, driver_user_id, event_type, amount, direction, actor_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      holdingId, row.consumer_id, resolvedByUserId,
+      eventType,
+      outcome === 'forfeited' ? 0 : row.deposit_amount,
+      eventType === 'driver_upi_paid_consumer' ? 'driver_to_consumer' :
+        eventType === 'store_credit_issued' ? 'company_to_consumer' :
+        eventType === 'bank_refund_pending' ? 'pending' : 'none',
+      resolvedByUserId,
+    );
   });
   tx();
-  return { ok: true, outcome };
+  return { ok: true, outcome, destination: effectiveDestination };
+}
+
+/* Phase 9 — admin verifies the UPI proof screenshot. Marks the refund
+ * as confirmed by the company; the driver is still owed reimbursement
+ * until adminReimburseDriver runs. */
+function adminVerifyRefundProof({ holdingId, adminUserId, approved, notes }) {
+  const row = db.prepare(`
+    SELECT id, consumer_id, deposit_amount, refund_paid_via, refund_proof_url,
+           admin_verified_at, driver_user_id
+      FROM container_holdings WHERE id=?
+  `).get(holdingId);
+  if (!row) { const e = new Error('holding not found'); e.code='NOT_FOUND'; throw e; }
+  if (row.refund_paid_via !== 'manual_upi') {
+    const e = new Error('only manual_upi refunds can be verified here'); e.code='WRONG_FLOW'; throw e;
+  }
+  if (!row.refund_proof_url) {
+    const e = new Error('no proof uploaded yet'); e.code='NO_PROOF'; throw e;
+  }
+  if (row.admin_verified_at && approved) {
+    return { ok: true, noop: true };
+  }
+  const tx = db.transaction(() => {
+    if (approved) {
+      db.prepare(`
+        UPDATE container_holdings
+           SET admin_verified_at=CURRENT_TIMESTAMP,
+               admin_verified_by=?,
+               notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+               updated_at=CURRENT_TIMESTAMP
+         WHERE id=?
+      `).run(adminUserId, notes || null, holdingId);
+      db.prepare(`
+        INSERT INTO container_finance_log
+          (holding_id, consumer_id, driver_user_id, event_type, amount, direction, actor_user_id, reference)
+        VALUES (?, ?, ?, 'admin_verified_upi_proof', ?, 'verification', ?, ?)
+      `).run(holdingId, row.consumer_id, row.driver_user_id, row.deposit_amount, adminUserId, row.refund_proof_url);
+    } else {
+      // Rejection clears verification + reopens the proof requirement
+      db.prepare(`
+        UPDATE container_holdings
+           SET admin_verified_at=NULL,
+               admin_verified_by=NULL,
+               refund_proof_url=NULL,
+               notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+               updated_at=CURRENT_TIMESTAMP
+         WHERE id=?
+      `).run(`Proof rejected: ${notes || 'no reason given'}`, holdingId);
+      db.prepare(`
+        INSERT INTO container_finance_log
+          (holding_id, consumer_id, driver_user_id, event_type, amount, direction, actor_user_id)
+        VALUES (?, ?, ?, 'admin_rejected_upi_proof', 0, 'verification', ?)
+      `).run(holdingId, row.consumer_id, row.driver_user_id, adminUserId);
+    }
+  });
+  tx();
+  return { ok: true, approved: !!approved };
+}
+
+/* Phase 9 — admin marks the driver as reimbursed for the cash they
+ * fronted. This is the final money-out event for a manual_upi refund. */
+function adminReimburseDriver({ holdingId, adminUserId, amount, notes }) {
+  const row = db.prepare(`
+    SELECT id, consumer_id, deposit_amount, refund_paid_via,
+           admin_verified_at, driver_user_id, driver_reimbursed_at
+      FROM container_holdings WHERE id=?
+  `).get(holdingId);
+  if (!row) { const e = new Error('holding not found'); e.code='NOT_FOUND'; throw e; }
+  if (row.refund_paid_via !== 'manual_upi') {
+    const e = new Error('driver reimbursement only applies to UPI refunds'); e.code='WRONG_FLOW'; throw e;
+  }
+  if (!row.admin_verified_at) {
+    const e = new Error('verify the proof before reimbursing the driver'); e.code='NOT_VERIFIED'; throw e;
+  }
+  if (row.driver_reimbursed_at) {
+    return { ok: true, noop: true };
+  }
+  const reimbursed = amount != null ? Number(amount) : Number(row.deposit_amount);
+  if (!Number.isFinite(reimbursed) || reimbursed <= 0) {
+    const e = new Error('invalid amount'); e.code='INVALID_AMOUNT'; throw e;
+  }
+  const tx = db.transaction(() => {
+    db.prepare(`
+      UPDATE container_holdings
+         SET driver_reimbursed_at=CURRENT_TIMESTAMP,
+             driver_reimbursed_by=?,
+             driver_reimbursed_amount=?,
+             notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+             updated_at=CURRENT_TIMESTAMP
+       WHERE id=?
+    `).run(adminUserId, reimbursed, notes || null, holdingId);
+    db.prepare(`
+      INSERT INTO container_finance_log
+        (holding_id, consumer_id, driver_user_id, event_type, amount, direction, actor_user_id)
+      VALUES (?, ?, ?, 'driver_reimbursed', ?, 'company_to_driver', ?)
+    `).run(holdingId, row.consumer_id, row.driver_user_id, reimbursed, adminUserId);
+  });
+  tx();
+  return { ok: true, amount: reimbursed };
+}
+
+/* Phase 9 — consumer opens a damage dispute. Allowed only when the
+ * holding is forfeited AND we are still within dispute_deadline. */
+function openDamageDispute({ holdingId, consumerId, notes }) {
+  const row = db.prepare(`
+    SELECT id, consumer_id, status, dispute_deadline, damage_dispute_status
+      FROM container_holdings WHERE id=?
+  `).get(holdingId);
+  if (!row) { const e = new Error('holding not found'); e.code='NOT_FOUND'; throw e; }
+  if (row.consumer_id !== consumerId) {
+    const e = new Error('not your holding'); e.code='FORBIDDEN'; throw e;
+  }
+  if (row.status !== 'forfeited') {
+    const e = new Error('only forfeited holdings can be disputed'); e.code='INVALID_STATUS'; throw e;
+  }
+  if (!row.dispute_deadline || new Date(row.dispute_deadline + 'Z').getTime() < Date.now()) {
+    const e = new Error('dispute window has closed'); e.code='WINDOW_CLOSED'; throw e;
+  }
+  if (row.damage_dispute_status && row.damage_dispute_status !== 'open') {
+    const e = new Error(`dispute already ${row.damage_dispute_status}`); e.code='ALREADY_RESOLVED'; throw e;
+  }
+  db.prepare(`
+    UPDATE container_holdings
+       SET damage_dispute_status='open',
+           dispute_opened_at=COALESCE(dispute_opened_at, CURRENT_TIMESTAMP),
+           notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+           updated_at=CURRENT_TIMESTAMP
+     WHERE id=?
+  `).run(notes ? `Consumer dispute: ${notes}` : null, holdingId);
+  db.prepare(`
+    INSERT INTO container_finance_log
+      (holding_id, consumer_id, event_type, amount, direction, actor_user_id)
+    VALUES (?, ?, 'consumer_opened_dispute', 0, 'dispute', ?)
+  `).run(holdingId, consumerId, consumerId);
+  return { ok: true };
+}
+
+function getDamageDisputes() {
+  return db.prepare(`
+    SELECT h.id, h.consumer_id, h.deposit_amount, h.damage_photo_url,
+           h.damage_dispute_status, h.dispute_deadline, h.dispute_opened_at,
+           h.dispute_resolved_at, h.resolved_at, h.notes,
+           c.name AS consumer_name, c.phone AS consumer_phone, c.email AS consumer_email
+      FROM container_holdings h
+      JOIN consumers c ON c.id=h.consumer_id
+     WHERE h.status='forfeited'
+       AND h.damage_dispute_status IS NOT NULL
+     ORDER BY h.dispute_opened_at DESC, h.id DESC
+  `).all();
 }
 
 /* List of refund_requested holdings the dealer is responsible for, with
@@ -587,6 +804,10 @@ module.exports = {
   cancelRefund,
   requestSwap,
   finalizeRefund,
+  adminVerifyRefundProof,
+  adminReimburseDriver,
+  openDamageDispute,
+  getDamageDisputes,
   getPendingPickups,
   getStoreCreditBalance,
   listAllHoldings,

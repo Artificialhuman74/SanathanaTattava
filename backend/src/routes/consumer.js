@@ -13,7 +13,9 @@ const {
   notifyLinkedDealerOrderRouted,
   notifyContainerRefundRequested,
 } = require('../services/notificationService');
-const { emitOrderUpdate } = require('../websocket/socketServer');
+const { createNotification } = require('../services/notificationService');
+const { sendAdminDisputeOpenedEmail } = require('../services/emailService');
+const { emitOrderUpdate, emitContainerHoldingUpdate } = require('../websocket/socketServer');
 const containerHoldings = require('../services/containerHoldingsService');
 const storeCredit       = require('../services/storeCreditService');
 
@@ -99,7 +101,11 @@ router.get('/containers', authConsumer, (req, res) => {
      WHERE status='active' AND container_type IS NOT NULL
      ORDER BY container_type, name
   `).all();
-  res.json({ held, history, swappable });
+  const waRow = db.prepare(`SELECT value FROM settings WHERE key='support_whatsapp_number'`).get();
+  res.json({
+    held, history, swappable,
+    support_whatsapp_number: waRow?.value || null,
+  });
 });
 
 const handleHoldingError = (e, res) => {
@@ -108,6 +114,9 @@ const handleHoldingError = (e, res) => {
   if (e.code === 'INVALID_DESTINATION') return res.status(400).json({ error: e.message });
   if (e.code === 'SIZE_MISMATCH')     return res.status(400).json({ error: e.message });
   if (e.code === 'NO_CHANGE')         return res.status(400).json({ error: e.message });
+  if (e.code === 'FORBIDDEN')         return res.status(403).json({ error: e.message });
+  if (e.code === 'WINDOW_CLOSED')     return res.status(410).json({ error: e.message });
+  if (e.code === 'ALREADY_RESOLVED')  return res.status(409).json({ error: e.message });
   console.error('[containers] unexpected error', e);
   return res.status(500).json({ error: 'Internal error' });
 };
@@ -160,6 +169,12 @@ router.post('/containers/:id/request-refund',
             destination: req.body.destination,
             notes: req.body.notes,
           });
+          emitContainerHoldingUpdate({
+            holdingId:      ctx.holding_id,
+            consumerId:     ctx.consumer_id,
+            linkedDealerId: ctx.linked_dealer_id,
+            event:          'refund_requested',
+          });
         }
       } catch (notifyErr) {
         console.error('[container-refund notify] failed:', notifyErr.message);
@@ -171,11 +186,21 @@ router.post('/containers/:id/request-refund',
 );
 
 router.post('/containers/:id/cancel-refund', authConsumer, (req, res) => {
+  const holdingId = parseInt(req.params.id, 10);
   try {
-    containerHoldings.cancelRefund({
-      holdingId: parseInt(req.params.id, 10),
-      consumerId: req.consumer.id,
-    });
+    containerHoldings.cancelRefund({ holdingId, consumerId: req.consumer.id });
+    try {
+      const ctx = db.prepare(`
+        SELECT c.linked_dealer_id FROM container_holdings h
+          JOIN consumers c ON c.id = h.consumer_id WHERE h.id=?
+      `).get(holdingId);
+      emitContainerHoldingUpdate({
+        holdingId,
+        consumerId: req.consumer.id,
+        linkedDealerId: ctx?.linked_dealer_id,
+        event: 'refund_cancelled',
+      });
+    } catch (_) {}
     res.json({ ok: true });
   } catch (e) { handleHoldingError(e, res); }
 });
@@ -186,12 +211,72 @@ router.post('/containers/:id/swap',
   (req, res) => {
     const errs = validationResult(req);
     if (!errs.isEmpty()) return res.status(400).json({ errors: errs.array() });
+    const holdingId = parseInt(req.params.id, 10);
     try {
       containerHoldings.requestSwap({
-        holdingId: parseInt(req.params.id, 10),
+        holdingId,
         consumerId: req.consumer.id,
         targetProductId: parseInt(req.body.target_product_id, 10),
       });
+      emitContainerHoldingUpdate({
+        holdingId,
+        consumerId: req.consumer.id,
+        event: 'swap_requested',
+      });
+      res.json({ ok: true });
+    } catch (e) { handleHoldingError(e, res); }
+  }
+);
+
+/* Phase 9 — consumer opens a damage dispute against a forfeited holding.
+ * Only allowed while we are still inside the 48h window stamped on the
+ * holding at forfeit time. Fans out an admin notification + email. */
+router.post('/containers/:id/dispute',
+  authConsumer,
+  body('notes').optional().isString().isLength({ max: 1000 }),
+  (req, res) => {
+    const errs = validationResult(req);
+    if (!errs.isEmpty()) return res.status(400).json({ errors: errs.array() });
+    const holdingId = parseInt(req.params.id, 10);
+    try {
+      containerHoldings.openDamageDispute({
+        holdingId,
+        consumerId: req.consumer.id,
+        notes: req.body.notes,
+      });
+
+      try {
+        const ctx = db.prepare(`
+          SELECT h.id, h.container_type, h.deposit_amount,
+                 c.id AS consumer_id, c.name AS consumer_name, c.phone AS consumer_phone
+            FROM container_holdings h
+            JOIN consumers c ON c.id = h.consumer_id
+           WHERE h.id = ?
+        `).get(holdingId);
+
+        const admins = db.prepare(`SELECT id, email FROM users WHERE role='admin'`).all();
+        const title = 'Damage dispute opened';
+        const body  = `${ctx.consumer_name} is disputing a forfeited ${ctx.container_type} deposit of ₹${ctx.deposit_amount}.`;
+        for (const a of admins) {
+          createNotification('admin', a.id, title, body, { holding_id: ctx.id, consumer_id: ctx.consumer_id });
+        }
+        sendAdminDisputeOpenedEmail({
+          consumerName:  ctx.consumer_name,
+          consumerPhone: ctx.consumer_phone,
+          holdingId:     ctx.id,
+          containerType: ctx.container_type,
+          depositAmount: ctx.deposit_amount,
+          consumerNotes: req.body.notes || '',
+        }).catch(err => console.error('[dispute email] failed:', err.message));
+        emitContainerHoldingUpdate({
+          holdingId: ctx.id,
+          consumerId: ctx.consumer_id,
+          event: 'dispute_opened',
+        });
+      } catch (notifyErr) {
+        console.error('[dispute notify] failed:', notifyErr.message);
+      }
+
       res.json({ ok: true });
     } catch (e) { handleHoldingError(e, res); }
   }

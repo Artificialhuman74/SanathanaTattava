@@ -944,3 +944,218 @@ If any step throws, all three roll back together. Manually verifiable:
 
 _Phase 8 added 2026-05-26. Run §33–§42 after Phase 7 for a complete
 end-to-end Containers regression pass._
+
+---
+
+## Phase 9 — Damage Dispute, Driver UPI Refund, Finance Log
+
+Phase 9 closes the loop on container pickups: the driver can refund the
+consumer on the spot via their own UPI, the admin verifies the proof and
+reimburses the driver from company funds, and the consumer has a 48-hour
+window to contest a damage-forfeit decision. Every money movement and
+status flip is logged to `container_finance_log` and surfaced in the
+admin Finance page.
+
+### 44. New schema (additive — see `migrations.js`)
+
+`container_holdings`:
+- `refund_proof_url` — path to the WebP screenshot of the driver's UPI
+  receipt (NULL until the driver uploads it)
+- `refund_paid_via` — `'manual_bank' | 'store_credit' | 'manual_upi'`,
+  the destination chosen at pickup time (may override the consumer's
+  original choice)
+- `admin_verified_at` / `admin_verified_by` — set when admin approves
+  the proof
+- `driver_user_id` — the agent who handled the pickup (used to identify
+  who to reimburse)
+- `driver_reimbursed_at` / `driver_reimbursed_by` / `driver_reimbursed_amount`
+- `damage_photo_url` — WebP photo of the damaged container (forfeit path)
+- `dispute_deadline` — `CURRENT_TIMESTAMP + 48h` at the moment of forfeit
+- `damage_dispute_status` — `'open' | 'upheld' | 'rejected' | NULL`
+- `dispute_opened_at` / `dispute_resolved_at` / `dispute_resolved_by`
+
+`container_finance_log` (new, append-only):
+- one row per money or lifecycle event
+- event types: `driver_upi_paid_consumer`, `admin_verified_upi_proof`,
+  `admin_rejected_upi_proof`, `driver_reimbursed`, `container_forfeited`,
+  `store_credit_issued`, `bank_refund_pending`, `consumer_opened_dispute`,
+  `admin_dispute_upheld`, `admin_dispute_rejected`
+
+`settings.support_whatsapp_number` — seeded with `919972922514`; surfaced
+on the consumer dispute modal and the forfeit call-out card.
+
+### 45. Backend routes
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST   | `/api/delivery/container-pickups/:id/resolve` | trader/admin (multipart) | Driver finalizes pickup. Accepts `refund_proof` or `damage_photo` files, optional `override_destination='manual_upi'`. |
+| POST   | `/api/consumer/containers/:id/dispute` | consumer | Open a damage dispute (only while inside the 48h window). |
+| GET    | `/api/consumer/containers` | consumer | Now returns `damage_photo_url`, `damage_dispute_status`, `dispute_deadline`, plus `support_whatsapp_number`. |
+| GET    | `/api/admin/container-deposits/pending-verification` | admin | UPI refunds awaiting proof approval. |
+| GET    | `/api/admin/container-deposits/pending-reimbursement` | admin | Verified UPI refunds owed to drivers; response includes `totalOwedDriver`. |
+| POST   | `/api/admin/container-deposits/holdings/:id/verify-proof` | admin | `approved: true/false` (rejection clears `refund_proof_url` so the driver re-uploads). |
+| POST   | `/api/admin/container-deposits/holdings/:id/reimburse-driver` | admin | Stamps `driver_reimbursed_*`. Blocked before verification. |
+| GET    | `/api/admin/damage-disputes` | admin | All forfeited holdings with non-null dispute status. |
+| POST   | `/api/admin/damage-disputes/:id/resolve` | admin | `resolution: 'upheld' | 'rejected'`. |
+| GET    | `/api/admin/container-finance/log` | admin | Append-only event feed with totals header. |
+
+### 46. Sockets — real-time fan-out
+
+`emitContainerHoldingUpdate({ holdingId, consumerId, linkedDealerId, event, extra })`
+fans a `container_holding_update` payload to:
+
+- `consumer:<id>` — keeps "My Containers" in sync
+- `trader:<id>` (linked dealer) — keeps the delivery agent's pickup list
+  current after admin actions
+- `admin` — refreshes the verification/reimbursement queues
+
+Events emitted: `refund_requested`, `refund_cancelled`, `swap_requested`,
+`pickup_refunded`, `pickup_forfeited`, `proof_verified`, `proof_rejected`,
+`driver_reimbursed`, `dispute_opened`.
+
+### 47. Delivery — driver pickup screen
+
+- `ContainerPickups.tsx` — destination chooser (Bank / Store credit /
+  **UPI**) plus damage path with photo capture.
+- UPI refund **requires** a screenshot upload before submit (hard guard
+  in the modal AND in `finalizeRefund` server-side — `PROOF_REQUIRED`).
+- Forfeit path shows the 48h dispute warning before submit and emails
+  every admin (`sendAdminDamageReportEmail`).
+- Photo capture uses `<input type="file" capture="environment">` so
+  drivers shoot directly from the camera; server converts to WebP at
+  quality 78 / max 1600×1600 via sharp.
+- `DeliveryLayout.tsx` subscribes to socket events for pickup/order
+  alerts; Wifi / WifiOff icon confirms live state.
+
+### 48. Admin — Container Deposits + Finance Log
+
+- `ContainerDeposits.tsx` — `<Phase9Queues />` block renders three
+  stacked tables: verification queue, reimbursement queue (with
+  `Total owed driver: ₹X` header), open disputes.
+- Photo preview lightbox via `previewUrl` state — admin can zoom into
+  the UPI proof / damage photo before approving.
+- `Finance.tsx` — new "Container Finance" tab loads
+  `/admin/container-finance/log`, shows KPI tiles for driver-reimbursed
+  total, UPI-verified total, total events, and a table covering every
+  money / lifecycle event.
+
+### 49. Consumer — dispute UI
+
+- `Containers.tsx` HistoryCard renders a red call-out for forfeited
+  holdings showing the deadline, dispute status, **Dispute forfeit**
+  button (within window only), and a **WhatsApp support** link.
+- `DisputeModal` previews the driver's damage photo and posts to
+  `/consumer/containers/:id/dispute`.
+
+### 50. Consumer — checkout swap warning
+
+- `Checkout.tsx` fetches held containers on mount.
+- For each NEW (buy) cart line whose `container_type` matches a held
+  container of a *different* product, a `swapConflicts` entry is
+  flagged.
+- Amber banner above the Pay button surfaces conflicts with a "View
+  details" CTA and a link to My Containers.
+- Clicking Pay opens `SwapWarningModal` first — hard-blocking; consumer
+  must explicitly click "Keep new container — proceed" before the order
+  can be placed.
+- Acknowledgement resets on any cart edit.
+
+### 51. Manual scenarios — Phase 9
+
+#### Happy paths
+
+- [ ] **UPI refund full loop**: Driver picks Refund → UPI, pays the
+      consumer via UPI, uploads the receipt screenshot. Admin sees the
+      holding in the verification queue, approves. Holding moves to
+      the reimbursement queue with deposit amount in `totalOwedDriver`.
+      Admin reimburses the driver → holding falls out of both queues,
+      three rows visible in Finance Log (`driver_upi_paid_consumer`,
+      `admin_verified_upi_proof`, `driver_reimbursed`).
+- [ ] **Damage forfeit, consumer accepts**: Driver picks Forfeit,
+      uploads damage photo. Consumer sees the forfeit card with
+      deadline in My Containers. Consumer does nothing → after 48h the
+      window closes; card now reads "The 48-hour dispute window has
+      closed." No further actions available.
+- [ ] **Damage forfeit, consumer disputes → upheld**: Consumer opens a
+      dispute within the window. Admin sees it under Damage Disputes
+      and sides with the consumer (`resolution: 'upheld'`). Holding row
+      shows `damage_dispute_status='upheld'`; Finance Log gains
+      `admin_dispute_upheld`. Consumer sees the updated banner.
+- [ ] **Damage forfeit, consumer disputes → rejected**: Admin reviews
+      and upholds the forfeit. `damage_dispute_status='rejected'`;
+      consumer sees "Admin reviewed and upheld the forfeit."
+- [ ] **Checkout swap warning — different product**: Consumer holds a
+      5L Mustard, adds a NEW 5L Coconut. Amber banner appears above
+      Pay. Modal lists the held Mustard container and the cart's
+      Coconut line, with "Go to My Containers" and "Keep new container
+      — proceed". Proceeding completes the order; navigating to My
+      Containers and swapping to Coconut clears the conflict.
+- [ ] **Checkout swap warning — same product**: Held 5L Mustard, cart
+      has NEW 5L Mustard. Same-product case is NOT flagged here (refill
+      cap logic handles it elsewhere).
+
+#### Negative paths and edge cases
+
+- [ ] UPI refund submit without photo → driver gets a hard alert
+      before the request is sent.
+- [ ] Server-side: posting `/api/delivery/.../resolve` with
+      `override_destination='manual_upi'` but no proof file returns
+      400 (`PROOF_REQUIRED`).
+- [ ] Admin rejects UPI proof → `refund_proof_url` cleared,
+      `admin_verified_at` NULL, holding stays in verification queue
+      awaiting a fresh upload.
+- [ ] Admin tries to reimburse driver before verifying → 400.
+- [ ] Consumer disputes a `held` (not forfeited) holding → 409.
+- [ ] Consumer disputes after `dispute_deadline` has passed → 410.
+- [ ] Consumer A tries to dispute consumer B's holding → 403.
+- [ ] Re-dispute attempt while status is already `'upheld'` or
+      `'rejected'` → 409.
+- [ ] Checkout: editing the cart after acknowledging the swap warning
+      re-opens the modal on the next Pay click.
+- [ ] WhatsApp button on the dispute modal honours
+      `settings.support_whatsapp_number`; admin can change it from the
+      settings page and the new number appears without a redeploy.
+
+#### Real-time
+
+- [ ] Driver completes a pickup → admin's verification queue updates
+      live (no manual refresh).
+- [ ] Admin verifies a proof → driver's pickup list reflects the
+      verified state.
+- [ ] Consumer opens a dispute → admin notification bell wiggles and a
+      new entry appears in Damage Disputes.
+- [ ] Driver loses connectivity → WifiOff icon in DeliveryLayout;
+      reconnects on network recovery without page reload.
+
+### 52. What is NOT in Phase 9
+
+1. **Auto-refund on `upheld` dispute** — admin upholds the consumer's
+   complaint, but the deposit is not auto-refunded; admin completes the
+   actual money movement out-of-band (the Phase 8 override flow exists
+   for this), and the finance log captures the dispute decision only.
+2. **Photo OCR / receipt parsing** — UPI proofs are visual only; admin
+   eyeballs the screenshot.
+3. **Per-driver reimbursement batching** — each holding is reimbursed
+   individually; a future phase may add bulk pay-out.
+4. **Push notifications to the consumer on dispute outcome** — UI
+   reflects state on next load; no transactional email yet.
+5. **Hard-blocking cross-size swap at checkout** — only same-size
+   conflicts are detected (matches Phase 5 swap semantics).
+
+### 53. Test coverage
+
+- `tests/phase9Containers.test.js` (13 new tests) — consumer dispute
+  flow, admin verify / reimburse pipeline, dispute resolution, finance
+  log endpoint, consumer containers response shape.
+- Test mocks extended: `__mocks__/socketServer.js` now exports
+  `emitAdminEvent` + `emitContainerHoldingUpdate`;
+  `__mocks__/emailService.js` exports every email helper added in
+  Phases 6–9 plus `DEV_MODE`.
+- After Phase 9: **782 passing / 5 skipped / 3 pre-existing failures**
+  (the same delivery-happy-path / OTP-wrong / adminFallback failures
+  that existed before Phase 9).
+
+---
+
+_Phase 9 added 2026-05-26. After Phases 5–9, run §1–§52 for a full
+end-to-end Containers regression pass._

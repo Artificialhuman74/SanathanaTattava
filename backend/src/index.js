@@ -133,6 +133,14 @@ app.use('/api/payments/webhook', express.raw({ type: '*/*', limit: '1mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Static uploads (refund proof + damage photos) ────────────────────────
+// Lives on the same DATA_DIR volume as the SQLite DB so it survives redeploys.
+const { UPLOADS_DIR } = require('./middleware/uploadProof');
+app.use('/uploads', express.static(UPLOADS_DIR, {
+  maxAge: '7d',
+  fallthrough: false,
+}));
+
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/admin/finance', financeRoutes);

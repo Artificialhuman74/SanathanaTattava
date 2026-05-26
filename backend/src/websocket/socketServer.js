@@ -156,6 +156,25 @@ function emitAdminEvent(event, data) {
 }
 
 /**
+ * Phase 9 — push a container-holding lifecycle event to every party that
+ * cares: the consumer, their linked dealer (pickup driver), and admin.
+ * Used to keep the delivery agent's pickup list and the consumer's
+ * "My Containers" view in sync without a manual reload.
+ */
+function emitContainerHoldingUpdate({ holdingId, consumerId, linkedDealerId, event, extra }) {
+  if (!io) return;
+  const payload = {
+    holdingId,
+    event,
+    timestamp: new Date().toISOString(),
+    ...(extra || {}),
+  };
+  if (consumerId)      io.to(`consumer:${consumerId}`).emit('container_holding_update', payload);
+  if (linkedDealerId)  io.to(`trader:${linkedDealerId}`).emit('container_holding_update', payload);
+  io.to('admin').emit('container_holding_update', payload);
+}
+
+/**
  * Get the Socket.IO instance (for advanced use).
  */
 function getIO() {
@@ -170,4 +189,5 @@ module.exports = {
   emitOrderUpdate,
   emitNotification,
   emitAdminEvent,
+  emitContainerHoldingUpdate,
 };

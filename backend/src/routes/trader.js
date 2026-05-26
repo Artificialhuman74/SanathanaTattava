@@ -160,7 +160,8 @@ router.get('/consumer-orders', (req, res) => {
 
   /* Attach items with product details for each order */
   const stmtItems = db.prepare(`
-    SELECT oi.*, p.name as product_name, p.sku, p.image_url, p.unit
+    SELECT oi.*, p.name as product_name, p.sku, p.image_url, p.unit,
+           p.container_type
     FROM consumer_order_items oi
     JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = ?
@@ -194,7 +195,7 @@ router.get('/consumer-orders/:id', (req, res) => {
     WHERE co.id=? AND (co.linked_dealer_id IN (${placeholders}) OR co.delivery_dealer_id IN (${placeholders}))
   `).get(req.params.id, ...dealerIds, ...dealerIds);
   if (!order) return res.status(404).json({ error: 'Order not found' });
-  const items = db.prepare(`SELECT oi.*, p.name as product_name, p.sku, p.image_url, p.unit FROM consumer_order_items oi JOIN products p ON oi.product_id=p.id WHERE oi.order_id=?`).all(order.id);
+  const items = db.prepare(`SELECT oi.*, p.name as product_name, p.sku, p.image_url, p.unit, p.container_type FROM consumer_order_items oi JOIN products p ON oi.product_id=p.id WHERE oi.order_id=?`).all(order.id);
   res.json({ order, items });
 });
 

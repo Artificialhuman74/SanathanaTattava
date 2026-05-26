@@ -1,17 +1,58 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import LocationPrompt from '../components/LocationPrompt';
 import api from '../api/axios';
 import {
-  Home, Package, Clock, User, Truck, ToggleLeft, ToggleRight, RotateCcw,
+  Home, Package, Clock, User, Truck, ToggleLeft, ToggleRight, RotateCcw, Wifi, WifiOff,
 } from 'lucide-react';
 
 export default function DeliveryLayout() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { on, off, connected } = useSocket();
   const [isOnline, setIsOnline] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [pickupAlerts, setPickupAlerts] = useState(0);
+  const [orderAlerts, setOrderAlerts]   = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Live updates: new pickup tasks + order status changes bump a tab
+   * badge so the driver notices without polling. Badges clear when the
+   * driver actually navigates to that section. */
+  useEffect(() => {
+    const onHoldingUpdate = (p: any) => {
+      if (p?.event === 'refund_requested') {
+        setPickupAlerts(c => c + 1);
+        showToast('New container pickup requested');
+      }
+    };
+    const onOrderUpdate = (p: any) => {
+      if (['pending', 'confirmed', 'processing'].includes(p?.status)) {
+        setOrderAlerts(c => c + 1);
+      }
+    };
+    on('container_holding_update', onHoldingUpdate);
+    on('order_status_updated', onOrderUpdate);
+    return () => {
+      off('container_holding_update', onHoldingUpdate);
+      off('order_status_updated', onOrderUpdate);
+    };
+  }, [on, off]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/delivery/pickups')) setPickupAlerts(0);
+    if (location.pathname.startsWith('/delivery/orders'))  setOrderAlerts(0);
+  }, [location.pathname]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     api.get('/location/dealer/me').then(({ data }) => {
@@ -35,11 +76,11 @@ export default function DeliveryLayout() {
   };
 
   const tabs = [
-    { to: '/delivery/dashboard', icon: Home,    label: 'Dashboard' },
-    { to: '/delivery/orders',    icon: Package,  label: 'Orders' },
-    { to: '/delivery/pickups',   icon: RotateCcw, label: 'Pickups' },
-    { to: '/delivery/history',   icon: Clock,    label: 'History' },
-    { to: '/delivery/profile',   icon: User,     label: 'Profile' },
+    { to: '/delivery/dashboard', icon: Home,      label: 'Dashboard', badge: 0 },
+    { to: '/delivery/orders',    icon: Package,   label: 'Orders',    badge: orderAlerts },
+    { to: '/delivery/pickups',   icon: RotateCcw, label: 'Pickups',   badge: pickupAlerts },
+    { to: '/delivery/history',   icon: Clock,     label: 'History',   badge: 0 },
+    { to: '/delivery/profile',   icon: User,      label: 'Profile',   badge: 0 },
   ];
 
   return (
@@ -56,6 +97,12 @@ export default function DeliveryLayout() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <span
+            title={connected ? 'Live updates active' : 'Reconnecting…'}
+            className={`flex items-center ${connected ? 'text-emerald-200' : 'text-amber-200'}`}
+          >
+            {connected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4 animate-pulse" />}
+          </span>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
             isOnline ? 'bg-green-400/30 text-white' : 'bg-white/20 text-green-100'
           }`}>
@@ -80,21 +127,34 @@ export default function DeliveryLayout() {
         <Outlet context={{ isOnline, toggleAvailability, toggling }} />
       </main>
 
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs px-3 py-2 rounded-full shadow-lg animate-pulse">
+          {toast}
+        </div>
+      )}
+
       {/* Bottom Tab Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex z-40">
-        {tabs.map(({ to, icon: Icon, label }) => (
+        {tabs.map(({ to, icon: Icon, label, badge }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-2 pt-3 transition-colors ${
+              `relative flex-1 flex flex-col items-center justify-center py-2 pt-3 transition-colors ${
                 isActive
                   ? 'text-emerald-600'
                   : 'text-slate-400 hover:text-slate-600'
               }`
             }
           >
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {badge > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 text-[9px] font-bold bg-red-500 text-white rounded-full flex items-center justify-center">
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] font-medium mt-1">{label}</span>
           </NavLink>
         ))}

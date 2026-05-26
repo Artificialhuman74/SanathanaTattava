@@ -848,6 +848,73 @@ function runMigrations(db) {
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_store_credit_consumer ON consumer_store_credit_ledger(consumer_id)`);
 
+  /* ── Phase 9 — driver-fronted UPI refunds, damage disputes, photo proofs ──
+   * Workflow:
+   *   1. Delivery agent inspects → no damage → pays consumer via their own
+   *      UPI, uploads screenshot (refund_proof_url, refund_paid_via='manual_upi')
+   *   2. Admin verifies in /admin/container-deposits → stamps admin_verified_at
+   *   3. Admin reimburses the driver → stamps driver_reimbursed_at + amount
+   *   4. Damage path → forfeited + damage_photo_url + dispute_deadline (now+48h)
+   *      + admin email; consumer can dispute via WhatsApp during the 48h window
+   */
+  const holdingsP9Cols = [
+    ['refund_proof_url',         `TEXT`],
+    ['refund_paid_via',          `TEXT`],
+    ['admin_verified_at',        `DATETIME`],
+    ['admin_verified_by',        `INTEGER REFERENCES users(id)`],
+    ['driver_user_id',           `INTEGER REFERENCES users(id)`],
+    ['driver_reimbursed_at',     `DATETIME`],
+    ['driver_reimbursed_by',     `INTEGER REFERENCES users(id)`],
+    ['driver_reimbursed_amount', `REAL`],
+    ['damage_photo_url',         `TEXT`],
+    ['damage_dispute_status',    `TEXT`],
+    ['dispute_deadline',         `DATETIME`],
+    ['dispute_opened_at',        `DATETIME`],
+    ['dispute_resolved_at',      `DATETIME`],
+    ['dispute_resolved_by',      `INTEGER REFERENCES users(id)`],
+  ];
+  for (const [col, type] of holdingsP9Cols) {
+    if (!hasColumn('container_holdings', col)) {
+      db.exec(`ALTER TABLE container_holdings ADD COLUMN ${col} ${type}`);
+      console.log(`[migration] container_holdings: added ${col}`);
+    }
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_pending_verification
+             ON container_holdings(admin_verified_at, refund_proof_url)
+             WHERE refund_proof_url IS NOT NULL AND admin_verified_at IS NULL`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_pending_reimbursement
+             ON container_holdings(admin_verified_at, driver_reimbursed_at)
+             WHERE admin_verified_at IS NOT NULL AND driver_reimbursed_at IS NULL`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_disputes
+             ON container_holdings(damage_dispute_status)
+             WHERE damage_dispute_status IS NOT NULL`);
+
+  /* Append-only finance audit. Every money movement (refund proof upload,
+   * admin verification, driver reimbursement, dispute decision) lands here
+   * so /admin/finance can reconstruct the full money trail. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS container_finance_log (
+      id            INTEGER  PRIMARY KEY AUTOINCREMENT,
+      holding_id    INTEGER  REFERENCES container_holdings(id),
+      consumer_id   INTEGER  REFERENCES consumers(id),
+      driver_user_id INTEGER REFERENCES users(id),
+      event_type    TEXT     NOT NULL,
+      amount        REAL     NOT NULL DEFAULT 0,
+      direction     TEXT     NOT NULL,
+      actor_user_id INTEGER  REFERENCES users(id),
+      reference     TEXT,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_event   ON container_finance_log(event_type)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_holding ON container_finance_log(holding_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_driver  ON container_finance_log(driver_user_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_created ON container_finance_log(created_at)`);
+
+  /* Settings: support WhatsApp number (already shown in support page,
+   * also used by the damage-dispute button on consumer side). */
+  db.prepare(`INSERT OR IGNORE INTO settings (key,value) VALUES ('support_whatsapp_number','919972922514')`).run();
+
   /* Backfill: for every existing tax invoice with a held deposit, materialise
    * one container_holdings row per delivered unit so legacy orders show up in
    * the new consumer UI. Idempotent — guarded by NOT EXISTS on invoice_id. */

@@ -142,6 +142,7 @@ function clearAll() {
   // Containers feature — must be cleared before invoices / consumer_order_items / products / consumers
   db.prepare('DELETE FROM container_swaps').run();
   try { db.prepare('DELETE FROM container_holdings_audit').run(); } catch (_) {}
+  try { db.prepare('DELETE FROM container_finance_log').run(); } catch (_) {}
   db.prepare('DELETE FROM container_holdings').run();
   db.prepare('DELETE FROM consumer_store_credit_ledger').run();
   db.prepare('DELETE FROM invoices').run();

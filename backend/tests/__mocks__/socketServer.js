@@ -3,6 +3,8 @@ module.exports = {
   initSocket:      jest.fn(),
   emitOrderUpdate: jest.fn(),
   emitNotification: jest.fn(),
+  emitAdminEvent:  jest.fn(),
+  emitContainerHoldingUpdate: jest.fn(),
   getIO: jest.fn(() => ({
     to:   jest.fn(() => ({ emit: jest.fn() })),
     emit: jest.fn(),

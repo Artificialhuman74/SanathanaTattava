@@ -6,13 +6,15 @@ const { deductOrderInventory } = require('../services/inventoryService');
 const {
   notifyConsumerDeliveryAssigned,
 } = require('../services/notificationService');
-const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
+const { emitOrderUpdate, emitNotification, emitContainerHoldingUpdate } = require('../websocket/socketServer');
 const { sendDeliveryOtpEmail, sendOutForDeliveryEmail } = require('../services/emailService');
 const {
   markHoldingsDelivered,
   getPendingPickups,
   finalizeRefund,
 } = require('../services/containerHoldingsService');
+const { uploadProof } = require('../middleware/uploadProof');
+const { sendAdminDamageReportEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -649,26 +651,81 @@ router.get('/container-pickups', (req, res) => {
 
 router.post(
   '/container-pickups/:id/resolve',
+  uploadProof('photo', 'pickups'),
   param('id').isInt(),
   body('outcome').isIn(['refunded', 'forfeited']),
+  body('destination').optional().isIn(['manual_bank', 'store_credit', 'manual_upi']),
   body('notes').optional().isString(),
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
+      const outcome = req.body.outcome;
+      const photoUrl = req.file ? req.file.url : null;
       const result = finalizeRefund({
         holdingId: Number(req.params.id),
         resolvedByUserId: req.user.id,
         resolvedByRole: req.user.role,
-        outcome: req.body.outcome,
+        outcome,
         notes: req.body.notes,
+        overrideDestination: req.body.destination || undefined,
+        refundProofUrl: outcome === 'refunded' ? photoUrl : null,
+        damagePhotoUrl: outcome === 'forfeited' ? photoUrl : null,
       });
-      res.json(result);
+
+      /* Damage path → admin email. Send asynchronously; don't block the
+       * response on SMTP. Logged on failure but not surfaced to driver. */
+      if (outcome === 'forfeited') {
+        try {
+          const ctx = db.prepare(`
+            SELECT h.id, h.container_type, h.deposit_amount, h.dispute_deadline,
+                   c.name AS consumer_name, c.phone AS consumer_phone,
+                   u.name AS driver_name
+              FROM container_holdings h
+              JOIN consumers c ON c.id = h.consumer_id
+              LEFT JOIN users u ON u.id = h.driver_user_id
+             WHERE h.id = ?
+          `).get(Number(req.params.id));
+          const publicBase = process.env.PUBLIC_API_URL || '';
+          sendAdminDamageReportEmail({
+            driverName: ctx.driver_name,
+            consumerName: ctx.consumer_name,
+            consumerPhone: ctx.consumer_phone,
+            holdingId: ctx.id,
+            containerType: ctx.container_type,
+            depositAmount: ctx.deposit_amount,
+            damagePhotoUrl: photoUrl ? `${publicBase}${photoUrl}` : null,
+            disputeDeadline: ctx.dispute_deadline,
+            notes: req.body.notes,
+          }).catch(err => console.error('[damage-email] failed:', err.message));
+        } catch (e) {
+          console.error('[damage-email] context lookup failed:', e.message);
+        }
+      }
+
+      try {
+        const ctx2 = db.prepare(`
+          SELECT h.consumer_id, c.linked_dealer_id
+            FROM container_holdings h
+            JOIN consumers c ON c.id = h.consumer_id
+           WHERE h.id = ?
+        `).get(Number(req.params.id));
+        emitContainerHoldingUpdate({
+          holdingId:      Number(req.params.id),
+          consumerId:     ctx2?.consumer_id,
+          linkedDealerId: ctx2?.linked_dealer_id,
+          event:          `pickup_${outcome}`,
+        });
+      } catch (_) { /* non-fatal */ }
+
+      res.json({ ...result, photoUrl });
     } catch (err) {
-      if (err.code === 'NOT_FOUND')         return res.status(404).json({ error: err.message });
-      if (err.code === 'FORBIDDEN')         return res.status(403).json({ error: err.message });
-      if (err.code === 'INVALID_STATUS')    return res.status(400).json({ error: err.message });
-      if (err.code === 'INVALID_OUTCOME')   return res.status(400).json({ error: err.message });
+      if (err.code === 'NOT_FOUND')           return res.status(404).json({ error: err.message });
+      if (err.code === 'FORBIDDEN')           return res.status(403).json({ error: err.message });
+      if (err.code === 'INVALID_STATUS')      return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_OUTCOME')     return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_DESTINATION') return res.status(400).json({ error: err.message });
+      if (err.code === 'PROOF_REQUIRED')      return res.status(400).json({ error: err.message });
       console.error('POST /delivery/container-pickups/:id/resolve error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }

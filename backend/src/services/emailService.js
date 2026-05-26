@@ -563,11 +563,93 @@ async function sendContainerRefundRequestEmail({
   return sendMail({ to, subject, text, html });
 }
 
+/* Phase 9 — driver reported container as damaged. Triggers an admin
+ * email with the photo URL + a 48h dispute deadline reminder. */
+async function sendAdminDamageReportEmail({
+  driverName, consumerName, consumerPhone, holdingId,
+  containerType, depositAmount, damagePhotoUrl, disputeDeadline, notes,
+}) {
+  const subject = `📸 Container damage reported — ${containerType} · ₹${depositAmount}`;
+  const text =
+    `Damage report on container holding #${holdingId}\n\n` +
+    `Driver: ${driverName}\n` +
+    `Consumer: ${consumerName}${consumerPhone ? ' (' + consumerPhone + ')' : ''}\n` +
+    `Container: ${containerType} · Deposit ₹${depositAmount}\n` +
+    `Photo: ${damagePhotoUrl || 'NOT PROVIDED'}\n` +
+    `Dispute deadline: ${disputeDeadline}\n` +
+    (notes ? `Notes: ${notes}\n\n` : '\n') +
+    `The consumer can dispute this within 48 hours via WhatsApp.`;
+  const html = buildEmailHtml({
+    title: 'Container Damage Report',
+    preheader: `${driverName} reported a damaged ${containerType} from ${consumerName}`,
+    body: `
+      <p style="margin:0 0 16px;color:#0f172a;font-size:15px;">
+        A delivery agent has reported a damaged container during pickup. The deposit will be forfeited unless the consumer disputes within 48 hours.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Driver</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:700;padding-bottom:6px;">${(driverName||'').replace(/</g,'&lt;')}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Consumer</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:6px;">${(consumerName||'').replace(/</g,'&lt;')}${consumerPhone ? ' · ' + consumerPhone : ''}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Container</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:6px;">${containerType}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Deposit at stake</td>
+            <td align="right" style="color:#b91c1c;font-size:18px;font-weight:800;padding-bottom:6px;">₹${depositAmount}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Dispute deadline</td>
+            <td align="right" style="color:#0f172a;font-size:13px;font-family:monospace;">${disputeDeadline}</td></tr>
+      </table>
+      ${damagePhotoUrl ? `<p style="margin:0 0 8px;font-size:13px;color:#64748b;">Damage photo:</p>
+        <p style="margin:0 0 16px;"><a href="${damagePhotoUrl}" style="color:#0d9488;text-decoration:underline;font-size:13px;font-family:monospace;">${damagePhotoUrl}</a></p>` : ''}
+      ${notes ? `<p style="margin:0 0 8px;font-size:13px;color:#64748b;">Driver notes:</p>
+        <p style="margin:0 0 16px;color:#0f172a;font-size:13px;">${notes.replace(/</g,'&lt;')}</p>` : ''}
+      <p style="margin:0;color:#64748b;font-size:13px;">If the consumer disputes via WhatsApp, you can override the holding back to <em>held</em> in the Admin → Holdings page.</p>
+    `,
+    footer: 'Sanathana Tattva',
+  });
+  return sendMail({ to: ADMIN_EMAIL, subject, text, html });
+}
+
+/* Phase 9 — consumer raised a damage dispute. Mirrors the WhatsApp ping
+ * so the admin has a permanent paper trail in their inbox. */
+async function sendAdminDisputeOpenedEmail({
+  consumerName, consumerPhone, holdingId, containerType, depositAmount, consumerNotes,
+}) {
+  const subject = `🚨 Consumer disputed damage — ${containerType} · ₹${depositAmount}`;
+  const text =
+    `Damage dispute opened on holding #${holdingId}\n\n` +
+    `Consumer: ${consumerName}${consumerPhone ? ' (' + consumerPhone + ')' : ''}\n` +
+    `Container: ${containerType} · Deposit ₹${depositAmount}\n` +
+    (consumerNotes ? `Their statement: ${consumerNotes}\n\n` : '\n') +
+    `Reach out via WhatsApp and resolve in /admin/holdings.`;
+  const html = buildEmailHtml({
+    title: 'Damage Dispute Opened',
+    preheader: `${consumerName} is contesting the damage claim on holding #${holdingId}`,
+    body: `
+      <p style="margin:0 0 16px;color:#0f172a;font-size:15px;">
+        The consumer disagrees with the driver's damage report and has opened a dispute. Reach out via WhatsApp to gather their side.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Consumer</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:700;padding-bottom:6px;">${(consumerName||'').replace(/</g,'&lt;')}${consumerPhone ? ' · ' + consumerPhone : ''}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Container</td>
+            <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:6px;">${containerType}</td></tr>
+        <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Deposit at stake</td>
+            <td align="right" style="color:#b91c1c;font-size:18px;font-weight:800;">₹${depositAmount}</td></tr>
+      </table>
+      ${consumerNotes ? `<p style="margin:0 0 8px;font-size:13px;color:#64748b;">Consumer notes:</p>
+        <p style="margin:0 0 16px;color:#0f172a;font-size:13px;">${consumerNotes.replace(/</g,'&lt;')}</p>` : ''}
+    `,
+    footer: 'Sanathana Tattva',
+  });
+  return sendMail({ to: ADMIN_EMAIL, subject, text, html });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
   sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
   sendAdminLowStockEmail,
   sendOrderConfirmedEmail, sendOutForDeliveryEmail, sendInvoiceEmail,
   sendContainerRefundRequestEmail,
+  sendAdminDamageReportEmail, sendAdminDisputeOpenedEmail,
   DEV_MODE,
 };

@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   TrendingUp, TrendingDown, Download, Plus, Trash2,
-  ShoppingBag, Users, BarChart3, Warehouse, IndianRupee, X,
+  ShoppingBag, Users, BarChart3, Warehouse, IndianRupee, X, Package,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -54,7 +54,7 @@ interface TraderPayment {
 }
 interface TraderOption { id: number; name: string; tier: number; phone: string }
 
-type Tab = 'overview' | 'consumer' | 'traders' | 'restock';
+type Tab = 'overview' | 'consumer' | 'traders' | 'restock' | 'containers';
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -225,10 +225,11 @@ export default function AdminFinance() {
 
   /* ── Render ──────────────────────────────────────────────────────────── */
   const tabs: { key: Tab; label: string; icon: any }[] = [
-    { key: 'overview', label: 'Overview',        icon: BarChart3 },
-    { key: 'consumer', label: 'Consumer Orders', icon: ShoppingBag },
-    { key: 'traders',  label: 'Partner Sales',   icon: Users },
-    { key: 'restock',  label: 'Restock Expense', icon: Warehouse },
+    { key: 'overview',   label: 'Overview',        icon: BarChart3 },
+    { key: 'consumer',   label: 'Consumer Orders', icon: ShoppingBag },
+    { key: 'traders',    label: 'Partner Sales',   icon: Users },
+    { key: 'restock',    label: 'Restock Expense', icon: Warehouse },
+    { key: 'containers', label: 'Container Finance', icon: Package },
   ];
 
   return (
@@ -560,6 +561,10 @@ export default function AdminFinance() {
         </div>
       )}
 
+      {!loading && tab === 'containers' && (
+        <ContainerFinanceLog />
+      )}
+
       {/* ── Modals ── */}
       {showAddIncome && (
         <AddIncomeModal onClose={() => setShowAddIncome(false)} onSubmit={addManualIncome} />
@@ -717,6 +722,150 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+/* ── Container Finance Log ─────────────────────────────────────────────── */
+interface ContainerFinanceEvent {
+  id: number;
+  holding_id: number | null;
+  consumer_id: number | null;
+  driver_user_id: number | null;
+  event_type: string;
+  amount: number | null;
+  direction: string | null;
+  actor_user_id: number | null;
+  reference: string | null;
+  created_at: string;
+  consumer_name: string | null;
+  driver_name: string | null;
+  actor_name: string | null;
+}
+interface ContainerFinanceTotals {
+  driver_paid_total: number;
+  verified_total: number;
+  total_events: number;
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  driver_upi_paid_consumer: 'Driver paid consumer (UPI)',
+  admin_verified_upi_proof: 'Admin verified UPI proof',
+  admin_rejected_upi_proof: 'Admin rejected UPI proof',
+  driver_reimbursed: 'Driver reimbursed',
+  container_forfeited: 'Container forfeited (damage)',
+  store_credit_issued: 'Store credit issued',
+  bank_refund_pending: 'Bank refund pending',
+  consumer_opened_dispute: 'Consumer opened dispute',
+  admin_dispute_upheld: 'Admin upheld forfeit',
+  admin_dispute_rejected: 'Admin sided with consumer',
+};
+const eventLabel = (k: string) => EVENT_LABEL[k] || k.replace(/_/g, ' ');
+
+function ContainerFinanceLog() {
+  const [events, setEvents] = useState<ContainerFinanceEvent[]>([]);
+  const [totals, setTotals] = useState<ContainerFinanceTotals>({
+    driver_paid_total: 0, verified_total: 0, total_events: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/admin/container-finance/log', { params: { limit: 200 } });
+      setEvents(data.events || []);
+      setTotals(data.totals || { driver_paid_total: 0, verified_total: 0, total_events: 0 });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load container finance log');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) {
+    return <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">Loading container finance log…</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
+            <IndianRupee size={16} className="text-emerald-600" />
+            Driver reimbursed (total)
+          </div>
+          <div className="mt-2 text-2xl font-bold text-slate-900">{inr(totals.driver_paid_total)}</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
+            <IndianRupee size={16} className="text-blue-600" />
+            UPI proofs verified (total)
+          </div>
+          <div className="mt-2 text-2xl font-bold text-slate-900">{inr(totals.verified_total)}</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
+            <Package size={16} className="text-amber-600" />
+            Container events logged
+          </div>
+          <div className="mt-2 text-2xl font-bold text-slate-900">{totals.total_events.toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900">Container Money Trail</h3>
+          <button
+            onClick={load}
+            className="text-xs text-slate-500 hover:text-slate-800"
+          >
+            Refresh
+          </button>
+        </div>
+        {events.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">No container finance events yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium">When</th>
+                  <th className="text-left px-4 py-2 font-medium">Event</th>
+                  <th className="text-left px-4 py-2 font-medium">Consumer</th>
+                  <th className="text-left px-4 py-2 font-medium">Driver</th>
+                  <th className="text-left px-4 py-2 font-medium">Actor</th>
+                  <th className="text-right px-4 py-2 font-medium">Amount</th>
+                  <th className="text-left px-4 py-2 font-medium">Dir.</th>
+                  <th className="text-left px-4 py-2 font-medium">Ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={e.id} className="border-t border-slate-100">
+                    <td className="px-4 py-2 text-slate-600 whitespace-nowrap">
+                      {new Date(e.created_at).toLocaleString('en-IN')}
+                    </td>
+                    <td className="px-4 py-2 text-slate-900">{eventLabel(e.event_type)}</td>
+                    <td className="px-4 py-2 text-slate-700">{e.consumer_name || '—'}</td>
+                    <td className="px-4 py-2 text-slate-700">{e.driver_name || '—'}</td>
+                    <td className="px-4 py-2 text-slate-700">{e.actor_name || '—'}</td>
+                    <td className="px-4 py-2 text-right font-medium text-slate-900">
+                      {e.amount != null ? inr(e.amount) : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-slate-600">{e.direction || '—'}</td>
+                    <td className="px-4 py-2 text-slate-500 truncate max-w-[220px]" title={e.reference || ''}>
+                      {e.reference || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

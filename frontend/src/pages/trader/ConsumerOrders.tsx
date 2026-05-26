@@ -38,6 +38,8 @@ interface OrderItem {
   quantity: number;
   price: number;
   total: number;
+  container_type?: string | null;
+  is_refill?: number | boolean;
 }
 
 interface SubDealer {
@@ -336,7 +338,23 @@ const totalOrders   = orders.length;
                         }
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{item.product_name}</p>
+                        <p className="font-semibold truncate flex items-center gap-1.5">
+                          <span className="truncate">{item.product_name}</span>
+                          {item.container_type && (
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide flex-shrink-0 ${
+                                item.is_refill
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}
+                              title={item.is_refill
+                                ? 'Customer is refilling an existing container — collect the empty.'
+                                : 'New container — deposit charged on this line.'}
+                            >
+                              {item.is_refill ? 'Refill' : 'New'}
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-slate-400">₹{parseFloat(String(item.price)).toFixed(2)} × {item.quantity} {item.unit || ''}</p>
                       </div>
                       <p className="font-bold flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>

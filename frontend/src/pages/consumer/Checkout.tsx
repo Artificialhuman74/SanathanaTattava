@@ -7,6 +7,7 @@ import { clearCart, loadCart, saveCart } from '../../services/cartStorage';
 import {
   ArrowLeft, MapPin, Tag, CheckCircle2, Package, Home, Briefcase,
   PlusCircle, User, Phone, Star, Hash, ShoppingBag, Wallet,
+  ArrowLeftRight, AlertTriangle, X as XIcon,
 } from 'lucide-react';
 
 type CartMode = 'refill' | 'buy';
@@ -23,6 +24,19 @@ interface CartItem {
   };
   quantity: number;
   mode: CartMode;
+}
+
+interface HeldContainer {
+  id: number;
+  container_type: string;
+  current_product_id: number;
+  current_product_name: string;
+}
+
+interface SwapConflict {
+  containerType: string;
+  cartLine: { productId: number; productName: string; qty: number };
+  heldUnits: { productId: number; productName: string; qty: number }[];
 }
 
 interface SavedAddress {
@@ -81,6 +95,14 @@ export default function Checkout() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [applyCredit,   setApplyCredit]   = useState(false);
 
+  /* Phase 9 — held containers + swap conflict detection. When a NEW cart line
+   * shares the same container_type as an existing held container of a
+   * different product, the consumer is about to pay a fresh deposit even
+   * though they could swap their held container for free instead. */
+  const [heldContainers, setHeldContainers] = useState<HeldContainer[]>([]);
+  const [swapAcknowledged, setSwapAcknowledged] = useState(false);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+
   const [placing, setPlacing] = useState(false);
   const [success, setSuccess] = useState<{
     orderNumber: string;
@@ -128,6 +150,19 @@ export default function Checkout() {
       .catch(() => setWalletBalance(0));
   }, [consumer]);
 
+  /* Fetch held containers for swap conflict detection */
+  useEffect(() => {
+    if (!consumer) { setHeldContainers([]); return; }
+    consumerApi.get('/consumer/containers')
+      .then(r => setHeldContainers(r.data.held || []))
+      .catch(() => setHeldContainers([]));
+  }, [consumer]);
+
+  /* Reset swap acknowledgement whenever the cart changes — the user must
+   * re-confirm if they edit the order. */
+  const cartSignature = cart.map(i => `${i.product.id}:${i.mode}:${i.quantity}`).join('|');
+  useEffect(() => { setSwapAcknowledged(false); }, [cartSignature]);
+
   /* Fetch saved addresses for logged-in consumers */
   useEffect(() => {
     if (!consumer) return;
@@ -174,9 +209,60 @@ export default function Checkout() {
     : 0;
   const payableTotal     = Math.max(1, finalTotal - creditApplied);
 
+  /* Compute swap conflicts: NEW (buy) cart lines whose container_type
+   * matches a container already held by the consumer for a different
+   * product. Refill lines never conflict — they explicitly target the held
+   * container. */
+  const swapConflicts: SwapConflict[] = (() => {
+    if (!consumer || heldContainers.length === 0) return [];
+    const heldByType = new Map<string, HeldContainer[]>();
+    for (const h of heldContainers) {
+      const arr = heldByType.get(h.container_type) || [];
+      arr.push(h);
+      heldByType.set(h.container_type, arr);
+    }
+    const conflicts: SwapConflict[] = [];
+    for (const line of cart) {
+      if (line.mode === 'refill') continue;
+      const ct = line.product.container_type;
+      if (!ct) continue;
+      const heldOfSameType = heldByType.get(ct) || [];
+      const heldOfDifferentProduct = heldOfSameType.filter(
+        h => h.current_product_id !== line.product.id
+      );
+      if (heldOfDifferentProduct.length === 0) continue;
+      const grouped = new Map<number, { productId: number; productName: string; qty: number }>();
+      for (const h of heldOfDifferentProduct) {
+        const entry = grouped.get(h.current_product_id) || {
+          productId: h.current_product_id,
+          productName: h.current_product_name,
+          qty: 0,
+        };
+        entry.qty += 1;
+        grouped.set(h.current_product_id, entry);
+      }
+      conflicts.push({
+        containerType: ct,
+        cartLine: {
+          productId: line.product.id,
+          productName: line.product.name,
+          qty: line.quantity,
+        },
+        heldUnits: [...grouped.values()],
+      });
+    }
+    return conflicts;
+  })();
+
+  const hasUnresolvedSwapConflict = swapConflicts.length > 0 && !swapAcknowledged;
+
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {
     if (cart.length === 0) return;
+    if (hasUnresolvedSwapConflict) {
+      setSwapModalOpen(true);
+      return;
+    }
     const items = cart.map(i => ({
       product_id: i.product.id,
       quantity: i.quantity,
@@ -794,6 +880,36 @@ export default function Checkout() {
               )}
             </div>
 
+            {swapConflicts.length > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900">
+                      You can skip the deposit on {swapConflicts.length === 1 ? 'this container' : 'these containers'}
+                    </p>
+                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                      You already hold a same-size container at home. Swap it from your "My Containers" page to switch products without paying a fresh deposit.
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSwapModalOpen(true)}
+                        className="text-xs font-semibold text-amber-900 underline hover:no-underline"
+                      >
+                        View details
+                      </button>
+                      <Link
+                        to="/shop/containers"
+                        className="text-xs font-semibold text-amber-900 underline hover:no-underline"
+                      >
+                        Go to My Containers
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <button
               onClick={placeOrder}
               disabled={placing}
@@ -814,6 +930,99 @@ export default function Checkout() {
               </p>
             )}
           </div>
+        </div>
+      </div>
+
+      {swapModalOpen && (
+        <SwapWarningModal
+          conflicts={swapConflicts}
+          onClose={() => setSwapModalOpen(false)}
+          onAcknowledge={() => {
+            setSwapAcknowledged(true);
+            setSwapModalOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SwapWarningModal({
+  conflicts,
+  onClose,
+  onAcknowledge,
+}: {
+  conflicts: SwapConflict[];
+  onClose: () => void;
+  onAcknowledge: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div className="flex items-start gap-2.5">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <ArrowLeftRight className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">You can swap instead</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Save the container deposit by reusing what you already hold.</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 flex-shrink-0"
+          >
+            <XIcon className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="space-y-3 mb-5">
+          {conflicts.map((c, idx) => (
+            <div key={idx} className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+              <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide mb-1.5">
+                {c.containerType} container
+              </p>
+              <p className="text-sm text-slate-800">
+                You're buying <strong>{c.cartLine.qty} × {c.cartLine.productName}</strong> (new container).
+              </p>
+              <div className="mt-2 text-xs text-slate-700">
+                You already hold:
+                <ul className="mt-1 space-y-0.5">
+                  {c.heldUnits.map(u => (
+                    <li key={u.productId} className="flex items-center gap-1.5">
+                      <Package className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                      <span>{u.qty} × {u.productName}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                Swap your held {c.containerType} container to <strong>{c.cartLine.productName}</strong> from My Containers — no fresh deposit, and your new order can be a refill instead.
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 mb-4">
+          <p className="text-xs text-slate-600 leading-relaxed">
+            If you continue, you'll pay another container deposit and have two same-size containers at home. You can still swap or return them later.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link
+            to="/shop/containers"
+            className="flex-1 py-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-semibold text-center hover:bg-emerald-100"
+          >
+            Go to My Containers
+          </Link>
+          <button
+            onClick={onAcknowledge}
+            className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold"
+          >
+            Keep new container — proceed
+          </button>
         </div>
       </div>
     </div>
