@@ -456,8 +456,8 @@ router.post('/sub-dealer-commissions/:id/log-payment', async (req, res) => {
   /* Send email to sub-dealer */
   try {
     const { sendCommissionConfirmationEmail } = require('../services/emailService');
-    const { getPublicSiteUrl } = require('../utils/publicUrl');
-    const confirmUrl = `${getPublicSiteUrl()}/confirm-commission?token=${encodeURIComponent(token)}`;
+    const { getPartnerSiteUrl } = require('../utils/publicUrl');
+    const confirmUrl = `${getPartnerSiteUrl()}/confirm-commission?token=${encodeURIComponent(token)}`;
     await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
       subDealerName: comm.sub_dealer_name,
       parentName:    req.user.name,
@@ -504,8 +504,8 @@ router.post('/sub-dealer-commissions/:id/resend-email', async (req, res) => {
 
   try {
     const { sendCommissionConfirmationEmail } = require('../services/emailService');
-    const { getPublicSiteUrl } = require('../utils/publicUrl');
-    const confirmUrl = `${getPublicSiteUrl()}/confirm-commission?token=${encodeURIComponent(comm.confirmation_token)}`;
+    const { getPartnerSiteUrl } = require('../utils/publicUrl');
+    const confirmUrl = `${getPartnerSiteUrl()}/confirm-commission?token=${encodeURIComponent(comm.confirmation_token)}`;
     await sendCommissionConfirmationEmail(comm.sub_dealer_email, {
       subDealerName: comm.sub_dealer_name,
       parentName:    req.user.name,

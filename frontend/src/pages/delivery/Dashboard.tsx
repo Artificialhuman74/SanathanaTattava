@@ -3,8 +3,9 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  Package, Truck, CheckCircle2, Clock, ChevronRight,
+  Package, Truck, CheckCircle2, ChevronRight,
   ToggleLeft, ToggleRight, Loader2, AlertCircle, MapPin,
+  Users, Info,
 } from 'lucide-react';
 
 interface DeliveryContext {
@@ -23,7 +24,7 @@ const DELIVERY_STATUS_COLORS: Record<string, string> = {
 };
 
 const DELIVERY_STATUS_LABELS: Record<string, string> = {
-  pending:          'New Order',
+  pending:          'Not yet accepted',
   accepted:         'Accepted',
   packed:           'Packed',
   out_for_delivery: 'Out for Delivery',
@@ -35,24 +36,30 @@ export default function DeliveryDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { isOnline, toggleAvailability, toggling } = useOutletContext<DeliveryContext>();
+  const isAdmin = user?.role === 'admin';
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [fleetOrders, setFleetOrders] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [isAdmin]);
 
   const fetchData = async () => {
     try {
-      const [ordersRes, statsRes] = await Promise.all([
+      const calls: Promise<any>[] = [
         api.get('/delivery/orders/assigned'),
         api.get('/delivery/stats'),
-      ]);
-      setOrders(ordersRes.data.orders || []);
-      setStats(statsRes.data.stats || null);
+      ];
+      if (isAdmin) calls.push(api.get('/delivery/fleet/orders'));
+
+      const results = await Promise.all(calls);
+      setOrders(results[0].data.orders || []);
+      setStats(results[1].data.stats || null);
+      if (isAdmin) setFleetOrders(results[2].data.orders || []);
     } catch (err: any) {
       setError('Failed to load delivery data');
     } finally {
@@ -81,7 +88,9 @@ export default function DeliveryDashboard() {
               You are {isOnline ? 'ONLINE' : 'OFFLINE'}
             </p>
             <p className="text-sm text-slate-500">
-              {isOnline ? 'Ready to receive delivery orders' : 'Toggle online to start receiving orders'}
+              {isOnline
+                ? 'You will be considered for new delivery assignments'
+                : 'You will NOT be assigned new deliveries until you go online'}
             </p>
           </div>
           <button
@@ -96,14 +105,29 @@ export default function DeliveryDashboard() {
             }
           </button>
         </div>
+        <div className="mt-3 flex items-start gap-2 text-xs text-slate-600 bg-white/60 rounded-lg p-2.5">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-slate-500" />
+          <span>
+            <b>What this toggle does:</b> turning it OFF also turns off your
+            <b> "Will deliver"</b> flag, so the system skips you when routing new orders.
+            Turning it ON enables both again.
+          </span>
+        </div>
       </div>
 
-      {/* Stats Grid */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Stats Grid (own deliveries) */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl p-3 border border-slate-100 text-center">
           <Package className="w-5 h-5 text-blue-500 mx-auto mb-1" />
           <p className="text-xl font-bold text-slate-800">{activeOrders.length}</p>
-          <p className="text-[10px] text-slate-500 font-medium">Active</p>
+          <p className="text-[10px] text-slate-500 font-medium">My Active</p>
         </div>
         <div className="bg-white rounded-xl p-3 border border-slate-100 text-center">
           <Truck className="w-5 h-5 text-orange-500 mx-auto mb-1" />
@@ -117,30 +141,40 @@ export default function DeliveryDashboard() {
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
+      {/* Admin: Fleet view */}
+      {isAdmin && (
+        <FleetView orders={fleetOrders} onOpen={id => navigate(`/delivery/orders/${id}`)} />
       )}
 
-      {/* Active Orders */}
+      {/* My Active / Assigned Orders */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-slate-800">Active Orders</h2>
-          <button
-            onClick={() => navigate('/delivery/orders')}
-            className="text-sm text-emerald-600 font-medium flex items-center gap-1"
-          >
-            View All <ChevronRight className="w-4 h-4" />
-          </button>
+          <h2 className="text-base font-bold text-slate-800">
+            {isAdmin ? 'My Delivery Requests' : 'Active Orders'}
+          </h2>
+          {!isAdmin && (
+            <button
+              onClick={() => navigate('/delivery/orders')}
+              className="text-sm text-emerald-600 font-medium flex items-center gap-1"
+            >
+              View All <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {activeOrders.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No active orders right now</p>
-            <p className="text-xs text-slate-400 mt-1">New orders will appear here when assigned</p>
+            <p className="text-sm text-slate-500">
+              {isAdmin
+                ? 'No deliveries assigned to admin right now'
+                : 'No active orders right now'}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {isAdmin
+                ? 'Admin is only used as last-resort fallback'
+                : 'New orders will appear here when assigned'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -183,6 +217,102 @@ export default function DeliveryDashboard() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function FleetView({ orders, onOpen }: { orders: any[]; onOpen: (id: number) => void }) {
+  const counts = orders.reduce(
+    (acc: Record<string, number>, o) => {
+      const s = o.delivery_status || 'pending';
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    { pending: 0, accepted: 0, packed: 0, out_for_delivery: 0 },
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-slate-600" />
+          <h2 className="text-base font-bold text-slate-800">Fleet — All Traders' Orders</h2>
+        </div>
+        <span className="text-xs text-slate-500">{orders.length} active</span>
+      </div>
+
+      {/* Status summary chips */}
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <StatusChip label="Not accepted" count={counts.pending} tone="amber" />
+        <StatusChip label="Accepted"     count={counts.accepted} tone="blue" />
+        <StatusChip label="Packed"       count={counts.packed} tone="purple" />
+        <StatusChip label="Delivering"   count={counts.out_for_delivery} tone="orange" />
+      </div>
+
+      {orders.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-100 p-6 text-center">
+          <p className="text-sm text-slate-500">No active deliveries across the fleet</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+          {orders.slice(0, 15).map(o => {
+            const status = o.delivery_status || 'pending';
+            const unassigned = !o.delivery_dealer_id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => onOpen(o.id)}
+                className="w-full p-3 text-left hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        #{o.order_number}
+                      </p>
+                      <span className="text-xs text-slate-400">·</span>
+                      <p className="text-xs text-slate-500 truncate">{o.consumer_name || 'Customer'}</p>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {unassigned ? (
+                        <span className="text-red-600 font-semibold">UNASSIGNED</span>
+                      ) : (
+                        <>
+                          Dealer: <b>{o.dealer_name || `#${o.delivery_dealer_id}`}</b>
+                          {o.dealer_role === 'admin' && <span className="text-amber-600 ml-1">(admin fallback)</span>}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
+                    {DELIVERY_STATUS_LABELS[status] || status}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+          {orders.length > 15 && (
+            <div className="p-2 text-center text-xs text-slate-400">
+              + {orders.length - 15} more
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusChip({ label, count, tone }: { label: string; count: number; tone: string }) {
+  const tones: Record<string, string> = {
+    amber:  'bg-amber-50 border-amber-200 text-amber-800',
+    blue:   'bg-blue-50 border-blue-200 text-blue-800',
+    purple: 'bg-purple-50 border-purple-200 text-purple-800',
+    orange: 'bg-orange-50 border-orange-200 text-orange-800',
+  };
+  return (
+    <div className={`rounded-lg border p-2 text-center ${tones[tone]}`}>
+      <p className="text-base font-bold leading-none">{count}</p>
+      <p className="text-[9px] font-semibold mt-1 uppercase tracking-wide">{label}</p>
     </div>
   );
 }

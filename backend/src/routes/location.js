@@ -79,10 +79,15 @@ router.put(
     const errs = validationResult(req);
     if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
 
-    db.prepare(`UPDATE users SET availability_status = ? WHERE id = ?`)
-      .run(req.body.status, req.user.id);
+    const willDeliver = req.body.status === 'available' ? 1 : 0;
+    db.prepare(`UPDATE users SET availability_status = ?, will_deliver = ? WHERE id = ?`)
+      .run(req.body.status, willDeliver, req.user.id);
 
-    res.json({ success: true, availability_status: req.body.status });
+    res.json({
+      success: true,
+      availability_status: req.body.status,
+      will_deliver: willDeliver,
+    });
   },
 );
 

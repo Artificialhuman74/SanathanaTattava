@@ -20,7 +20,7 @@ export const DeliveryRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return <Spinner accent="emerald-600" />;
   if (!user) return <Navigate to="/delivery/login" replace />;
-  if (user.role !== 'trader') return <Navigate to="/delivery/login" replace />;
+  if (user.role !== 'trader' && user.role !== 'admin') return <Navigate to="/delivery/login" replace />;
   return <>{children}</>;
 };
 

@@ -19,7 +19,7 @@ const navItems = [
   { to: '/admin/container-deposits', icon: Package2,     label: 'Container Deposits' },
   { to: '/admin/finance',         icon: BarChart3,       label: 'Finance' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
-  { to: '/delivery/login',        icon: Truck,           label: 'Delivery' },
+  { to: '/delivery/dashboard',    icon: Truck,           label: 'Delivery' },
 ];
 
 export default function AdminLayout() {

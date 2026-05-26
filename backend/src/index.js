@@ -85,6 +85,7 @@ const PORT = process.env.PORT || 5001;
 const allowedOrigins = [
   'https://sanathanatattva.shop',
   'https://www.sanathanatattva.shop',
+  'https://partner.sanathanatattva.shop',
   'http://localhost:3000',
   'https://localhost:3000',
   'http://localhost:5001',

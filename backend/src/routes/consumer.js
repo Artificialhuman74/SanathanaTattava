@@ -398,13 +398,40 @@ router.post('/orders', authConsumer, [
       if (parent?.delivery_enabled && parent?.will_deliver && parent?.pan_verified) deliveryDealerId = parent.id;
     }
   }
-  // Final fallback: assign to admin if no trader could be resolved
+  /* Relaxed trader fallback before admin. H3 + referral-chain are strict
+   * (require availability_status='available' and an in-range H3 cell). If
+   * those return nothing, try ANY active delivery-capable trader before
+   * landing the order on admin. Prefer same pincode, then same pin-prefix
+   * (~district), then any. Admin can still reassign manually later. */
+  if (!deliveryDealerId) {
+    const pin       = String(pincode || '');
+    const pinPrefix = pin.slice(0, 3);
+    const fallback  = db.prepare(`
+      SELECT id FROM users
+       WHERE role='trader' AND status='active'
+         AND delivery_enabled=1 AND will_deliver=1
+         AND pan_verified=1
+       ORDER BY
+         CASE WHEN pincode = ?           THEN 0
+              WHEN substr(pincode,1,3) = ? THEN 1
+              ELSE 2 END,
+         id
+       LIMIT 1
+    `).get(pin, pinPrefix);
+    if (fallback) {
+      deliveryDealerId = fallback.id;
+      console.log(`[order assign] H3+chain found nobody → relaxed fallback picked trader ${fallback.id}`);
+    }
+  }
+
+  // Final fallback: assign to admin only if NO trader at all can deliver
   let assignmentStatus = deliveryDealerId ? 'assigned' : 'unassigned';
   if (!deliveryDealerId) {
     const admin = db.prepare(`SELECT id FROM users WHERE role='admin' AND status='active' ORDER BY id LIMIT 1`).get();
     if (admin) {
       deliveryDealerId = admin.id;
       assignmentStatus = 'admin';
+      console.log(`[order assign] no eligible trader anywhere — assigning to admin (last resort)`);
     }
   }
 

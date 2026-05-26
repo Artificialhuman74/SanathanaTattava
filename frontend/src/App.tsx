@@ -5,6 +5,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { PrivateRoute, DeliveryRoute, ConsumerRoute } from './components/RouteGuards';
+import { IS_PARTNER } from './appMode';
 
 import Landing         from './pages/Landing';
 import Login           from './pages/Login';
@@ -60,8 +61,87 @@ import DeliveryOrderDetail from './pages/delivery/OrderDetail';
 import DeliveryHistory   from './pages/delivery/History';
 import DeliveryProfile   from './pages/delivery/DeliveryProfile';
 
-const AppRoutes = () => {
+const PartnerRoutes = () => {
   const { user } = useAuth();
+  return (
+    <Routes>
+      <Route path="/" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} replace /> : <Navigate to="/login" replace />} />
+      <Route path="/login"           element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} /> : <Login />} />
+      <Route path="/register"        element={user ? <Navigate to="/trader" /> : <Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
+      <Route path="/confirm-commission" element={<ConfirmCommission />} />
+
+      <Route path="/admin" element={<PrivateRoute role="admin"><AdminLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="dashboard"       element={<AdminDashboard />} />
+        <Route path="inventory"       element={<AdminInventory />} />
+        <Route path="traders"         element={<AdminTraders />} />
+        <Route path="orders"          element={<AdminOrders />} />
+        <Route path="consumer-orders" element={<AdminConsumerOrders />} />
+        <Route path="consumers"       element={<AdminConsumers />} />
+        <Route path="commissions"     element={<Navigate to="/admin/payouts" replace />} />
+        <Route path="payouts"         element={<AdminPayouts />} />
+        <Route path="dealer-inventory" element={<AdminDealerInventory />} />
+        <Route path="finance"         element={<AdminFinance />} />
+        <Route path="container-deposits" element={<AdminContainerDeposits />} />
+        <Route path="settings"        element={<AdminSettings />} />
+      </Route>
+
+      <Route path="/trader" element={<PrivateRoute role="trader"><TraderLayout /></PrivateRoute>}>
+        <Route index element={<Navigate to="/trader/dashboard" replace />} />
+        <Route path="dashboard"       element={<TraderDashboard />} />
+        <Route path="products"        element={<TraderProducts />} />
+        <Route path="orders"          element={<TraderOrders />} />
+        <Route path="sub-dealers"     element={<TraderSubDealers />} />
+        <Route path="consumer-orders" element={<TraderConsumerOrders />} />
+        <Route path="commissions"     element={<TraderCommissions />} />
+        <Route path="sub-dealer-commissions" element={<TraderSubDealerCommissions />} />
+        <Route path="profile"         element={<TraderProfile />} />
+        <Route path="inventory"       element={<TraderInventory />} />
+      </Route>
+
+      <Route path="/delivery/login" element={<DeliveryLogin />} />
+      <Route path="/delivery" element={<DeliveryRoute><DeliveryLayout /></DeliveryRoute>}>
+        <Route index element={<Navigate to="/delivery/dashboard" replace />} />
+        <Route path="dashboard" element={<DeliveryDashboard />} />
+        <Route path="orders"    element={<DeliveryOrders />} />
+        <Route path="orders/:id" element={<DeliveryOrderDetail />} />
+        <Route path="history"   element={<DeliveryHistory />} />
+        <Route path="profile"   element={<DeliveryProfile />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
+const ConsumerRoutes = () => (
+  <Routes>
+    <Route path="/" element={<Landing />} />
+    <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Route path="/reset-password"  element={<ResetPassword />} />
+
+    <Route path="/shop" element={<ConsumerLayout />}>
+      <Route index element={<Shop />} />
+      <Route path="login"           element={<ConsumerLogin />} />
+      <Route path="register"        element={<ConsumerRegister />} />
+      <Route path="verify-pending"  element={<VerifyPending />} />
+      <Route path="resend-verification" element={<VerifyPending />} />
+      <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />
+      <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
+      <Route path="checkout"  element={<ConsumerCheckout />} />
+      <Route path="profile"         element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />
+      <Route path="profile/account" element={<ConsumerRoute><ConsumerAccount /></ConsumerRoute>} />
+      <Route path="support"         element={<ConsumerSupport />} />
+      <Route path="review"          element={<ConsumerReview />} />
+    </Route>
+
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
+
+const AppRoutes = () => {
   useRubberBandScroll();
   return (
     <>
@@ -98,74 +178,7 @@ const AppRoutes = () => {
           );
         }}
       </Toaster>
-      <Routes>
-        <Route path="/"         element={<Landing />} />
-        <Route path="/login"           element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/trader'} /> : <Login />} />
-        <Route path="/register"        element={user ? <Navigate to="/trader" /> : <Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password"  element={<ResetPassword />} />
-        <Route path="/confirm-commission" element={<ConfirmCommission />} />
-
-        {/* Admin routes */}
-        <Route path="/admin" element={<PrivateRoute role="admin"><AdminLayout /></PrivateRoute>}>
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard"       element={<AdminDashboard />} />
-          <Route path="inventory"       element={<AdminInventory />} />
-          <Route path="traders"         element={<AdminTraders />} />
-          <Route path="orders"          element={<AdminOrders />} />
-          <Route path="consumer-orders" element={<AdminConsumerOrders />} />
-          <Route path="consumers"       element={<AdminConsumers />} />
-          <Route path="commissions"     element={<Navigate to="/admin/payouts" replace />} />
-          <Route path="payouts"         element={<AdminPayouts />} />
-          <Route path="dealer-inventory" element={<AdminDealerInventory />} />
-          <Route path="finance"         element={<AdminFinance />} />
-          <Route path="container-deposits" element={<AdminContainerDeposits />} />
-          <Route path="settings"        element={<AdminSettings />} />
-        </Route>
-
-        {/* Trader routes */}
-        <Route path="/trader" element={<PrivateRoute role="trader"><TraderLayout /></PrivateRoute>}>
-          <Route index element={<Navigate to="/trader/dashboard" replace />} />
-          <Route path="dashboard"       element={<TraderDashboard />} />
-          <Route path="products"        element={<TraderProducts />} />
-          <Route path="orders"          element={<TraderOrders />} />
-          <Route path="sub-dealers"     element={<TraderSubDealers />} />
-          <Route path="consumer-orders" element={<TraderConsumerOrders />} />
-          <Route path="commissions"     element={<TraderCommissions />} />
-          <Route path="sub-dealer-commissions" element={<TraderSubDealerCommissions />} />
-          <Route path="profile"         element={<TraderProfile />} />
-          <Route path="inventory"       element={<TraderInventory />} />
-        </Route>
-
-        {/* Consumer / Shop routes */}
-        <Route path="/shop" element={<ConsumerLayout />}>
-          <Route index element={<Shop />} />
-          <Route path="login"           element={<ConsumerLogin />} />
-          <Route path="register"        element={<ConsumerRegister />} />
-          <Route path="verify-pending"  element={<VerifyPending />} />
-          <Route path="resend-verification" element={<VerifyPending />} />
-          <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />
-          <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
-          <Route path="checkout"  element={<ConsumerCheckout />} />
-          <Route path="profile"         element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />
-          <Route path="profile/account" element={<ConsumerRoute><ConsumerAccount /></ConsumerRoute>} />
-          <Route path="support"         element={<ConsumerSupport />} />
-          <Route path="review"          element={<ConsumerReview />} />
-        </Route>
-
-        {/* Delivery Partner routes */}
-        <Route path="/delivery/login" element={<DeliveryLogin />} />
-        <Route path="/delivery" element={<DeliveryRoute><DeliveryLayout /></DeliveryRoute>}>
-          <Route index element={<Navigate to="/delivery/dashboard" replace />} />
-          <Route path="dashboard" element={<DeliveryDashboard />} />
-          <Route path="orders"    element={<DeliveryOrders />} />
-          <Route path="orders/:id" element={<DeliveryOrderDetail />} />
-          <Route path="history"   element={<DeliveryHistory />} />
-          <Route path="profile"   element={<DeliveryProfile />} />
-        </Route>
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {IS_PARTNER ? <PartnerRoutes /> : <ConsumerRoutes />}
     </>
   );
 };

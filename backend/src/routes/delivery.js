@@ -50,6 +50,43 @@ function getAssignedOrder(orderId, dealerId) {
 }
 
 /* ═════════════════════════════════════════════════════════════════════
+ * GET /delivery/fleet/orders   (admin-only)
+ *
+ * Returns active delivery orders across ALL dealers with assignment state.
+ * Used by the admin delivery dashboard to monitor the whole fleet.
+ * ═════════════════════════════════════════════════════════════════════ */
+router.get('/fleet/orders', (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+  try {
+    const orders = db.prepare(`
+      SELECT co.id, co.order_number, co.status AS order_status,
+             co.delivery_status, co.total_amount, co.delivery_address,
+             co.delivery_phone, co.created_at, co.delivery_dealer_id,
+             c.name  AS consumer_name,
+             c.phone AS consumer_phone,
+             u.name  AS dealer_name,
+             u.phone AS dealer_phone,
+             u.role  AS dealer_role
+      FROM consumer_orders co
+      LEFT JOIN consumers c ON c.id = co.consumer_id
+      LEFT JOIN users u     ON u.id = co.delivery_dealer_id
+      WHERE co.payment_status = 'paid'
+        AND co.status NOT IN ('cancelled')
+        AND co.delivery_status IN ('pending','accepted','packed','out_for_delivery')
+      ORDER BY co.created_at DESC
+      LIMIT 200
+    `).all();
+
+    res.json({ orders });
+  } catch (err) {
+    console.error('GET /delivery/fleet/orders error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/* ═════════════════════════════════════════════════════════════════════
  * GET /delivery/orders/assigned
  * ═════════════════════════════════════════════════════════════════════ */
 router.get('/orders/assigned', (req, res) => {

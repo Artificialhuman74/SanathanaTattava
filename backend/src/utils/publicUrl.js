@@ -1,11 +1,17 @@
 /**
- * Resolve the public site URL used in user-facing email links, invoice
- * notes, etc. FRONTEND_URL is sometimes set to a comma-separated CORS
- * list, which is not a valid base URL — so prefer a dedicated PUBLIC_SITE_URL
- * env var, then fall back to the first entry of FRONTEND_URL, then to prod.
+ * Resolve public site URLs used in user-facing email links, invoice notes, etc.
+ *
+ * The app ships as two Netlify sites:
+ *   - consumer:  sanathanatattva.shop          (shop + landing)
+ *   - partner:   partner.sanathanatattva.shop  (admin + trader + delivery)
+ *
+ * Each has its own env var so emails route to the correct front-end.
+ * PUBLIC_SITE_URL / PARTNER_SITE_URL win; FRONTEND_URL is sometimes a CSV
+ * (for CORS), so we only use its first entry as a fallback for the consumer URL.
  */
-function getPublicSiteUrl() {
-  const clean = u => u.trim().replace(/\/+$/, '');
+const clean = u => u.trim().replace(/\/+$/, '');
+
+function getConsumerSiteUrl() {
   if (process.env.PUBLIC_SITE_URL) return clean(process.env.PUBLIC_SITE_URL);
   if (process.env.FRONTEND_URL) {
     const first = process.env.FRONTEND_URL.split(',')[0];
@@ -14,4 +20,13 @@ function getPublicSiteUrl() {
   return 'https://sanathanatattva.shop';
 }
 
-module.exports = { getPublicSiteUrl };
+function getPartnerSiteUrl() {
+  if (process.env.PARTNER_SITE_URL) return clean(process.env.PARTNER_SITE_URL);
+  return 'https://partner.sanathanatattva.shop';
+}
+
+// Legacy alias — kept so existing imports keep working. Points at the consumer
+// site (which is what every current caller of getPublicSiteUrl expects).
+const getPublicSiteUrl = getConsumerSiteUrl;
+
+module.exports = { getPublicSiteUrl, getConsumerSiteUrl, getPartnerSiteUrl };

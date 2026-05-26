@@ -317,8 +317,11 @@ router.post('/forgot-password', [
   db.prepare('UPDATE password_resets SET used = 1 WHERE email = ?').run(email);
   db.prepare('INSERT INTO password_resets (email, token_hash, expires_at) VALUES (?, ?, ?)').run(email, hashed, expires);
 
-  const { getPublicSiteUrl } = require('../utils/publicUrl');
-  const resetUrl = `${getPublicSiteUrl()}/reset-password?token=${raw}`;
+  // Route reset link to the correct subdomain: partner accounts (admin/trader)
+  // can only reset on partner.sanathanatattva.shop; consumers on the main site.
+  const { getConsumerSiteUrl, getPartnerSiteUrl } = require('../utils/publicUrl');
+  const baseUrl  = user ? getPartnerSiteUrl() : getConsumerSiteUrl();
+  const resetUrl = `${baseUrl}/reset-password?token=${raw}`;
 
   const response = { success: true };
   if (!process.env.EMAIL_USER) response.dev_token = raw;
