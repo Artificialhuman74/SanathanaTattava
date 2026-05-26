@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Package2, Users, ShoppingBag,
   LogOut, Menu, X, ChevronRight,
-  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3,
+  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import { DELIVERY_SITE_URL } from '../appMode';
 
 const navItems = [
   { to: '/admin/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
@@ -19,7 +20,6 @@ const navItems = [
   { to: '/admin/container-deposits', icon: Package2,     label: 'Container Deposits' },
   { to: '/admin/finance',         icon: BarChart3,       label: 'Finance' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
-  { to: '/delivery/dashboard',    icon: Truck,           label: 'Delivery' },
 ];
 
 export default function AdminLayout() {
@@ -56,6 +56,18 @@ export default function AdminLayout() {
             <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100" size={14} />
           </NavLink>
         ))}
+
+        <a
+          href={DELIVERY_SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setSidebarOpen(false)}
+          className="sidebar-link"
+        >
+          <Truck size={18} className="flex-shrink-0" />
+          <span>Delivery</span>
+          <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-60" size={14} />
+        </a>
       </nav>
 
       {/* User */}

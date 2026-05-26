@@ -4,10 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, ShoppingCart,
   Users, DollarSign, QrCode, Warehouse, UserCircle,
-  LogOut, Menu, X, ChevronRight, Bell, Star, Truck, HandCoins,
+  LogOut, Menu, X, ChevronRight, Bell, Star, Truck, HandCoins, ExternalLink,
 } from 'lucide-react';
 import LocationPrompt from '../components/LocationPrompt';
 import NotificationBell from '../components/NotificationBell';
+import { DELIVERY_SITE_URL } from '../appMode';
 
 export default function TraderLayout() {
   const { user, logout, isTier1 } = useAuth();
@@ -24,7 +25,6 @@ export default function TraderLayout() {
     { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Partners', show: isTier1 },
     { to: '/trader/commissions',      icon: DollarSign,      label: 'Commissions',     show: true },
     { to: '/trader/profile',          icon: UserCircle,      label: 'My Profile',      show: true },
-    { to: '/delivery/dashboard',      icon: Truck,           label: 'Delivery',        show: true },
   ].filter(item => item.show);
 
   const tierBadge = user?.tier === 1
@@ -56,6 +56,18 @@ export default function TraderLayout() {
             <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100" size={14} />
           </NavLink>
         ))}
+
+        <a
+          href={DELIVERY_SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setSidebarOpen(false)}
+          className="sidebar-link"
+        >
+          <Truck size={18} className="flex-shrink-0" />
+          <span>Delivery</span>
+          <ExternalLink className="w-3.5 h-3.5 ml-auto opacity-60" size={14} />
+        </a>
 
         {/* Referral Code quick access */}
         {user?.referral_code && (

@@ -5,7 +5,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { PrivateRoute, DeliveryRoute, ConsumerRoute } from './components/RouteGuards';
-import { IS_PARTNER } from './appMode';
+import { APP_MODE } from './appMode';
 
 import Landing         from './pages/Landing';
 import Login           from './pages/Login';
@@ -101,6 +101,19 @@ const PartnerRoutes = () => {
         <Route path="inventory"       element={<TraderInventory />} />
       </Route>
 
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
+const DeliveryRoutes = () => {
+  const { user } = useAuth();
+  return (
+    <Routes>
+      <Route path="/" element={user ? <Navigate to="/delivery/dashboard" replace /> : <Navigate to="/delivery/login" replace />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
+
       <Route path="/delivery/login" element={<DeliveryLogin />} />
       <Route path="/delivery" element={<DeliveryRoute><DeliveryLayout /></DeliveryRoute>}>
         <Route index element={<Navigate to="/delivery/dashboard" replace />} />
@@ -178,7 +191,9 @@ const AppRoutes = () => {
           );
         }}
       </Toaster>
-      {IS_PARTNER ? <PartnerRoutes /> : <ConsumerRoutes />}
+      {APP_MODE === 'partner'  ? <PartnerRoutes /> :
+       APP_MODE === 'delivery' ? <DeliveryRoutes /> :
+                                 <ConsumerRoutes />}
     </>
   );
 };

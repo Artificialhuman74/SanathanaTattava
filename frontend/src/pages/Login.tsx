@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
@@ -113,17 +113,6 @@ export default function Login() {
                 Create one
               </Link>
             </p>
-          </div>
-
-          {/* Consumer shop link */}
-          <div className="mt-4 flex items-center justify-center">
-            <Link
-              to="/shop/login"
-              className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand-600 transition-colors"
-            >
-              <ShoppingBag size={15} />
-              Shop as Consumer →
-            </Link>
           </div>
 
         </div>
