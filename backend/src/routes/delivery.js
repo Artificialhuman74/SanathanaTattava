@@ -447,7 +447,14 @@ router.post('/orders/:id/resend-otp', param('id').isInt(), async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: 'New delivery code sent to consumer in-app' });
+    if (order.consumer_email) {
+      sendDeliveryOtpEmail(order.consumer_email, order.consumer_name, newOtp, order.order_number)
+        .catch(err => console.error('[delivery] resend OTP email failed:', err.message));
+    } else {
+      console.warn('[delivery] resend-otp: no consumer email for consumer_id', order.consumer_id);
+    }
+
+    res.json({ success: true, message: 'New delivery code sent to consumer (in-app + email)' });
   } catch (err) {
     console.error('POST /delivery/orders/:id/resend-otp error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
