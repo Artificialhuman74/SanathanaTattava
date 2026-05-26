@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  LayoutDashboard, ShoppingCart,
+  LayoutDashboard, ShoppingCart, ShoppingBag,
   Users, DollarSign, QrCode, Warehouse, UserCircle,
   LogOut, Menu, X, ChevronRight, Bell, Star, Truck, HandCoins, ExternalLink,
 } from 'lucide-react';
@@ -20,6 +20,7 @@ export default function TraderLayout() {
   const navItems = [
     { to: '/trader/dashboard',       icon: LayoutDashboard, label: 'Dashboard',       show: true },
     { to: '/trader/orders',           icon: ShoppingCart,    label: 'My Orders',       show: true },
+    { to: '/trader/consumer-orders',  icon: ShoppingBag,     label: 'Consumer Orders', show: true },
     { to: '/trader/inventory',         icon: Warehouse,       label: 'My Inventory',    show: true },
     { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Partners',    show: isTier1 },
     { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Partners', show: isTier1 },
