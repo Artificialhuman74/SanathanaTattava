@@ -57,6 +57,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  updateUser: (patch: Partial<User>) => void;
   /* Consumer email+password auth */
   consumerLogin: (email: string, password: string) => Promise<void>;
   consumerRegister: (name: string, email: string, password: string, referralCode?: string, phone?: string) => Promise<void>;
@@ -158,6 +159,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.dispatchEvent(new Event('tradehub-auth-changed'));
   }, []);
 
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   /* ── Consumer Email+Password Auth ───────────────────────────────────── */
 
   const consumerLogin = useCallback(async (email: string, password: string) => {
@@ -197,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       user, token, consumer, consumerToken, loading,
-      login, register, logout,
+      login, register, logout, updateUser,
       consumerLogin, consumerRegister, consumerLoginWithToken, consumerLogout, refreshConsumer,
       isAdmin:    user?.role === 'admin',
       isTrader:   user?.role === 'trader',

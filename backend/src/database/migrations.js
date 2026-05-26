@@ -497,6 +497,16 @@ function runMigrations(db) {
     console.log('[migration] users: added pan_verified');
   }
 
+  // pan_celebrated = whether the PAN-verified confetti has been shown to the
+  // trader yet. Reset to 0 on each verify transition; set to 1 once the
+  // frontend acknowledges the celebration. Backfill existing verified users
+  // to 1 so they don't get a sudden celebration on their next login.
+  if (!hasColumn('users', 'pan_celebrated')) {
+    db.exec(`ALTER TABLE users ADD COLUMN pan_celebrated INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`UPDATE users SET pan_celebrated = 1 WHERE pan_verified = 1`);
+    console.log('[migration] users: added pan_celebrated (backfilled for existing verified)');
+  }
+
   // Keep admin as fallback-only — not in the H3 active delivery network
   db.exec(`
     UPDATE users

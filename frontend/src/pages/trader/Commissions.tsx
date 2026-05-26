@@ -3,8 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
-  Clock, CheckCircle2, TrendingUp, Info, AlertCircle,
-  ArrowDownToLine, X, Loader2, Wallet, RefreshCw,
+  TrendingUp, AlertCircle, Loader2, CheckCircle2, RefreshCw, HelpCircle, ChevronDown,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
 
@@ -15,11 +14,9 @@ interface CommissionData {
     paid_amount: number;
     total_amount: number;
   };
-  available_balance: number;
   commissions: CommissionEntry[];
   weeklyBreakdown: WeeklyEntry[];
   payouts: any[];
-  withdrawals: WithdrawalEntry[];
 }
 
 interface WeeklyEntry {
@@ -41,24 +38,12 @@ interface CommissionEntry {
   created_at: string;
 }
 
-interface WithdrawalEntry {
-  id: number;
-  amount: number;
-  upi_id: string;
-  status: 'pending' | 'approved' | 'rejected';
-  admin_notes: string | null;
-  requested_at: string;
-  processed_at: string | null;
-}
-
 const STATUS_COLORS: Record<string, string> = {
   pending:         'bg-amber-100 text-amber-700',
   transferring:    'bg-blue-100 text-blue-700',
   transferred:     'bg-emerald-100 text-emerald-700',
   transfer_failed: 'bg-red-100 text-red-700',
   paid:            'bg-emerald-100 text-emerald-700',
-  approved:        'bg-emerald-100 text-emerald-700',
-  rejected:        'bg-red-100 text-red-700',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -69,16 +54,14 @@ const STATUS_LABEL: Record<string, string> = {
   paid:            'Paid',
 };
 
+const PAID_STATUSES = new Set(['transferred', 'paid']);
+
 const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
 export default function TraderCommissions() {
   const { isTier1 } = useAuth();
   const [data,       setData]       = useState<CommissionData | null>(null);
   const [loading,    setLoading]    = useState(true);
-  const [showModal,  setShowModal]  = useState(false);
-  const [withdrawAmt, setWithdrawAmt] = useState('');
-  const [upiId,      setUpiId]      = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [syncingId,  setSyncingId]  = useState<number | null>(null);
 
   const fetchData = () => {
@@ -109,59 +92,29 @@ export default function TraderCommissions() {
     }
   };
 
-  const submitWithdrawal = async () => {
-    const amt = parseFloat(withdrawAmt);
-    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return; }
-    if (!upiId.trim())    { toast.error('Enter your UPI ID'); return; }
-    setSubmitting(true);
-    try {
-      await api.post('/trader/commissions/withdraw', { amount: amt, upi_id: upiId.trim() });
-      toast.success('Withdrawal request submitted!');
-      setShowModal(false);
-      setWithdrawAmt('');
-      setUpiId('');
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to submit request');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
     </div>
   );
 
-  const pending  = parseFloat(String(data?.summary?.pending_amount || 0));
-  const paid     = parseFloat(String(data?.summary?.paid_amount    || 0));
-  const total    = parseFloat(String(data?.summary?.total_amount   || 0));
-  const available = parseFloat(String(data?.available_balance      || 0));
+  const total      = parseFloat(String(data?.summary?.total_amount || 0));
+  const paidToBank = (data?.commissions || [])
+    .filter(c => PAID_STATUSES.has(c.status))
+    .reduce((sum, c) => sum + parseFloat(String(c.amount)), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">My Commissions</h2>
-          <p className="text-slate-500 text-sm mt-0.5">Track earnings and request withdrawals</p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={available <= 0}
-          className="btn-primary flex items-center gap-2 disabled:opacity-40"
-        >
-          <ArrowDownToLine size={16} /> Withdraw
-        </button>
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">My Commissions</h2>
+        <p className="text-slate-500 text-sm mt-0.5">Earnings auto-settle to your linked bank account</p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { label: 'Available',  value: fmt(available), icon: Wallet,       color: 'bg-brand-50 text-brand-600',   border: 'border-brand-300' },
-          { label: 'Pending',    value: fmt(pending),   icon: Clock,         color: 'bg-amber-50 text-amber-600',   border: 'border-amber-200' },
-          { label: 'Processed',  value: fmt(paid),      icon: CheckCircle2,  color: 'bg-emerald-50 text-emerald-600', border: 'border-emerald-200' },
-          { label: 'Total Earned', value: fmt(total),   icon: TrendingUp,    color: 'bg-slate-50 text-slate-600',   border: 'border-slate-200' },
+          { label: 'Total Earned', value: fmt(total),      icon: TrendingUp,   color: 'bg-slate-50 text-slate-600',     border: 'border-slate-200' },
+          { label: 'Paid to Bank', value: fmt(paidToBank), icon: CheckCircle2, color: 'bg-emerald-50 text-emerald-600', border: 'border-emerald-200' },
         ].map(({ label, value, icon: Icon, color, border }) => (
           <div key={label} className={`card p-4 border-l-4 ${border}`}>
             <div className="flex items-start gap-3">
@@ -177,60 +130,58 @@ export default function TraderCommissions() {
         ))}
       </div>
 
-      {/* Info */}
-      <div className="card p-4 bg-blue-50 border-blue-200">
-        <div className="flex items-start gap-3">
-          <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-blue-800">
-            <p className="font-semibold mb-1">How commissions work</p>
-            <ul className="space-y-0.5 text-blue-700">
-              <li><strong>Direct</strong> — earned from your own consumers' paid orders</li>
-              {isTier1 && <li><strong>Override</strong> — earned from your sub-dealers' consumers' paid orders</li>}
-              <li>Commissions are only added after the consumer completes payment</li>
-              <li><strong>Available balance</strong> = total earned − pending or approved withdrawals</li>
+      {/* Simple Guide — collapsible */}
+      <details className="card bg-blue-50 border-blue-200 group" open>
+        <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer list-none">
+          <div className="flex items-center gap-2">
+            <HelpCircle size={18} className="text-blue-600" />
+            <span className="font-bold text-blue-900 text-sm">How do I earn money? (tap to show/hide)</span>
+          </div>
+          <ChevronDown size={18} className="text-blue-600 transition-transform group-open:rotate-180" />
+        </summary>
+
+        <div className="px-4 pb-4 space-y-4 text-sm text-blue-900">
+          <div>
+            <p className="font-bold mb-1">In simple words</p>
+            <p className="text-blue-800">
+              Every time a customer buys something using your referral code, you get a small share of that
+              order as <b>commission</b>. The money comes <b>straight to your bank account</b> by itself.
+              You don't need to ask anyone. You don't need to fill any UPI ID.
+            </p>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">Step by step</p>
+            <ol className="list-decimal pl-5 space-y-1 text-blue-800">
+              <li>Customer places an order and <b>pays online</b>.</li>
+              <li>Your commission appears in this page within a few minutes.</li>
+              <li>The system <b>automatically sends the money to your bank</b> using Razorpay.</li>
+              <li>Money usually reaches your bank in <b>1 to 2 working days</b>.</li>
+            </ol>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">What the words mean</p>
+            <ul className="space-y-1 text-blue-800">
+              <li><b>Total Earned</b> — all the commission you have ever earned.</li>
+              <li><b>Paid to Bank</b> — the money that has already gone to your bank.</li>
+              <li><b>Direct</b> — commission from a customer <b>you</b> brought.</li>
+              {isTier1 && <li><b>Override</b> — commission from a customer brought by <b>your sub-dealer</b>.</li>}
+              <li><b>Paid to Razorpay</b> — money sent, will reach your bank in 1–2 days.</li>
+              <li><b>Transferring</b> — money is on the way right now.</li>
+            </ul>
+          </div>
+
+          <div className="bg-white/70 rounded-lg p-3 border border-blue-200">
+            <p className="font-bold mb-1 text-blue-900">Important</p>
+            <ul className="space-y-1 text-blue-800">
+              <li>Make sure your <b>PAN</b> and <b>bank account</b> are added in <b>My Profile</b>. Without these, money cannot be sent.</li>
+              <li>If you don't see your commission after a customer pays, wait a few minutes and refresh the page.</li>
+              <li>Still have a problem? Call admin.</li>
             </ul>
           </div>
         </div>
-      </div>
-
-      {/* Withdrawal History */}
-      {(data?.withdrawals || []).length > 0 && (
-        <div className="card">
-          <div className="p-5 border-b border-slate-100">
-            <h3 className="font-bold text-slate-900">Withdrawal Requests</h3>
-          </div>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Amount</th>
-                  <th>UPI ID</th>
-                  <th>Status</th>
-                  <th>Notes</th>
-                  <th>Requested</th>
-                  <th>Processed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.withdrawals || []).map(w => (
-                  <tr key={w.id}>
-                    <td className="font-bold text-emerald-600">{fmt(parseFloat(String(w.amount)))}</td>
-                    <td className="font-mono text-sm text-slate-600">{w.upi_id}</td>
-                    <td>
-                      <span className={`badge ${STATUS_COLORS[w.status] || 'bg-slate-100 text-slate-600'}`}>
-                        {w.status}
-                      </span>
-                    </td>
-                    <td className="text-xs text-slate-500">{w.admin_notes || '—'}</td>
-                    <td className="text-xs text-slate-400">{formatIstDate(w.requested_at)}</td>
-                    <td className="text-xs text-slate-400">{w.processed_at ? formatIstDate(w.processed_at) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </details>
 
       {/* Weekly Breakdown */}
       {(data?.weeklyBreakdown || []).length > 0 && (
@@ -323,62 +274,6 @@ export default function TraderCommissions() {
           </div>
         )}
       </div>
-
-      {/* Withdraw Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-bold text-slate-900 text-lg">Request Withdrawal</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="p-3 bg-brand-50 rounded-xl text-sm text-brand-800 font-medium">
-                Available balance: <span className="font-extrabold">{fmt(available)}</span>
-              </div>
-
-              <div>
-                <label className="form-label">Amount (₹)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={available}
-                  step="0.01"
-                  value={withdrawAmt}
-                  onChange={e => setWithdrawAmt(e.target.value)}
-                  className="form-input"
-                  placeholder="Enter amount"
-                />
-              </div>
-
-              <div>
-                <label className="form-label">UPI ID</label>
-                <input
-                  type="text"
-                  value={upiId}
-                  onChange={e => setUpiId(e.target.value)}
-                  className="form-input"
-                  placeholder="yourname@upi"
-                />
-              </div>
-
-              <p className="text-xs text-slate-400">
-                Withdrawals are reviewed and processed by admin. You'll be notified once approved.
-              </p>
-
-              <div className="flex gap-3">
-                <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button onClick={submitWithdrawal} disabled={submitting} className="btn-primary flex-1">
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Submit'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2, Info } from 'lucide-react';
 
 export default function DeliveryLogin() {
   const navigate = useNavigate();
@@ -43,10 +43,19 @@ export default function DeliveryLogin() {
     <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] to-[#166534] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Branding */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-16 w-16 object-contain rounded-2xl mx-auto mb-4" alt="Sanathana Tattva" />
           <h1 className="text-2xl font-bold text-white">Sanathana Tattva</h1>
           <p className="text-green-200 text-sm mt-1">Delivery Partner Sign In</p>
+        </div>
+
+        {/* Reassurance note — credentials are the same as the partner portal */}
+        <div className="flex items-start gap-2.5 p-3 mb-5 bg-emerald-500/10 border border-emerald-400/30 rounded-xl text-sm text-emerald-50">
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-300" />
+          <span>
+            Use the <strong>same email and password</strong> you use on your partner login.
+            No separate account needed.
+          </span>
         </div>
 
         {/* Login Form */}

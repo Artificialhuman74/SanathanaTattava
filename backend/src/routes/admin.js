@@ -161,7 +161,10 @@ router.put('/traders/:id/pan-verify', (req, res) => {
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
   if (!trader.pan) return res.status(400).json({ error: 'Trader has not submitted their PAN' });
   const { verified } = req.body;
-  db.prepare(`UPDATE users SET pan_verified = ? WHERE id = ?`).run(verified ? 1 : 0, req.params.id);
+  // Reset pan_celebrated so the trader sees confetti the next time they open
+  // their dashboard after being verified.
+  db.prepare(`UPDATE users SET pan_verified = ?, pan_celebrated = 0 WHERE id = ?`)
+    .run(verified ? 1 : 0, req.params.id);
   res.json({ success: true });
 });
 
@@ -412,28 +415,6 @@ router.get('/payouts/pending-commissions', (req, res) => {
   if (trader_id) { sql += ` AND cm.trader_id = ?`; params.push(Number(trader_id)); }
   sql += ` ORDER BY cm.created_at DESC LIMIT 500`;
   res.json({ commissions: db.prepare(sql).all(...params) });
-});
-
-/* ── Withdrawal Requests ──────────────────────────────────────────────── */
-router.get('/withdrawals', (req, res) => {
-  const { status } = req.query;
-  let sql = `
-    SELECT wr.*, u.name as trader_name, u.tier as trader_tier
-    FROM withdrawal_requests wr JOIN users u ON wr.trader_id = u.id
-    WHERE 1=1
-  `, params = [];
-  if (status) { sql += ` AND wr.status = ?`; params.push(status); }
-  sql += ` ORDER BY wr.requested_at DESC`;
-  res.json({ withdrawals: db.prepare(sql).all(...params) });
-});
-
-router.put('/withdrawals/:id', (req, res) => {
-  const { status, admin_notes } = req.body;
-  if (!['approved','rejected'].includes(status)) return res.status(400).json({ error: 'Status must be approved or rejected' });
-  db.prepare(`
-    UPDATE withdrawal_requests SET status=?, admin_notes=?, processed_at=CURRENT_TIMESTAMP WHERE id=?
-  `).run(status, admin_notes || null, req.params.id);
-  res.json({ success: true });
 });
 
 /* ── Delivery Eligible Dealers ────────────────────────────────────────── */

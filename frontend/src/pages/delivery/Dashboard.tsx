@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   Package, Truck, CheckCircle2, ChevronRight,
   ToggleLeft, ToggleRight, Loader2, AlertCircle, MapPin,
-  Users, Info,
+  Users, Info, HelpCircle, ChevronDown,
 } from 'lucide-react';
 
 interface DeliveryContext {
@@ -121,6 +121,68 @@ export default function DeliveryDashboard() {
           <span>{error}</span>
         </div>
       )}
+
+      {/* Simple Guide — collapsible */}
+      <details className="bg-emerald-50 border border-emerald-200 rounded-2xl group" open>
+        <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer list-none">
+          <div className="flex items-center gap-2">
+            <HelpCircle className="w-5 h-5 text-emerald-700" />
+            <span className="font-bold text-emerald-900 text-sm">How to deliver an order (tap to show/hide)</span>
+          </div>
+          <ChevronDown className="w-5 h-5 text-emerald-700 transition-transform group-open:rotate-180" />
+        </summary>
+
+        <div className="px-4 pb-4 space-y-4 text-sm text-emerald-900">
+          <div>
+            <p className="font-bold mb-1">In simple words</p>
+            <p className="text-emerald-800">
+              When a customer places an order near you, it will show up here. Take the order to the
+              customer, ask them for a <b>4-digit OTP</b>, type it in this app, and you're done.
+            </p>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">Step by step</p>
+            <ol className="list-decimal pl-5 space-y-1 text-emerald-800">
+              <li>Turn the <b>ONLINE</b> switch above ON so the app can give you orders.</li>
+              <li>A new order appears in <b>Active Orders</b>. Tap it to open.</li>
+              <li>Tap <b>Accept</b> → then <b>Mark Packed</b> when ready to leave.</li>
+              <li>Tap <b>Start Delivery</b> when you leave for the customer.</li>
+              <li>At the customer's door, ask them: <i>"Please tell me the 4-digit OTP from your app."</i></li>
+              <li>Type the OTP in the app and tap <b>Confirm</b>. Done — delivery is complete.</li>
+            </ol>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">What the buttons mean</p>
+            <ul className="space-y-1 text-emerald-800">
+              <li><b>Online / Offline</b> — Online means you are ready to take orders. Offline means you won't get new orders.</li>
+              <li><b>Accept</b> — You agree to deliver this order.</li>
+              <li><b>Mark Packed</b> — The bag is ready in your hand.</li>
+              <li><b>Start Delivery</b> — You are leaving now to go to the customer.</li>
+              <li><b>Enter OTP</b> — You have reached the customer; ask for their OTP.</li>
+            </ul>
+          </div>
+
+          <div className="bg-white/70 rounded-lg p-3 border border-emerald-200">
+            <p className="font-bold mb-1 text-emerald-900">If the customer doesn't have the OTP</p>
+            <ul className="space-y-1 text-emerald-800">
+              <li>Open the order page and tap <b>Resend OTP</b>. A new code will be sent to their phone and email.</li>
+              <li>Ask them to <b>check their SMS and email</b>, including the spam folder.</li>
+              <li>Still no OTP? Call admin before handing over the items.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">Important</p>
+            <ul className="space-y-1 text-emerald-800">
+              <li><b>Never hand over the items without entering the OTP.</b> The OTP is the only proof the customer received the order.</li>
+              <li>If you cannot finish a delivery, open the order and mark it <b>Failed</b> with a reason.</li>
+              <li>Use the <b>same email and password</b> as your trader login. No separate account.</li>
+            </ul>
+          </div>
+        </div>
+      </details>
 
       {/* Stats Grid (own deliveries) */}
       <div className="grid grid-cols-3 gap-3">
