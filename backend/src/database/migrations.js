@@ -684,51 +684,67 @@ function runMigrations(db) {
   });
   if (hasOrderIdUnique) {
     console.log('[migration] invoices: rebuilding to drop UNIQUE on order_id…');
-    db.exec(`
-      BEGIN;
-      CREATE TABLE invoices_new (
-        id                            INTEGER PRIMARY KEY AUTOINCREMENT,
-        invoice_number                TEXT    NOT NULL UNIQUE,
-        order_id                      INTEGER NOT NULL REFERENCES consumer_orders(id),
-        customer_name                 TEXT    NOT NULL,
-        customer_email                TEXT,
-        customer_phone                TEXT,
-        customer_address              TEXT,
-        customer_state                TEXT,
-        customer_gstin                TEXT,
-        items_json                    TEXT    NOT NULL,
-        taxable_amount                REAL    NOT NULL,
-        cgst_amount                   REAL    NOT NULL DEFAULT 0,
-        sgst_amount                   REAL    NOT NULL DEFAULT 0,
-        igst_amount                   REAL    NOT NULL DEFAULT 0,
-        container_deposit             REAL    NOT NULL DEFAULT 0,
-        total_amount                  REAL    NOT NULL,
-        razorpay_payment_id           TEXT,
-        pdf_path                      TEXT,
-        container_deposit_status      TEXT    NOT NULL DEFAULT 'none',
-        container_deposit_resolved_at DATETIME,
-        container_deposit_resolved_by INTEGER REFERENCES users(id),
-        container_deposit_notes       TEXT,
-        parent_invoice_id             INTEGER REFERENCES invoices(id),
-        invoice_type                  TEXT    NOT NULL DEFAULT 'tax',
-        created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      INSERT INTO invoices_new
-        SELECT id, invoice_number, order_id, customer_name, customer_email, customer_phone,
-               customer_address, customer_state, customer_gstin, items_json,
-               taxable_amount, cgst_amount, sgst_amount, igst_amount,
-               container_deposit, total_amount, razorpay_payment_id, pdf_path,
-               container_deposit_status, container_deposit_resolved_at,
-               container_deposit_resolved_by, container_deposit_notes,
-               parent_invoice_id, invoice_type, created_at
-        FROM invoices;
-      DROP TABLE invoices;
-      ALTER TABLE invoices_new RENAME TO invoices;
-      CREATE INDEX idx_invoices_order  ON invoices(order_id);
-      CREATE INDEX idx_invoices_number ON invoices(invoice_number);
-      CREATE INDEX idx_invoices_parent ON invoices(parent_invoice_id);
-      COMMIT;
-    `);
+    /* Per the SQLite ALTER TABLE workaround (https://sqlite.org/lang_altertable.html#otheralter),
+     * FK enforcement must be disabled across the rebuild because dependent tables
+     * (container_holdings, etc.) hold rows referencing invoices.id. PRAGMA can't
+     * be toggled inside a transaction, so we do it outside. */
+    const fkWasOn = db.pragma('foreign_keys', { simple: true });
+    db.pragma('foreign_keys = OFF');
+    try {
+      const rebuild = db.transaction(() => {
+        db.exec(`
+          CREATE TABLE invoices_new (
+            id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_number                TEXT    NOT NULL UNIQUE,
+            order_id                      INTEGER NOT NULL REFERENCES consumer_orders(id),
+            customer_name                 TEXT    NOT NULL,
+            customer_email                TEXT,
+            customer_phone                TEXT,
+            customer_address              TEXT,
+            customer_state                TEXT,
+            customer_gstin                TEXT,
+            items_json                    TEXT    NOT NULL,
+            taxable_amount                REAL    NOT NULL,
+            cgst_amount                   REAL    NOT NULL DEFAULT 0,
+            sgst_amount                   REAL    NOT NULL DEFAULT 0,
+            igst_amount                   REAL    NOT NULL DEFAULT 0,
+            container_deposit             REAL    NOT NULL DEFAULT 0,
+            total_amount                  REAL    NOT NULL,
+            razorpay_payment_id           TEXT,
+            pdf_path                      TEXT,
+            container_deposit_status      TEXT    NOT NULL DEFAULT 'none',
+            container_deposit_resolved_at DATETIME,
+            container_deposit_resolved_by INTEGER REFERENCES users(id),
+            container_deposit_notes       TEXT,
+            parent_invoice_id             INTEGER REFERENCES invoices(id),
+            invoice_type                  TEXT    NOT NULL DEFAULT 'tax',
+            created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO invoices_new
+            SELECT id, invoice_number, order_id, customer_name, customer_email, customer_phone,
+                   customer_address, customer_state, customer_gstin, items_json,
+                   taxable_amount, cgst_amount, sgst_amount, igst_amount,
+                   container_deposit, total_amount, razorpay_payment_id, pdf_path,
+                   container_deposit_status, container_deposit_resolved_at,
+                   container_deposit_resolved_by, container_deposit_notes,
+                   parent_invoice_id, invoice_type, created_at
+            FROM invoices;
+          DROP TABLE invoices;
+          ALTER TABLE invoices_new RENAME TO invoices;
+          CREATE INDEX idx_invoices_order  ON invoices(order_id);
+          CREATE INDEX idx_invoices_number ON invoices(invoice_number);
+          CREATE INDEX idx_invoices_parent ON invoices(parent_invoice_id);
+        `);
+      });
+      rebuild();
+      /* Confirm FK graph is still consistent before re-enabling enforcement. */
+      const violations = db.pragma('foreign_key_check');
+      if (violations.length) {
+        throw new Error(`invoices rebuild left FK violations: ${JSON.stringify(violations)}`);
+      }
+    } finally {
+      if (fkWasOn) db.pragma('foreign_keys = ON');
+    }
     /* Re-enforce idempotency on original tax invoices via a partial unique index. */
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_tax_order ON invoices(order_id) WHERE invoice_type='tax'`);
     console.log('[migration] invoices: rebuild done');
