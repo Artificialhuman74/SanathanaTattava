@@ -59,6 +59,23 @@ const EXPECTED = {
     'id', 'name', 'description', 'category', 'sku', 'price',
     'cost_price', 'stock', 'min_stock', 'image_url', 'image_urls',
     'unit', 'status',
+    /* Containers feature */
+    'container_type',
+  ],
+  container_holdings: [
+    'id', 'consumer_id', 'invoice_id', 'order_item_id',
+    'original_product_id', 'current_product_id',
+    'container_type', 'deposit_amount', 'status',
+    'refund_destination', 'requested_at', 'resolved_at',
+    'resolved_by', 'notes', 'created_at', 'updated_at',
+  ],
+  container_swaps: [
+    'id', 'holding_id', 'from_product_id', 'to_product_id',
+    'diff_amount', 'diff_payment_id', 'triggered_in', 'created_at',
+  ],
+  consumer_store_credit_ledger: [
+    'id', 'consumer_id', 'delta', 'reason',
+    'source_type', 'source_id', 'created_by', 'created_at',
   ],
   orders: ['id', 'order_number', 'trader_id', 'status', 'total_amount'],
   order_items: ['id', 'order_id', 'product_id', 'quantity', 'price', 'total'],
@@ -139,6 +156,12 @@ const EXPECTED_INDEXES = [
   'idx_dealer_inv_product',
   'idx_consumer_addr_h3',
   'idx_commissions_confirmation_token',
+  /* Containers feature */
+  'idx_holdings_consumer_status',
+  'idx_holdings_invoice',
+  'idx_holdings_current_product',
+  'idx_swaps_holding',
+  'idx_store_credit_consumer',
 ];
 
 // ── tests ─────────────────────────────────────────────────────────────────

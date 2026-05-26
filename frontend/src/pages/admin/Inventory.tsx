@@ -11,13 +11,18 @@ import {
 interface Product {
   id: number; name: string; description: string; category: string; sku: string;
   price: number; cost_price: number; container_cost: number; stock: number; min_stock: number;
-  image_url: string; image_urls?: string | null; unit: string; hsn_code?: string | null; status: string; created_at: string;
+  image_url: string; image_urls?: string | null; unit: string; hsn_code?: string | null;
+  container_type?: '2.8L' | '5L' | null;
+  status: string; created_at: string;
 }
 
 const UNITS = ['piece','kg','litre','set','pair','box','bottle','tin','pack'];
+const CONTAINER_TYPES = ['2.8L', '5L'] as const;
 const EMPTY: Partial<Product> = {
   name: '', description: '', category: '', sku: '', price: 0,
-  cost_price: 0, container_cost: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', hsn_code: '', status: 'active',
+  cost_price: 0, container_cost: 0, stock: 0, min_stock: 10, image_url: '', image_urls: '', unit: 'piece', hsn_code: '',
+  container_type: null,
+  status: 'active',
 };
 
 function parseImageUrls(raw?: string | null): string[] {
@@ -506,7 +511,19 @@ export default function AdminInventory() {
                 <div>
                   <label className="form-label">Container Cost (₹)</label>
                   <input type="number" min="0" step="0.01" value={form.container_cost || ''} onChange={set('container_cost')} className="form-input" placeholder="0.00" />
-                  <p className="text-xs text-slate-400 mt-1">One-time charge for first order only</p>
+                  <p className="text-xs text-slate-400 mt-1">Per-unit refundable deposit</p>
+                </div>
+                <div>
+                  <label className="form-label">Container Type</label>
+                  <select
+                    value={form.container_type || ''}
+                    onChange={e => setForm(f => ({ ...f, container_type: (e.target.value || null) as Product['container_type'] }))}
+                    className="form-input"
+                  >
+                    <option value="">None (no container)</option>
+                    {CONTAINER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">Steel container size — required to enable refill & swap</p>
                 </div>
                 <div>
                   <label className="form-label">Stock Quantity <span className="text-red-500">*</span></label>

@@ -234,6 +234,79 @@ function notifyLinkedDealerOrderRouted({
   console.log(`[NOTIFICATION] Linked dealer "${linkedDealerName}" (id=${linkedDealerId}): ${title}`);
 }
 
+/**
+ * Container refund request — fans out to BOTH admin and the consumer's
+ * linked dealer. The linked dealer is responsible for the physical pickup
+ * regardless of distance (no nearest-dealer routing for container returns).
+ */
+function notifyContainerRefundRequested({
+  holdingId,
+  consumerId,
+  consumerName,
+  consumerPhone,
+  consumerAddress,
+  linkedDealerId,
+  linkedDealerName,
+  linkedDealerEmail,
+  productName,
+  containerType,
+  destination,
+  notes,
+}) {
+  const dealerTitle = `Container pickup needed — ${consumerName}`;
+  const dealerBody  = `${consumerName} requested a refund for 1 × ${containerType} container (${productName}). Please collect it on your next visit.`;
+  const adminTitle  = `Container refund requested — ${consumerName}`;
+  const adminBody   = `${consumerName} requested a refund (${destination.replace('_', ' ')}) for 1 × ${containerType} container (${productName}).`;
+  const data = {
+    holding_id: holdingId,
+    consumer_id: consumerId,
+    consumer_name: consumerName,
+    linked_dealer_id: linkedDealerId,
+    product_name: productName,
+    container_type: containerType,
+    destination,
+  };
+
+  /* In-app + WebSocket fan-out. Emails are fired after, errors swallowed so
+   * a failed send never blocks the API response. */
+  if (linkedDealerId) {
+    createNotification('dealer', linkedDealerId, dealerTitle, dealerBody, data);
+    console.log(`[NOTIFICATION] Linked dealer ${linkedDealerName} (id=${linkedDealerId}): ${dealerTitle}`);
+  }
+
+  const admins = db.prepare(`SELECT id, email, name FROM users WHERE role='admin' AND status='active'`).all();
+  for (const a of admins) {
+    createNotification('admin', a.id, adminTitle, adminBody, data);
+  }
+  console.log(`[NOTIFICATION] ${admins.length} admin(s) notified: ${adminTitle}`);
+
+  let sendEmail;
+  try { sendEmail = require('./emailService').sendContainerRefundRequestEmail; }
+  catch (e) { console.error('[container-refund email] load failed:', e.message); return; }
+
+  const baseEmailArgs = {
+    holdingId, consumerName, consumerPhone, consumerAddress,
+    productName, containerType, destination, notes,
+  };
+  if (linkedDealerId && linkedDealerEmail) {
+    sendEmail({
+      ...baseEmailArgs,
+      to: linkedDealerEmail,
+      recipientName: linkedDealerName,
+      recipientRole: 'dealer',
+    }).catch(err => console.error('[container-refund email → dealer] send failed:', err.message));
+  }
+  for (const a of admins) {
+    if (!a.email) continue;
+    sendEmail({
+      ...baseEmailArgs,
+      to: a.email,
+      recipientName: a.name,
+      recipientRole: 'admin',
+    }).catch(err => console.error(`[container-refund email → admin ${a.id}] send failed:`, err.message));
+  }
+}
+
 /* ── Exports ─────────────────────────────────────────────────────────── */
 
 /**
@@ -260,6 +333,7 @@ module.exports = {
   notifyConsumerDeliveryAssigned,
   notifyLinkedDealerOrderRouted,
   notifyAdminLowStock,
+  notifyContainerRefundRequested,
   getUnreadNotifications,
   getNotifications,
   markRead,

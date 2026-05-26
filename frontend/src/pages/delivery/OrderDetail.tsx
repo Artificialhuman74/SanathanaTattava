@@ -285,6 +285,17 @@ export default function DeliveryOrderDetail() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-800 truncate">
                       {item.product_name || 'Product'}
+                      {item.container_type && (
+                        <span
+                          className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            item.is_refill
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {item.is_refill ? 'REFILL' : 'NEW'}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-500">
                       Qty: {item.quantity} × ₹{parseFloat(item.price || 0).toFixed(2)}

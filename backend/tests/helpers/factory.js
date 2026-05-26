@@ -139,6 +139,12 @@ function clearAll() {
   // Order matters — child rows before parents
   db.prepare('DELETE FROM review_tokens').run();
   db.prepare('DELETE FROM product_reviews').run();
+  // Containers feature — must be cleared before invoices / consumer_order_items / products / consumers
+  db.prepare('DELETE FROM container_swaps').run();
+  try { db.prepare('DELETE FROM container_holdings_audit').run(); } catch (_) {}
+  db.prepare('DELETE FROM container_holdings').run();
+  db.prepare('DELETE FROM consumer_store_credit_ledger').run();
+  db.prepare('DELETE FROM invoices').run();
   db.prepare('DELETE FROM consumer_order_items').run();
   db.prepare('DELETE FROM commissions').run();
   db.prepare('DELETE FROM weekly_payouts').run();

@@ -15,6 +15,7 @@ const { authenticate, requireAdmin, requireTrader } = require('../middleware/aut
 const { auditLog } = require('../middleware/auditLog');
 const { sendOrderConfirmedEmail } = require('../services/emailService');
 const { generateInvoiceForOrder } = require('../services/invoiceService');
+const { applyStoreCredit } = require('../services/storeCreditService');
 const fs = require('fs');
 
 const router = express.Router();
@@ -119,6 +120,19 @@ router.post('/verify', authConsumer, async (req, res) => {
           razorpay_order_id=?, razorpay_payment_id=?
       WHERE id=?
     `).run(razorpay_order_id, razorpay_payment_id, consumer_order_id);
+
+    /* Phase 7 — burn the reserved store credit now that Razorpay has
+     * confirmed payment. If this throws (e.g. balance manipulated since
+     * order placement), the transaction rolls back and the order stays
+     * unpaid. applyStoreCredit re-validates balance defensively. */
+    if (order.store_credit_applied > 0) {
+      applyStoreCredit({
+        consumerId: order.consumer_id,
+        orderId:    order.id,
+        amount:     order.store_credit_applied,
+        createdBy:  null,
+      });
+    }
 
     /* Record commissions now that payment is confirmed */
     if (!order.is_direct && order.linked_dealer_id) {

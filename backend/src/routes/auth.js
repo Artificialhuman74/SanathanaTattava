@@ -13,25 +13,57 @@ const signToken = (id, role) =>
   jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
 /* ── Referral Code Generation ─────────────────────────────────────────
- *  Tier 1: A0000, B0000, C0000 … (next unused uppercase letter + "0000")
- *  Tier 2: A0001, A0002 …       (parent's letter + next number under that parent)
+ *  Tier 1: A0000 … Z0000 (single letter), then AA0000 … ZZ0000 (two-letter
+ *          fallback once all 26 single letters are used). 26 + 676 = 702 slots.
+ *  Tier 2: parent's prefix + next number under that parent
+ *          (e.g. parent A0000 → A0001, A0002 …; parent AA0000 → AA0001, AA0002 …)
  */
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+/** Split a referral code into its letter prefix and numeric suffix.
+ *  Supports both legacy single-letter (A0000) and two-letter (AA0000) forms. */
+function splitReferralCode(code) {
+  if (!code) return null;
+  const m = /^([A-Z]+)(\d+)$/.exec(code);
+  return m ? { prefix: m[1], num: m[2] } : null;
+}
+
 function generateTier1Code() {
-  const used = db.prepare(`SELECT referral_code FROM users WHERE role='trader' AND tier=1`)
-    .all().map(r => r.referral_code && r.referral_code[0]).filter(Boolean);
-  for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')) {
-    if (!used.includes(letter)) return `${letter}0000`;
+  const usedPrefixes = new Set(
+    db.prepare(`SELECT referral_code FROM users WHERE role='trader' AND tier=1`)
+      .all()
+      .map(r => splitReferralCode(r.referral_code)?.prefix)
+      .filter(Boolean)
+  );
+  // First try single letters A..Z (preserves the current scheme for new dealers).
+  for (const a of ALPHABET) {
+    if (!usedPrefixes.has(a)) return `${a}0000`;
   }
-  return `T${Date.now().toString().slice(-4)}`; // fallback
+  // Then fall back to two-letter combos AA..ZZ (alphabetical order).
+  for (const a of ALPHABET) {
+    for (const b of ALPHABET) {
+      const pfx = `${a}${b}`;
+      if (!usedPrefixes.has(pfx)) return `${pfx}0000`;
+    }
+  }
+  return null; // 702 Tier-1 slots exhausted — caller must surface as an error.
 }
 
 function generateTier2Code(parentId) {
   const parent = db.prepare(`SELECT referral_code FROM users WHERE id=?`).get(parentId);
-  if (!parent?.referral_code) return null;
-  const prefix = parent.referral_code[0]; // e.g. 'A'
-  const existingNums = db.prepare(`SELECT referral_code FROM users WHERE role='trader' AND tier=2 AND referral_code LIKE ?`)
+  const parsed = splitReferralCode(parent?.referral_code);
+  if (!parsed) return null;
+  const prefix = parsed.prefix;
+  // LIKE 'A%' would also match two-letter children ('AA0001', 'AB0001' …) of
+  // *different* parents, so filter by exact prefix match after parsing.
+  const existingNums = db.prepare(
+    `SELECT referral_code FROM users WHERE role='trader' AND tier=2 AND referral_code LIKE ?`,
+  )
     .all(`${prefix}%`)
-    .map(r => r.referral_code ? parseInt(r.referral_code.slice(1)) : 0)
+    .map(r => {
+      const p = splitReferralCode(r.referral_code);
+      return p && p.prefix === prefix ? parseInt(p.num, 10) : NaN;
+    })
     .filter(n => !isNaN(n) && n > 0);
   const next = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
   return `${prefix}${String(next).padStart(4, '0')}`;
@@ -87,16 +119,24 @@ router.post('/register', [
     code = generateTier2Code(referrer.id);
     if (!code) return res.status(500).json({ error: 'Could not generate sub-dealer code' });
     while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
-      // increment until unique (collision safety)
-      const num = parseInt(code.slice(1)) + 1;
-      code = `${code[0]}${String(num).padStart(4,'0')}`;
+      // increment until unique (collision safety) — preserves the parent's prefix
+      const parsed = splitReferralCode(code);
+      if (!parsed) return res.status(500).json({ error: 'Sub-dealer code generation failed' });
+      const nextNum = parseInt(parsed.num, 10) + 1;
+      code = `${parsed.prefix}${String(nextNum).padStart(4, '0')}`;
     }
   } else {
     code = generateTier1Code();
+    if (!code) {
+      // 26 single-letter + 676 two-letter prefixes all taken (702 Tier-1 dealers).
+      return res.status(503).json({ error: 'Tier-1 partner slots are full. Please contact admin.' });
+    }
+    // generateTier1Code already returns an unused prefix, so a collision here would
+    // only happen if two registrations race. Re-pick a fresh code rather than
+    // blindly incrementing into another prefix's namespace.
     while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
-      // Should not happen, but just in case
-      const idx = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.indexOf(code[0]) + 1;
-      code = `${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[idx] || 'Z'}0000`;
+      code = generateTier1Code();
+      if (!code) return res.status(503).json({ error: 'Tier-1 partner slots are full. Please contact admin.' });
     }
   }
 

@@ -544,13 +544,36 @@ function runMigrations(db) {
     db.exec(`ALTER TABLE products ADD COLUMN container_cost REAL NOT NULL DEFAULT 0`);
     console.log('[migration] products: added container_cost');
   }
+
+  /* container_type identifies the physical container SKU (e.g. '2.8L', '5L').
+   * Used to match same-size containers for the consumer Swap flow — volume
+   * alone is unsafe (a 2.8L PET ≠ a 2.8L steel). v1 ships steel only.
+   * NULL for products that don't carry a deposit. */
+  if (!hasColumn('products', 'container_type')) {
+    db.exec(`ALTER TABLE products ADD COLUMN container_type TEXT`);
+    console.log('[migration] products: added container_type');
+  }
   if (!hasColumn('consumer_order_items', 'container_cost')) {
     db.exec(`ALTER TABLE consumer_order_items ADD COLUMN container_cost REAL NOT NULL DEFAULT 0`);
     console.log('[migration] consumer_order_items: added container_cost');
   }
+  /* is_refill marks lines where the consumer re-uses a held container.
+   * Drives delivery-agent UI ("Refill exchange" vs "New container") and
+   * the "(Refill)" suffix on tax invoices. */
+  if (!hasColumn('consumer_order_items', 'is_refill')) {
+    db.exec(`ALTER TABLE consumer_order_items ADD COLUMN is_refill INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_order_items: added is_refill');
+  }
   if (!hasColumn('consumer_orders', 'container_costs_total')) {
     db.exec(`ALTER TABLE consumer_orders ADD COLUMN container_costs_total REAL NOT NULL DEFAULT 0`);
     console.log('[migration] consumer_orders: added container_costs_total');
+  }
+
+  /* Phase 7 — store credit applied at checkout. Stamps the amount of
+   * wallet credit consumed by an order; ledger row carries the audit. */
+  if (!hasColumn('consumer_orders', 'store_credit_applied')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN store_credit_applied REAL NOT NULL DEFAULT 0`);
+    console.log('[migration] consumer_orders: added store_credit_applied');
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -711,6 +734,166 @@ function runMigrations(db) {
     console.log('[migration] invoices: rebuild done');
   } else {
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_tax_order ON invoices(order_id) WHERE invoice_type='tax'`);
+  }
+
+  /* ── Consumer Containers feature ──────────────────────────────────────
+   * Per-line holdings ledger. One row = one physical steel container the
+   * consumer holds (or is in transit to them). Replaces the aggregate
+   * invoices.container_deposit_status as the operational source of truth.
+   * See CONTAINERS_FEATURE_SPEC.md for the full lifecycle.
+   */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS container_holdings (
+      id                   INTEGER  PRIMARY KEY AUTOINCREMENT,
+      consumer_id          INTEGER  NOT NULL REFERENCES consumers(id),
+      invoice_id           INTEGER  NOT NULL REFERENCES invoices(id),
+      order_item_id        INTEGER  REFERENCES consumer_order_items(id),
+      original_product_id  INTEGER  NOT NULL REFERENCES products(id),
+      current_product_id   INTEGER  NOT NULL REFERENCES products(id),
+      container_type       TEXT     NOT NULL,
+      deposit_amount       REAL     NOT NULL,
+      status               TEXT     NOT NULL DEFAULT 'pending_delivery',
+      refund_destination   TEXT,
+      requested_at         DATETIME,
+      resolved_at          DATETIME,
+      resolved_by          INTEGER  REFERENCES users(id),
+      notes                TEXT,
+      created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_consumer_status ON container_holdings(consumer_id, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_invoice         ON container_holdings(invoice_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_current_product ON container_holdings(current_product_id)`);
+
+  /* Phase 7 — manual_bank refund settlement audit. UTR is the bank
+   * reference number admin enters when they wire the deposit back. */
+  if (!hasColumn('container_holdings', 'manual_refund_utr')) {
+    db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_utr TEXT`);
+    console.log('[migration] container_holdings: added manual_refund_utr');
+  }
+  if (!hasColumn('container_holdings', 'manual_refund_paid_at')) {
+    db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_paid_at DATETIME`);
+    console.log('[migration] container_holdings: added manual_refund_paid_at');
+  }
+  if (!hasColumn('container_holdings', 'manual_refund_paid_by')) {
+    db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_paid_by INTEGER REFERENCES users(id)`);
+    console.log('[migration] container_holdings: added manual_refund_paid_by');
+  }
+
+  /* Phase 8 — admin holdings override audit. Every admin-initiated status
+   * change on a container_holdings row writes one row here. Append-only. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS container_holdings_audit (
+      id                 INTEGER  PRIMARY KEY AUTOINCREMENT,
+      holding_id         INTEGER  NOT NULL REFERENCES container_holdings(id),
+      actor_user_id      INTEGER  NOT NULL REFERENCES users(id),
+      action             TEXT     NOT NULL,
+      before_status      TEXT,
+      after_status       TEXT,
+      before_destination TEXT,
+      after_destination  TEXT,
+      notes              TEXT,
+      created_at         DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_audit_holding ON container_holdings_audit(holding_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_audit_actor   ON container_holdings_audit(actor_user_id)`);
+
+  /* Swap audit trail. The holding's current_product_id is mutated in-place;
+   * this table preserves the full reassignment history. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS container_swaps (
+      id              INTEGER  PRIMARY KEY AUTOINCREMENT,
+      holding_id      INTEGER  NOT NULL REFERENCES container_holdings(id),
+      from_product_id INTEGER  NOT NULL REFERENCES products(id),
+      to_product_id   INTEGER  NOT NULL REFERENCES products(id),
+      diff_amount     REAL     NOT NULL DEFAULT 0,
+      diff_payment_id TEXT,
+      triggered_in    TEXT     NOT NULL,
+      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_swaps_holding ON container_swaps(holding_id)`);
+
+  /* Append-only store credit ledger. Balance = SUM(delta) per consumer.
+   * Used as an opt-in refund destination for container opt-outs. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS consumer_store_credit_ledger (
+      id           INTEGER  PRIMARY KEY AUTOINCREMENT,
+      consumer_id  INTEGER  NOT NULL REFERENCES consumers(id),
+      delta        REAL     NOT NULL,
+      reason       TEXT     NOT NULL,
+      source_type  TEXT,
+      source_id    INTEGER,
+      created_by   INTEGER  REFERENCES users(id),
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_store_credit_consumer ON consumer_store_credit_ledger(consumer_id)`);
+
+  /* Backfill: for every existing tax invoice with a held deposit, materialise
+   * one container_holdings row per delivered unit so legacy orders show up in
+   * the new consumer UI. Idempotent — guarded by NOT EXISTS on invoice_id. */
+  const backfillNeeded = db.prepare(`
+    SELECT COUNT(*) AS n
+      FROM invoices i
+     WHERE i.invoice_type='tax'
+       AND i.container_deposit_status='held'
+       AND i.container_deposit > 0
+       AND NOT EXISTS (SELECT 1 FROM container_holdings h WHERE h.invoice_id=i.id)
+  `).get();
+
+  if (backfillNeeded.n > 0) {
+    console.log(`[migration] container_holdings: backfilling from ${backfillNeeded.n} legacy invoice(s)…`);
+    const legacy = db.prepare(`
+      SELECT i.id AS invoice_id, i.order_id, co.consumer_id
+        FROM invoices i
+        JOIN consumer_orders co ON co.id=i.order_id
+       WHERE i.invoice_type='tax'
+         AND i.container_deposit_status='held'
+         AND i.container_deposit > 0
+         AND NOT EXISTS (SELECT 1 FROM container_holdings h WHERE h.invoice_id=i.id)
+    `).all();
+
+    const insertHolding = db.prepare(`
+      INSERT INTO container_holdings
+        (consumer_id, invoice_id, order_item_id, original_product_id, current_product_id,
+         container_type, deposit_amount, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'held')
+    `);
+
+    const itemsByOrder = db.prepare(`
+      SELECT oi.id AS order_item_id, oi.product_id, oi.quantity, oi.container_cost,
+             p.container_type
+        FROM consumer_order_items oi
+        JOIN products p ON p.id=oi.product_id
+       WHERE oi.order_id=? AND oi.container_cost > 0
+    `);
+
+    const backfill = db.transaction(() => {
+      for (const inv of legacy) {
+        const items = itemsByOrder.all(inv.order_id);
+        for (const item of items) {
+          // If container_type wasn't set on the product yet (pre-this-migration data),
+          // skip — admin must set it then re-run. Logged for visibility.
+          if (!item.container_type) {
+            console.warn(`[migration] backfill: product ${item.product_id} has no container_type — skipping ${item.quantity} unit(s) on invoice ${inv.invoice_id}`);
+            continue;
+          }
+          for (let q = 0; q < item.quantity; q++) {
+            insertHolding.run(
+              inv.consumer_id, inv.invoice_id, item.order_item_id,
+              item.product_id, item.product_id,
+              item.container_type, item.container_cost
+            );
+          }
+        }
+      }
+    });
+    backfill();
+    const created = db.prepare(`SELECT COUNT(*) AS n FROM container_holdings WHERE status='held'`).get();
+    console.log(`[migration] container_holdings: backfill complete — ${created.n} held row(s)`);
   }
 
   console.log('[migration] all migrations applied');

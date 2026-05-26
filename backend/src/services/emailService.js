@@ -494,9 +494,80 @@ async function sendInvoiceEmail({ to, consumerName, invoiceNumber, orderNumber, 
   });
 }
 
+/* ── Container refund request (dealer + admin) ───────────────────────────
+ * Sent to both the consumer's linked dealer AND the admin when a consumer
+ * opts a container out for refund. The linked dealer is responsible for
+ * physical pickup regardless of distance.
+ */
+async function sendContainerRefundRequestEmail({
+  to, recipientName, recipientRole,        // 'dealer' | 'admin'
+  consumerName, consumerPhone, consumerAddress,
+  productName, containerType, destination, notes, holdingId,
+}) {
+  const destLabel = destination === 'store_credit' ? 'Store credit' : 'Manual bank refund';
+  const isDealer  = recipientRole === 'dealer';
+  const subject   = isDealer
+    ? `Container pickup needed — ${consumerName} (1 × ${containerType})`
+    : `Container refund requested — ${consumerName} (${destLabel})`;
+  const text =
+    `Hi ${recipientName || 'there'},\n\n` +
+    `${consumerName} has requested a refund for 1 × ${containerType} container ` +
+    `(originally bought with ${productName}).\n\n` +
+    `Refund destination: ${destLabel}\n` +
+    (isDealer
+      ? `\nAs the linked dealer, please collect this container from the consumer on your next visit, ` +
+        `regardless of distance. Inspect for damage before marking the refund as approved.\n\n` +
+        `Consumer phone: ${consumerPhone || 'n/a'}\n` +
+        (consumerAddress ? `Pickup address: ${consumerAddress}\n` : '')
+      : `\nThe linked dealer has been notified to pick up the container. ` +
+        `You will see this request in the admin Container Refunds queue.\n`) +
+    (notes ? `\nConsumer note: "${notes}"\n` : '') +
+    `\nHolding ID: ${holdingId}\n\n— Sanathana Tattva`;
+  const html = buildEmailHtml({
+    title:    isDealer ? 'Container Pickup Needed' : 'Container Refund Requested',
+    preheader: `${consumerName} · 1 × ${containerType} · ${destLabel}`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${recipientName || 'there'},
+      </p>
+      <p style="margin:0 0 16px;color:#0f172a;font-size:15px;line-height:1.6;">
+        <strong>${consumerName.replace(/</g, '&lt;')}</strong> has requested a refund for
+        <strong>1 × ${containerType}</strong> container (originally bought with
+        <strong>${productName.replace(/</g, '&lt;')}</strong>).
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:18px 22px;margin:0 0 22px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Destination</td>
+              <td align="right" style="color:#0f172a;font-size:14px;font-weight:700;padding-bottom:6px;">${destLabel}</td></tr>
+          <tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Holding ID</td>
+              <td align="right" style="color:#0f172a;font-size:13px;font-family:monospace;padding-bottom:6px;">#${holdingId}</td></tr>
+          ${isDealer && consumerPhone ? `<tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Phone</td>
+              <td align="right" style="color:#0f172a;font-size:14px;font-weight:600;padding-bottom:6px;">${consumerPhone}</td></tr>` : ''}
+          ${isDealer && consumerAddress ? `<tr><td style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;">Pickup address</td>
+              <td align="right" style="color:#0f172a;font-size:13px;">${consumerAddress.replace(/</g, '&lt;')}</td></tr>` : ''}
+        </table>
+        ${notes ? `<p style="margin:14px 0 0;color:#475569;font-size:13px;font-style:italic;">"${notes.replace(/</g, '&lt;')}"</p>` : ''}
+      </div>
+      ${isDealer ? `
+      <p style="margin:0 0 8px;color:#0f172a;font-size:14px;line-height:1.6;">
+        As the linked dealer, please <strong>collect this container on your next visit, regardless of distance</strong>. Inspect for damage before marking the refund as approved.
+      </p>
+      ` : `
+      <p style="margin:0 0 8px;color:#0f172a;font-size:14px;line-height:1.6;">
+        The linked dealer has been notified to pick up the container. You will see this request in the admin Container Refunds queue.
+      </p>
+      `}
+    `,
+    footer: 'Sanathana Tattva — Pure, Cold Pressed Oils',
+  });
+  return sendMail({ to, subject, text, html });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
   sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
   sendAdminLowStockEmail,
-  sendOrderConfirmedEmail, sendOutForDeliveryEmail, sendInvoiceEmail, DEV_MODE,
+  sendOrderConfirmedEmail, sendOutForDeliveryEmail, sendInvoiceEmail,
+  sendContainerRefundRequestEmail,
+  DEV_MODE,
 };

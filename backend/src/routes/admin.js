@@ -16,6 +16,15 @@ const {
 const router = express.Router();
 router.use(authenticate, requireAdmin);
 
+/* Allowed container types for the Containers feature. NULL means
+ * "no container" — valid for products that don't carry a deposit. */
+const ALLOWED_CONTAINER_TYPES = ['2.8L', '5L'];
+const INVALID_CT = Symbol('invalid-container-type');
+function normaliseContainerType(v) {
+  if (v === undefined || v === null || v === '') return null;
+  return ALLOWED_CONTAINER_TYPES.includes(v) ? v : INVALID_CT;
+}
+
 /* ── Admin profile ───────────────────────────────────────────────────── */
 router.get('/me', (req, res) => {
   const admin = db.prepare('SELECT id,name,email,phone FROM users WHERE id=?').get(req.user.id);
@@ -86,25 +95,32 @@ router.post('/products', [
 ], (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
-  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit, hsn_code } = req.body;
+  const { name, description, category, sku, price, cost_price, container_cost, container_type, stock, min_stock, image_url, image_urls, unit, hsn_code } = req.body;
+  const ct = normaliseContainerType(container_type);
+  if (ct === INVALID_CT) return res.status(400).json({ error: `container_type must be one of: ${ALLOWED_CONTAINER_TYPES.join(', ')}` });
   if (db.prepare(`SELECT id FROM products WHERE sku = ?`).get(sku)) return res.status(409).json({ error: 'SKU already exists' });
   const result = db.prepare(`
-    INSERT INTO products (name,description,category,sku,price,cost_price,container_cost,stock,min_stock,image_url,image_urls,unit,hsn_code,status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'active')
-  `).run(name, description||null, category, sku, price, cost_price||null, container_cost||0, stock||0, min_stock||10, image_url||null, image_urls||null, unit||'piece', hsn_code||null);
+    INSERT INTO products (name,description,category,sku,price,cost_price,container_cost,container_type,stock,min_stock,image_url,image_urls,unit,hsn_code,status)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active')
+  `).run(name, description||null, category, sku, price, cost_price||null, container_cost||0, ct, stock||0, min_stock||10, image_url||null, image_urls||null, unit||'piece', hsn_code||null);
   res.status(201).json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(result.lastInsertRowid) });
 });
 
 router.put('/products/:id', (req, res) => {
   const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
-  const { name, description, category, sku, price, cost_price, container_cost, stock, min_stock, image_url, image_urls, unit, status, hsn_code } = req.body;
+  const { name, description, category, sku, price, cost_price, container_cost, container_type, stock, min_stock, image_url, image_urls, unit, status, hsn_code } = req.body;
   if (sku && sku !== product.sku && db.prepare(`SELECT id FROM products WHERE sku = ? AND id != ?`).get(sku, product.id))
     return res.status(409).json({ error: 'SKU already in use' });
+  let ct = product.container_type;
+  if (container_type !== undefined) {
+    ct = normaliseContainerType(container_type);
+    if (ct === INVALID_CT) return res.status(400).json({ error: `container_type must be one of: ${ALLOWED_CONTAINER_TYPES.join(', ')}` });
+  }
   db.prepare(`
-    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,container_cost=?,stock=?,min_stock=?,image_url=?,image_urls=?,unit=?,hsn_code=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+    UPDATE products SET name=?,description=?,category=?,sku=?,price=?,cost_price=?,container_cost=?,container_type=?,stock=?,min_stock=?,image_url=?,image_urls=?,unit=?,hsn_code=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
   `).run(name??product.name, description??product.description, category??product.category, sku??product.sku,
-         price??product.price, cost_price??product.cost_price, container_cost??product.container_cost??0,
+         price??product.price, cost_price??product.cost_price, container_cost??product.container_cost??0, ct,
          stock??product.stock, min_stock??product.min_stock,
          image_url??product.image_url, image_urls??product.image_urls, unit??product.unit, hsn_code??product.hsn_code, status??product.status, product.id);
   res.json({ product: db.prepare(`SELECT * FROM products WHERE id = ?`).get(product.id) });
@@ -694,5 +710,119 @@ router.post('/container-deposits/:invoiceId/forfeit', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Phase 7 — Manual refund payout queue
+ *
+ * Lists every refunded+manual_bank holding awaiting a bank transfer. Admin
+ * wires the deposit out-of-band (UPI / NEFT) and stamps the UTR back here
+ * for audit. Once stamped, the holding falls off this queue.
+ * ═════════════════════════════════════════════════════════════════════ */
+const {
+  getPendingManualRefunds,
+  settleManualRefund,
+} = require('../services/storeCreditService');
+
+router.get('/manual-refunds', (req, res) => {
+  try {
+    res.json({ refunds: getPendingManualRefunds() });
+  } catch (err) {
+    console.error('GET /admin/manual-refunds error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/manual-refunds/:holdingId/settle',
+  body('utr').isString().trim().isLength({ min: 4 }),
+  body('notes').optional().isString(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const result = settleManualRefund({
+        holdingId: Number(req.params.holdingId),
+        utr: req.body.utr,
+        notes: req.body.notes,
+        paidByUserId: req.user.id,
+      });
+      res.json(result);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND')        return res.status(404).json({ error: err.message });
+      if (err.code === 'INVALID_UTR')      return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_STATUS')   return res.status(400).json({ error: err.message });
+      if (err.code === 'ALREADY_SETTLED')  return res.status(409).json({ error: err.message });
+      console.error('POST /admin/manual-refunds/:id/settle error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/* ── Phase 8: admin holdings dashboard + override ────────────────────── */
+const {
+  listAllHoldings,
+  getHoldingDetail,
+  adminOverrideHolding,
+  VALID_STATUSES,
+  VALID_DESTINATIONS,
+} = require('../services/containerHoldingsService');
+
+router.get('/holdings', (req, res) => {
+  try {
+    const { status, consumer_id, container_type, search, limit, offset } = req.query;
+    const statusArr = status ? String(status).split(',').filter(Boolean) : undefined;
+    const out = listAllHoldings({
+      status: statusArr && statusArr.length === 1 ? statusArr[0] : statusArr,
+      consumerId:    consumer_id ? parseInt(consumer_id, 10) : undefined,
+      containerType: container_type || undefined,
+      search:        search || undefined,
+      limit:  limit  ? Math.min(parseInt(limit, 10) || 50, 200) : 50,
+      offset: offset ? parseInt(offset, 10) || 0 : 0,
+    });
+    res.json(out);
+  } catch (err) {
+    console.error('GET /admin/holdings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/holdings/:id', (req, res) => {
+  try {
+    const detail = getHoldingDetail(parseInt(req.params.id, 10));
+    if (!detail) return res.status(404).json({ error: 'Holding not found' });
+    res.json(detail);
+  } catch (err) {
+    console.error('GET /admin/holdings/:id error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/holdings/:id/override',
+  body('new_status').isIn(VALID_STATUSES),
+  body('new_destination').optional({ nullable: true }).isIn(VALID_DESTINATIONS),
+  body('notes').optional().isString().isLength({ max: 500 }),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const result = adminOverrideHolding({
+        holdingId:      parseInt(req.params.id, 10),
+        actorUserId:    req.user.id,
+        newStatus:      req.body.new_status,
+        newDestination: req.body.new_destination || null,
+        notes:          req.body.notes || null,
+      });
+      res.json(result);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND')           return res.status(404).json({ error: err.message });
+      if (err.code === 'INVALID_STATUS')      return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_DESTINATION') return res.status(400).json({ error: err.message });
+      if (err.code === 'MISSING_DESTINATION') return res.status(400).json({ error: err.message });
+      console.error('POST /admin/holdings/:id/override error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 module.exports = router;

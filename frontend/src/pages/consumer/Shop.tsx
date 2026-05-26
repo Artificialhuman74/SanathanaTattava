@@ -19,6 +19,7 @@ interface Product {
   category: string;
   price: number;
   container_cost: number;
+  container_type?: '2.8L' | '5L' | null;
   stock: number;
   image_url: string;
   image_urls?: string | null;
@@ -26,9 +27,12 @@ interface Product {
   sku: string;
 }
 
+type CartMode = 'refill' | 'buy';
+
 interface CartItem {
   product: Product;
   quantity: number;
+  mode: CartMode;
 }
 
 interface FlyItem {
@@ -138,10 +142,12 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
-  const [cart, setCart] = useState<CartItem[]>(() => loadCart<Product>());
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    loadCart<Product>().map(i => ({ product: i.product, quantity: i.quantity, mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode }))
+  );
   const [cartOpen, setCartOpen] = useState(false);
   const [discountPct, setDiscountPct] = useState<number>(0);
-  const [orderedProductIds, setOrderedProductIds] = useState<Set<number> | null>(null);
+  const [refillCaps, setRefillCaps] = useState<Record<number, number>>({});
   const [shakingId, setShakingId] = useState<number | null>(null);
   const [cartIconBounce, setCartIconBounce] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -165,23 +171,19 @@ export default function Shop() {
       for (const { id, qty } of items) {
         const product = products.find(p => p.id === id);
         if (product && product.stock > 0) {
-          newCart.push({ product, quantity: Math.min(qty, product.stock) });
+          newCart.push({ product, quantity: Math.min(qty, product.stock), mode: 'buy' });
         }
       }
       if (newCart.length) {
         setCart((prev) => {
-          const map = new Map<number, CartItem>();
-          prev.forEach((i) => map.set(i.product.id, { ...i }));
+          const keyOf = (i: CartItem) => `${i.product.id}::${i.mode}`;
+          const map = new Map<string, CartItem>();
+          prev.forEach((i) => map.set(keyOf(i), { ...i }));
           newCart.forEach((i) => {
-            const ex = map.get(i.product.id);
-            if (!ex) {
-              map.set(i.product.id, i);
-              return;
-            }
-            map.set(i.product.id, {
-              product: i.product,
-              quantity: Math.min(i.product.stock, ex.quantity + i.quantity),
-            });
+            const k = keyOf(i);
+            const ex = map.get(k);
+            if (!ex) { map.set(k, i); return; }
+            map.set(k, { ...ex, quantity: Math.min(i.product.stock, ex.quantity + i.quantity) });
           });
           return Array.from(map.values()).filter(i => i.quantity > 0);
         });
@@ -217,7 +219,7 @@ export default function Shop() {
         const fresh = products.find(p => p.id === item.product.id);
         if (!fresh || fresh.stock <= 0) return;
         const qty = Math.min(item.quantity, fresh.stock);
-        if (qty > 0) merged.push({ product: fresh, quantity: qty });
+        if (qty > 0) merged.push({ product: fresh, quantity: qty, mode: item.mode });
       });
       return merged;
     });
@@ -229,14 +231,19 @@ export default function Shop() {
       .catch(() => {});
   }, []);
 
+  /* Refill caps — count of 'held' containers per current_product_id. */
   useEffect(() => {
-    if (!consumer) { setOrderedProductIds(new Set()); return; }
-    consumerApi.get('/consumer/ordered-product-ids')
-      .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
-      .catch(() => setOrderedProductIds(new Set()));
+    if (!consumer) { setRefillCaps({}); return; }
+    consumerApi.get('/consumer/refill-caps')
+      .then(r => setRefillCaps(r.data.caps || {}))
+      .catch(() => setRefillCaps({}));
   }, [consumer]);
 
-  const cartInProduct = (id: number) => cart.find(i => i.product.id === id)?.quantity ?? 0;
+  const cartInProduct = (id: number, mode: CartMode = 'buy') =>
+    cart.find(i => i.product.id === id && i.mode === mode)?.quantity ?? 0;
+  /* How many refills of this product are already reserved by other refill lines */
+  const refillReserved = (id: number) =>
+    cart.filter(i => i.product.id === id && i.mode === 'refill').reduce((s, i) => s + i.quantity, 0);
 
   useEffect(() => {
     return () => {
@@ -503,44 +510,71 @@ export default function Shop() {
   };
 
   /* ── Cart helpers ─────────────────────────────────────────────────── */
-  const addToCart = (product: Product, sourceEl?: HTMLElement | null) => {
+  const addToCart = (product: Product, sourceEl?: HTMLElement | null, mode: CartMode = 'buy') => {
     if (product.stock === 0) {
       setShakingId(product.id);
       setTimeout(() => setShakingId(null), 450);
       return;
     }
 
-    const existingQty = cartInProduct(product.id);
-    if (existingQty >= product.stock) return;
+    /* Refill mode: respect held-container cap (minus what's already reserved). */
+    if (mode === 'refill') {
+      const cap = refillCaps[product.id] || 0;
+      const already = refillReserved(product.id);
+      if (already >= cap) {
+        toast.error(`You hold ${cap} container(s) of ${product.name}`);
+        return;
+      }
+    }
+
+    /* Stock check across all lines for this product (refill + buy). */
+    const totalForProduct = cart
+      .filter(i => i.product.id === product.id)
+      .reduce((s, i) => s + i.quantity, 0);
+    if (totalForProduct >= product.stock) return;
+
+    const existingQty = cartInProduct(product.id, mode);
 
     setCart(prev => {
-      const existing = prev.find(i => i.product.id === product.id);
+      const existing = prev.find(i => i.product.id === product.id && i.mode === mode);
       if (existing) {
-        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i =>
+          i.product.id === product.id && i.mode === mode ? { ...i, quantity: i.quantity + 1 } : i
+        );
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: 1, mode }];
     });
 
-    // Animate only for unique product additions.
+    // Animate only when first adding this (product, mode).
     if (existingQty === 0) {
       triggerFlyToCart(product, sourceEl);
     }
   };
 
-  const updateQty = (id: number, qty: number) => {
-    if (qty < 1) { removeFromCart(id); return; }
-    const product = cart.find(i => i.product.id === id)?.product;
-    if (product && qty > product.stock) return;
-    setCart(prev => prev.map(i => i.product.id === id ? { ...i, quantity: qty } : i));
+  const updateQty = (id: number, qty: number, mode: CartMode = 'buy') => {
+    if (qty < 1) { removeFromCart(id, mode); return; }
+    const line = cart.find(i => i.product.id === id && i.mode === mode);
+    if (!line) return;
+    const product = line.product;
+    /* Stock cap across both modes for this product */
+    const otherModeQty = cart
+      .filter(i => i.product.id === id && i.mode !== mode)
+      .reduce((s, i) => s + i.quantity, 0);
+    if (qty + otherModeQty > product.stock) return;
+    /* Refill cap */
+    if (mode === 'refill' && qty > (refillCaps[id] || 0)) return;
+    setCart(prev => prev.map(i => (i.product.id === id && i.mode === mode) ? { ...i, quantity: qty } : i));
   };
 
-  const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
+  const removeFromCart = (id: number, mode: CartMode = 'buy') =>
+    setCart(prev => prev.filter(i => !(i.product.id === id && i.mode === mode)));
 
   const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const containerCostsTotal = orderedProductIds === null ? null : cart.reduce((s, i) => {
-    const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
-    return s + (isFirstTime ? i.product.container_cost : 0);
+  /* Container deposits: per-unit × qty on Buy lines only; Refill lines free. */
+  const containerCostsTotal = cart.reduce((s, i) => {
+    if (i.mode === 'refill') return s;
+    return s + (i.product.container_cost || 0) * i.quantity;
   }, 0);
 
   // Persist cart and broadcast cart count to shared header/state listeners.
@@ -565,7 +599,10 @@ export default function Shop() {
     navigate('/shop/checkout', { state: { cart } });
   };
 
-  const selectedQty = selectedProduct ? cartInProduct(selectedProduct.id) : 0;
+  const selectedBuyQty    = selectedProduct ? cartInProduct(selectedProduct.id, 'buy') : 0;
+  const selectedRefillQty = selectedProduct ? cartInProduct(selectedProduct.id, 'refill') : 0;
+  const selectedCap       = selectedProduct ? (refillCaps[selectedProduct.id] || 0) : 0;
+  const selectedHasContainer = !!selectedProduct?.container_type;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -652,9 +689,12 @@ export default function Shop() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {products.map(p => {
-            const inCart = cartInProduct(p.id);
+            const buyQty    = cartInProduct(p.id, 'buy');
+            const refillQty = cartInProduct(p.id, 'refill');
             const outOfStock = p.stock === 0;
             const images = getProductImages(p);
+            const cap       = refillCaps[p.id] || 0;
+            const hasContainer = !!p.container_type;
             return (
               <article
                 key={p.id}
@@ -689,17 +729,54 @@ export default function Shop() {
                   <div className="mt-2">
                     <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400 truncate">per {p.unit || 'can'}</p>
-                    {orderedProductIds !== null && (p.container_cost || 0) > 0 && !orderedProductIds.has(p.id) && (
-                      <p className="text-[11px] text-amber-600 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} container (one-time)</p>
+                    {hasContainer && (p.container_cost || 0) > 0 && (
+                      <p className="text-[11px] text-amber-600 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} container deposit (refundable)</p>
+                    )}
+                    {hasContainer && cap > 0 && (
+                      <p className="text-[11px] text-emerald-600 font-medium mt-0.5">You hold {cap} · refills free</p>
                     )}
                   </div>
                 </div>
 
                 {/* Full-width touch-first CTA bar */}
-                <div className="mt-auto border-t border-[#e8dcc8] p-2 bg-white" onClick={(e) => e.stopPropagation()}>
-                  {inCart === 0 ? (
+                <div className="mt-auto border-t border-[#e8dcc8] p-2 bg-white space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                  {/* Refill button (only when product has a container and consumer holds at least one) */}
+                  {hasContainer && cap > 0 && (
+                    refillQty === 0 ? (
+                      <button
+                        onClick={(e) => addToCart(p, e.currentTarget, 'refill')}
+                        disabled={outOfStock}
+                        className={`w-full min-h-[36px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                          outOfStock ? 'bg-slate-100 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]'
+                        }`}
+                      >
+                        <span className="truncate">Refill ({cap} held)</span>
+                      </button>
+                    ) : (
+                      <div className="w-full min-h-[36px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
+                        <button
+                          onClick={() => updateQty(p.id, refillQty - 1, 'refill')}
+                          className="w-9 h-9 flex items-center justify-center text-emerald-700"
+                          aria-label="Decrease refill"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <div className="flex-1 text-center text-emerald-800 text-xs font-bold">Refill · {refillQty}/{cap}</div>
+                        <button
+                          onClick={() => addToCart(p, null, 'refill')}
+                          disabled={refillQty >= cap}
+                          className="w-9 h-9 flex items-center justify-center text-emerald-700 disabled:opacity-40"
+                          aria-label="Increase refill"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    )
+                  )}
+                  {/* Buy more / Add to Cart */}
+                  {buyQty === 0 ? (
                     <button
-                      onClick={(e) => addToCart(p, e.currentTarget)}
+                      onClick={(e) => addToCart(p, e.currentTarget, 'buy')}
                       className={`w-full min-h-[40px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
                         outOfStock
                           ? `bg-red-50 text-red-500 ${shakingId === p.id ? 'animate-shake' : ''}`
@@ -707,22 +784,22 @@ export default function Shop() {
                       }`}
                     >
                       <ShoppingCart size={14} />
-                      <span className="truncate">Add to Cart</span>
+                      <span className="truncate">{hasContainer && cap > 0 ? 'Buy more' : 'Add to Cart'}</span>
                     </button>
                   ) : (
                     <div className="w-full min-h-[40px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
                       <button
-                        onClick={() => updateQty(p.id, inCart - 1)}
+                        onClick={() => updateQty(p.id, buyQty - 1, 'buy')}
                         className="w-10 h-10 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                         aria-label={`Decrease ${p.name}`}
                       >
                         <Minus size={16} />
                       </button>
                       <div className="flex-1 text-center text-brand-800 text-sm font-bold">
-                        <RollingNumber value={inCart} className="text-sm leading-none" />
+                        <RollingNumber value={buyQty} className="text-sm leading-none" />
                       </div>
                       <button
-                        onClick={() => addToCart(p)}
+                        onClick={() => addToCart(p, null, 'buy')}
                         className="w-10 h-10 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                         aria-label={`Increase ${p.name}`}
                       >
@@ -781,8 +858,11 @@ export default function Shop() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-xl font-extrabold text-slate-900">₹{selectedProduct.price.toFixed(2)}</p>
                     <p className="text-xs text-slate-400">per {selectedProduct.unit || 'can'}</p>
-                    {orderedProductIds !== null && (selectedProduct.container_cost || 0) > 0 && !orderedProductIds.has(selectedProduct.id) && (
-                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} container (one-time)</p>
+                    {selectedHasContainer && (selectedProduct.container_cost || 0) > 0 && (
+                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} container deposit (refundable)</p>
+                    )}
+                    {selectedHasContainer && selectedCap > 0 && (
+                      <p className="text-xs text-emerald-600 font-medium mt-0.5">You hold {selectedCap} · refills free</p>
                     )}
                   </div>
                 </div>
@@ -797,10 +877,40 @@ export default function Shop() {
             </div>
 
 
-            <div className="border-t border-slate-100 p-3 sm:p-4 bg-white">
-              {selectedQty === 0 ? (
+            <div className="border-t border-slate-100 p-3 sm:p-4 bg-white space-y-2">
+              {/* Refill control */}
+              {selectedHasContainer && selectedCap > 0 && (
+                selectedRefillQty === 0 ? (
+                  <button
+                    onClick={(e) => addToCart(selectedProduct, e.currentTarget, 'refill')}
+                    disabled={selectedProduct.stock === 0}
+                    className="w-full min-h-[42px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    Refill ({selectedCap} held · no deposit)
+                  </button>
+                ) : (
+                  <div className="w-full min-h-[42px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
+                    <button
+                      onClick={() => updateQty(selectedProduct.id, selectedRefillQty - 1, 'refill')}
+                      className="w-11 h-11 flex items-center justify-center text-emerald-700"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <div className="flex-1 text-center text-emerald-800 text-sm font-bold">Refill · {selectedRefillQty}/{selectedCap}</div>
+                    <button
+                      onClick={() => addToCart(selectedProduct, null, 'refill')}
+                      disabled={selectedRefillQty >= selectedCap}
+                      className="w-11 h-11 flex items-center justify-center text-emerald-700 disabled:opacity-40"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                )
+              )}
+              {/* Buy / Add to Cart */}
+              {selectedBuyQty === 0 ? (
                 <button
-                  onClick={(e) => addToCart(selectedProduct, e.currentTarget)}
+                  onClick={(e) => addToCart(selectedProduct, e.currentTarget, 'buy')}
                   className={`w-full min-h-[46px] rounded-xl text-sm sm:text-base font-semibold flex items-center justify-center gap-2 transition-colors ${
                     selectedProduct.stock === 0
                       ? 'bg-red-50 text-red-500'
@@ -808,22 +918,22 @@ export default function Shop() {
                   }`}
                 >
                   <ShoppingCart size={16} />
-                  {selectedProduct.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                  {selectedProduct.stock === 0 ? 'Out of Stock' : (selectedHasContainer && selectedCap > 0 ? 'Buy more' : 'Add to Cart')}
                 </button>
               ) : (
                 <div className="w-full min-h-[46px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
                   <button
-                    onClick={() => updateQty(selectedProduct.id, selectedQty - 1)}
+                    onClick={() => updateQty(selectedProduct.id, selectedBuyQty - 1, 'buy')}
                     className="w-12 h-12 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                     aria-label={`Decrease ${selectedProduct.name}`}
                   >
                     <Minus size={18} />
                   </button>
                   <div className="flex-1 text-center text-brand-800 text-base font-bold">
-                    <RollingNumber value={selectedQty} className="text-base leading-none" />
+                    <RollingNumber value={selectedBuyQty} className="text-base leading-none" />
                   </div>
                   <button
-                    onClick={() => addToCart(selectedProduct)}
+                    onClick={() => addToCart(selectedProduct, null, 'buy')}
                     className="w-12 h-12 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                     aria-label={`Increase ${selectedProduct.name}`}
                   >
@@ -943,10 +1053,11 @@ export default function Shop() {
                 <p className="font-medium">Your cart is empty</p>
                 <p className="text-xs mt-1">Add some products to get started</p>
               </div>
-            ) : cart.map(({ product, quantity }) => {
-              const isFirstTime = orderedProductIds !== null && !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+            ) : cart.map(({ product, quantity, mode }) => {
+              const isBuy = mode === 'buy';
+              const showsDeposit = isBuy && (product.container_cost || 0) > 0;
               return (
-                <div key={product.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
+                <div key={`${product.id}::${mode}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
                   <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
                     {getPrimaryImage(product)
                       ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
@@ -954,21 +1065,31 @@ export default function Shop() {
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        mode === 'refill' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {mode === 'refill' ? 'REFILL' : 'NEW'}
+                      </span>
+                    </div>
                     <p className="text-xs text-brand-600 font-semibold mt-0.5">₹{product.price.toFixed(2)}/{product.unit || 'unit'}</p>
-                    {isFirstTime && (
-                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{product.container_cost.toFixed(2)} container (one-time)</p>
+                    {showsDeposit && (
+                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{(product.container_cost * quantity).toFixed(2)} container deposit</p>
+                    )}
+                    {mode === 'refill' && (
+                      <p className="text-xs text-emerald-600 font-medium mt-0.5">Re-uses your held container (no deposit)</p>
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       <button
-                        onClick={() => updateQty(product.id, quantity - 1)}
+                        onClick={() => updateQty(product.id, quantity - 1, mode)}
                         className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
                       >
                         <Minus size={12} />
                       </button>
                       <span className="text-sm font-bold w-6 text-center">{quantity}</span>
                       <button
-                        onClick={() => updateQty(product.id, quantity + 1)}
+                        onClick={() => updateQty(product.id, quantity + 1, mode)}
                         className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
                       >
                         <Plus size={12} />
@@ -976,7 +1097,7 @@ export default function Shop() {
                       <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
                     </div>
                   </div>
-                  <button onClick={() => removeFromCart(product.id)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
+                  <button onClick={() => removeFromCart(product.id, mode)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -987,9 +1108,9 @@ export default function Shop() {
           {cart.length > 0 && (() => {
             const baseSubtotal = cartTotal / 1.05;
             const gstAmount    = cartTotal - baseSubtotal;
-            const rawTotal     = containerCostsTotal === null ? null : cartTotal + containerCostsTotal;
-            const cartFinal    = rawTotal === null ? null : Math.ceil(rawTotal);
-            const cartRounding = rawTotal === null ? 0 : cartFinal! - rawTotal;
+            const rawTotal     = cartTotal + containerCostsTotal;
+            const cartFinal    = Math.ceil(rawTotal);
+            const cartRounding = cartFinal - rawTotal;
             return (
             <div className="p-4 border-t border-slate-100 space-y-2 flex-shrink-0 pb-safe">
               <div className="flex justify-between items-center text-sm text-slate-500">
@@ -1004,9 +1125,9 @@ export default function Shop() {
                 <span>GST (5%)</span>
                 <span>₹{gstAmount.toFixed(2)}</span>
               </div>
-              {containerCostsTotal !== null && containerCostsTotal > 0 && (
+              {containerCostsTotal > 0 && (
                 <div className="flex justify-between items-baseline gap-3 text-sm text-amber-600 font-medium">
-                  <span className="flex-1 min-w-0">Container (one-time)</span>
+                  <span className="flex-1 min-w-0">Container deposit (refundable)</span>
                   <span className="whitespace-nowrap flex-shrink-0">+ ₹{containerCostsTotal.toFixed(2)}</span>
                 </div>
               )}
@@ -1018,9 +1139,7 @@ export default function Shop() {
               )}
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Total</span>
-                <span className="text-xl font-extrabold text-brand-600">
-                  {cartFinal === null ? '…' : `₹${cartFinal}`}
-                </span>
+                <span className="text-xl font-extrabold text-brand-600">₹{cartFinal}</span>
               </div>
               {cartRounding > 0 && (
                 <p className="text-xs text-slate-400 leading-relaxed">

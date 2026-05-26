@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon, ShoppingCart } from 'lucide-react';
+import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon, ShoppingCart, Package, Wallet } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import { getCartCount } from '../services/cartStorage';
 
@@ -144,6 +144,8 @@ export default function ConsumerLayout() {
               {consumer && (
                 <>
                   <NavItem to="/shop/orders" icon={<ShoppingBag size={18} />} label="My Orders" onClick={() => setMenuOpen(false)} />
+                  <NavItem to="/shop/containers" icon={<Package size={18} />} label="My Containers" onClick={() => setMenuOpen(false)} />
+                  <NavItem to="/shop/wallet" icon={<Wallet size={18} />} label="My Wallet" onClick={() => setMenuOpen(false)} />
                   <NavItem to="/shop/addresses" icon={<MapPin size={18} />} label="My Addresses" onClick={() => setMenuOpen(false)} />
                   <NavItem to="/shop/profile" icon={<User size={18} />} label="Profile" onClick={() => setMenuOpen(false)} />
                 </>

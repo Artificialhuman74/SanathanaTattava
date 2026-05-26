@@ -8,6 +8,11 @@ const {
 } = require('../services/notificationService');
 const { emitOrderUpdate, emitNotification } = require('../websocket/socketServer');
 const { sendDeliveryOtpEmail, sendOutForDeliveryEmail } = require('../services/emailService');
+const {
+  markHoldingsDelivered,
+  getPendingPickups,
+  finalizeRefund,
+} = require('../services/containerHoldingsService');
 
 const router = express.Router();
 
@@ -117,7 +122,8 @@ router.get('/orders/assigned', (req, res) => {
 
     // Attach items with product details for each order
     const itemStmt = db.prepare(`
-      SELECT coi.*, p.name AS product_name, p.image_url, p.unit, p.category
+      SELECT coi.*, p.name AS product_name, p.image_url, p.unit, p.category,
+             p.container_type
       FROM consumer_order_items coi
       LEFT JOIN products p ON p.id = coi.product_id
       WHERE coi.order_id = ?
@@ -156,7 +162,8 @@ router.get('/orders/:id', param('id').isInt(), (req, res) => {
 
     // Items with product details
     order.items = db.prepare(`
-      SELECT coi.*, p.name AS product_name, p.image_url, p.unit, p.category, p.description AS product_description
+      SELECT coi.*, p.name AS product_name, p.image_url, p.unit, p.category,
+             p.description AS product_description, p.container_type
       FROM consumer_order_items coi
       LEFT JOIN products p ON p.id = coi.product_id
       WHERE coi.order_id = ?
@@ -392,6 +399,11 @@ router.post(
         WHERE id = ?
       `).run(now, now, order.id);
 
+      /* Flip pending_delivery container holdings to 'held' — physical
+       * containers are now with the consumer. Non-fatal on error. */
+      try { markHoldingsDelivered(order.id); }
+      catch (err) { console.error(`[delivery] markHoldingsDelivered failed for order ${order.id}:`, err.message); }
+
       if (order.consumer_id) {
         notifyConsumer(
           order.consumer_id,
@@ -615,5 +627,52 @@ router.get('/history', (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Container pickups (Phase 6)
+ *
+ * Refund_requested holdings show up as pickup tasks for the linked dealer
+ * (and to all admins). The dealer goes to the consumer, inspects the
+ * container, and posts the outcome: 'refunded' (good condition) or
+ * 'forfeited' (damaged/missing). Store-credit refunds settle the ledger
+ * atomically inside finalizeRefund.
+ * ═════════════════════════════════════════════════════════════════════ */
+router.get('/container-pickups', (req, res) => {
+  try {
+    const rows = getPendingPickups({ userId: req.user.id, role: req.user.role });
+    res.json({ pickups: rows });
+  } catch (err) {
+    console.error('GET /delivery/container-pickups error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/container-pickups/:id/resolve',
+  param('id').isInt(),
+  body('outcome').isIn(['refunded', 'forfeited']),
+  body('notes').optional().isString(),
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const result = finalizeRefund({
+        holdingId: Number(req.params.id),
+        resolvedByUserId: req.user.id,
+        resolvedByRole: req.user.role,
+        outcome: req.body.outcome,
+        notes: req.body.notes,
+      });
+      res.json(result);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND')         return res.status(404).json({ error: err.message });
+      if (err.code === 'FORBIDDEN')         return res.status(403).json({ error: err.message });
+      if (err.code === 'INVALID_STATUS')    return res.status(400).json({ error: err.message });
+      if (err.code === 'INVALID_OUTCOME')   return res.status(400).json({ error: err.message });
+      console.error('POST /delivery/container-pickups/:id/resolve error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 module.exports = router;

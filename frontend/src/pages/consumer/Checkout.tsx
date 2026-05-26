@@ -6,8 +6,10 @@ import toast from 'react-hot-toast';
 import { clearCart, loadCart, saveCart } from '../../services/cartStorage';
 import {
   ArrowLeft, MapPin, Tag, CheckCircle2, Package, Home, Briefcase,
-  PlusCircle, User, Phone, Star, Hash, ShoppingBag,
+  PlusCircle, User, Phone, Star, Hash, ShoppingBag, Wallet,
 } from 'lucide-react';
+
+type CartMode = 'refill' | 'buy';
 
 interface CartItem {
   product: {
@@ -17,8 +19,10 @@ interface CartItem {
     container_cost: number;
     unit: string;
     image_url: string;
+    container_type?: '2.8L' | '5L' | null;
   };
   quantity: number;
+  mode: CartMode;
 }
 
 interface SavedAddress {
@@ -46,14 +50,21 @@ export default function Checkout() {
   const navigate     = useNavigate();
   const location     = useLocation();
 
-  const navCart: CartItem[] = (location.state as any)?.cart || [];
+  const navCart: CartItem[] = ((location.state as any)?.cart || []).map((i: any) => ({
+    product: i.product,
+    quantity: i.quantity,
+    mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode,
+  }));
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (navCart.length) return navCart;
-    return loadCart<CartItem['product']>().map(i => ({ product: i.product, quantity: i.quantity }));
+    return loadCart<CartItem['product']>().map(i => ({
+      product: i.product,
+      quantity: i.quantity,
+      mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode,
+    }));
   });
 
   const [discountPct,        setDiscountPct]        = useState(0);
-  const [orderedProductIds,  setOrderedProductIds]  = useState<Set<number> | null>(null);
   const [savedAddresses,     setSavedAddresses]     = useState<SavedAddress[]>([]);
   const [selectedAddressId,  setSelectedAddressId]  = useState<number | null>(null);
   const [useNewAddress,      setUseNewAddress]      = useState(false);
@@ -65,6 +76,10 @@ export default function Checkout() {
   /* Referral code — checkbox reveals input; skipped if already linked to account */
   const [hasCode,      setHasCode]      = useState(false);
   const [referralCode, setReferralCode] = useState('');
+
+  /* Store credit wallet (logged-in consumers only) */
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [applyCredit,   setApplyCredit]   = useState(false);
 
   const [placing, setPlacing] = useState(false);
   const [success, setSuccess] = useState<{
@@ -98,18 +113,19 @@ export default function Checkout() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!consumer) { setOrderedProductIds(new Set()); return; }
-    consumerApi.get('/consumer/ordered-product-ids')
-      .then(r => setOrderedProductIds(new Set(r.data.product_ids || [])))
-      .catch(() => setOrderedProductIds(new Set()));
-  }, [consumer]);
-
   /* Pre-fill from consumer account */
   useEffect(() => {
     if (consumer) {
       setNewAddr(a => ({ ...a, name: consumer.name || '', phone: consumer.phone || '' }));
     }
+  }, [consumer]);
+
+  /* Fetch wallet balance */
+  useEffect(() => {
+    if (!consumer) return;
+    consumerApi.get('/consumer/store-credit')
+      .then(r => setWalletBalance(Number(r.data.balance) || 0))
+      .catch(() => setWalletBalance(0));
   }, [consumer]);
 
   /* Fetch saved addresses for logged-in consumers */
@@ -129,9 +145,10 @@ export default function Checkout() {
 
   /* ── Calculations ──────────────────────────────────────────────────── */
   const cartTotal        = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const containerCostsTotal = orderedProductIds === null ? null : cart.reduce((s, i) => {
-    const isFirstTime = !orderedProductIds.has(i.product.id) && (i.product.container_cost || 0) > 0;
-    return s + (isFirstTime ? i.product.container_cost : 0);
+  /* Container deposit: per-unit × qty on Buy lines only; Refill lines free. */
+  const containerCostsTotal = cart.reduce((s, i) => {
+    if (i.mode === 'refill') return s;
+    return s + (i.product.container_cost || 0) * i.quantity;
   }, 0);
   const effectiveCode    = consumer?.referral_code_used || (hasCode ? referralCode : '');
   const hasReferral      = !!effectiveCode.trim();
@@ -145,17 +162,31 @@ export default function Checkout() {
 
   /* Raw total (pre-rounding) and final total (rounded UP to whole rupee).
    * Server mirrors this Math.ceil so the "Pay ₹X" button matches Razorpay. */
-  const rawTotal         = containerCostsTotal === null
-    ? null
-    : cartTotal - discountAmt + containerCostsTotal;
-  const finalTotal       = rawTotal === null ? null : Math.ceil(rawTotal);
-  const roundingAdj      = rawTotal === null ? 0 : finalTotal! - rawTotal;
+  const rawTotal         = cartTotal - discountAmt + containerCostsTotal;
+  const finalTotal       = Math.ceil(rawTotal);
+  const roundingAdj      = finalTotal - rawTotal;
+
+  /* Store credit applied — capped at finalTotal-1 so Razorpay always charges ≥ ₹1.
+   * Server mirrors this cap; we precompute here for accurate UI. */
+  const maxCreditUsable  = Math.max(0, finalTotal - 1);
+  const creditApplied    = applyCredit
+    ? Math.min(walletBalance, maxCreditUsable)
+    : 0;
+  const payableTotal     = Math.max(1, finalTotal - creditApplied);
 
   /* ── Place order ───────────────────────────────────────────────────── */
   const placeOrder = async () => {
     if (cart.length === 0) return;
-    const items = cart.map(i => ({ product_id: i.product.id, quantity: i.quantity }));
-    let payload: any = { items, referral_code: effectiveCode.trim() || undefined };
+    const items = cart.map(i => ({
+      product_id: i.product.id,
+      quantity: i.quantity,
+      is_refill: i.mode === 'refill',
+    }));
+    let payload: any = {
+      items,
+      referral_code: effectiveCode.trim() || undefined,
+      store_credit_to_apply: consumer && creditApplied > 0 ? creditApplied : undefined,
+    };
 
     if (consumer) {
       if (useNewAddress || savedAddresses.length === 0) {
@@ -626,6 +657,34 @@ export default function Checkout() {
               </div>
             )}
           </div>
+
+          {/* ── Store credit wallet ─────────────────────────────────── */}
+          {consumer && walletBalance > 0 && (
+            <div className="card p-5 sm:p-6">
+              <h2 className="font-bold text-slate-900 flex items-center gap-2 mb-4">
+                <Wallet size={16} className="text-emerald-600" /> Store Credit
+              </h2>
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={applyCredit}
+                  onChange={e => setApplyCredit(e.target.checked)}
+                  className="w-4 h-4 rounded accent-emerald-600 mt-0.5 flex-shrink-0"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-slate-700">
+                    Apply ₹{Math.min(walletBalance, maxCreditUsable).toFixed(2)} from my wallet
+                  </span>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Available balance: ₹{walletBalance.toFixed(2)}
+                    {walletBalance > maxCreditUsable && (
+                      <span> · capped at order total minus ₹1</span>
+                    )}
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* ── Right column: Order Summary ────────────────────────────── */}
@@ -634,10 +693,10 @@ export default function Checkout() {
             <h2 className="font-bold text-slate-900 mb-4">Order Summary</h2>
 
             <div className="space-y-3 max-h-64 overflow-y-auto mb-4">
-              {cart.map(({ product, quantity }) => {
-                const isFirstTime = orderedProductIds !== null && !orderedProductIds.has(product.id) && (product.container_cost || 0) > 0;
+              {cart.map(({ product, quantity, mode }) => {
+                const showsDeposit = mode === 'buy' && (product.container_cost || 0) > 0;
                 return (
-                  <div key={product.id} className="flex items-start gap-3">
+                  <div key={`${product.id}::${mode}`} className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
                       {product.image_url
                         ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
@@ -645,10 +704,20 @@ export default function Checkout() {
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 leading-snug line-clamp-2">{product.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-slate-900 leading-snug line-clamp-2">{product.name}</p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          mode === 'refill' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {mode === 'refill' ? 'REFILL' : 'NEW'}
+                        </span>
+                      </div>
                       <p className="text-xs text-slate-400 mt-0.5">×{quantity} · ₹{product.price.toFixed(2)}/{product.unit}</p>
-                      {isFirstTime && (
-                        <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{product.container_cost.toFixed(2)} container</p>
+                      {showsDeposit && (
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{(product.container_cost * quantity).toFixed(2)} container deposit</p>
+                      )}
+                      {mode === 'refill' && (
+                        <p className="text-xs text-emerald-600 font-medium mt-0.5">Re-uses held container</p>
                       )}
                     </div>
                     <span className="text-sm font-semibold text-slate-900 flex-shrink-0">
@@ -672,9 +741,9 @@ export default function Checkout() {
                 <span>GST (5%)</span>
                 <span>₹{gstAmount.toFixed(2)}</span>
               </div>
-              {containerCostsTotal !== null && containerCostsTotal > 0 && (
+              {containerCostsTotal > 0 && (
                 <div className="flex justify-between items-baseline gap-3 text-xs text-amber-600 font-semibold">
-                  <span className="flex-1 min-w-0 whitespace-nowrap">Container deposit (one-time)</span>
+                  <span className="flex-1 min-w-0 whitespace-nowrap">Container deposit (refundable)</span>
                   <span className="whitespace-nowrap flex-shrink-0">+ ₹{containerCostsTotal.toFixed(2)}</span>
                 </div>
               )}
@@ -693,35 +762,49 @@ export default function Checkout() {
               <div className="flex justify-between items-baseline font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
                 <span>Total</span>
                 <span className="flex items-baseline gap-2">
-                  {effectiveDiscount > 0 && finalTotal !== null && (
+                  {effectiveDiscount > 0 && (
                     <span className="text-sm font-medium text-slate-400 line-through">
-                      ₹{Math.ceil(cartTotal + (containerCostsTotal ?? 0))}
+                      ₹{Math.ceil(cartTotal + containerCostsTotal)}
                     </span>
                   )}
-                  <span className="text-brand-600">
-                    {finalTotal === null ? '…' : `₹${finalTotal}`}
-                  </span>
+                  <span className="text-brand-600">₹{finalTotal}</span>
                 </span>
               </div>
+              {creditApplied > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-emerald-600 font-semibold">
+                    <span className="flex items-center gap-1.5"><Wallet size={11} />Store credit applied</span>
+                    <span>−₹{creditApplied.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline font-extrabold text-base pt-1 border-t border-emerald-100 mt-1">
+                    <span>Payable now</span>
+                    <span className="text-emerald-700">₹{payableTotal.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
               {roundingAdj > 0 && (
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Your total has been rounded up to the nearest rupee.
                 </p>
               )}
-              {containerCostsTotal !== null && containerCostsTotal > 0 && (
+              {containerCostsTotal > 0 && (
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Container deposit is a one-time charge — you won't pay it again on refills. It's fully refundable if returned undamaged.
+                  Container deposit is charged per new container. Refundable when you return them undamaged, or skipped entirely on refill orders.
                 </p>
               )}
             </div>
 
             <button
               onClick={placeOrder}
-              disabled={placing || finalTotal === null}
+              disabled={placing}
               className="btn-primary w-full py-4 mt-5 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {placing && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {placing ? 'Processing…' : finalTotal === null ? 'Loading…' : consumer ? `Pay ₹${finalTotal}` : `Place Order · ₹${finalTotal}`}
+              {placing
+                ? 'Processing…'
+                : consumer
+                  ? `Pay ₹${creditApplied > 0 ? payableTotal.toFixed(2) : finalTotal}`
+                  : `Place Order · ₹${finalTotal}`}
             </button>
 
             {!consumer && (

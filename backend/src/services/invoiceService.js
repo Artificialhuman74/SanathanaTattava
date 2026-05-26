@@ -19,6 +19,7 @@ const fs = require('fs');
 const { renderInvoicePdf } = require('./invoicePdf');
 const { stateFromPincode } = require('./pincodeState');
 const { sendInvoiceEmail } = require('./emailService');
+const { createHoldingsForInvoice } = require('./containerHoldingsService');
 
 const BUSINESS_STATE = process.env.BUSINESS_STATE || 'Karnataka';
 
@@ -57,8 +58,9 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
   if (!consumer) { console.log(`[invoice] consumer ${order.consumer_id} not found`); return null; }
 
   const items = db.prepare(`
-    SELECT oi.product_id, oi.quantity, oi.price AS unit_price,
-           p.name, p.hsn_code, p.unit
+    SELECT oi.product_id, oi.quantity, oi.price AS unit_price, oi.is_refill,
+           oi.container_cost,
+           p.name, p.hsn_code, p.unit, p.container_type
     FROM consumer_order_items oi
     JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = ?
@@ -84,20 +86,22 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
     totalTaxable += taxable;
     totalTax     += tax;
     grossTotal   += gross;
+    const displayName = (it.is_refill && it.container_type) ? `${it.name} (Refill)` : it.name;
     return {
-      name:           it.name,
+      name:           displayName,
       hsn_code:       it.hsn_code || null,
       quantity:       it.quantity,
       unit_price:     it.unit_price,
       tax_rate:       rate,
       taxable_amount: taxable,
       tax_amount:     tax,
+      is_refill:      it.is_refill ? 1 : 0,
+      container_type: it.container_type || null,
     };
   });
 
   totalTaxable = +totalTaxable.toFixed(2);
   totalTax     = +totalTax.toFixed(2);
-  const totalAmount = order.total_amount; // already rounded by checkout
 
   const cgst = isIntraState ? +(totalTax / 2).toFixed(2) : 0;
   const sgst = isIntraState ? +(totalTax - cgst).toFixed(2) : 0;
@@ -107,6 +111,12 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
    * Safe under CGST Act §2(31) Explanation: refundable deposits aren't
    * "consideration" until forfeited. Must be refunded on undamaged return. */
   const containerDeposit = +(order.container_costs_total || 0).toFixed(2);
+
+  /* Invoice total = full taxable supply (including tax + refundable deposit).
+   * Phase 7: any store credit applied is a payment instrument, NOT a discount
+   * on the consideration. So the invoice total stays at gross; only the
+   * Razorpay charge (order.total_amount) is reduced. */
+  const totalAmount = +(totalTaxable + totalTax + containerDeposit).toFixed(2);
 
   const invoiceNumber = allocateInvoiceNumber();
 
@@ -128,6 +138,15 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
     paymentId || order.razorpay_payment_id || null
   );
   const invoiceId = result.lastInsertRowid;
+
+  /* ── Materialise per-unit container holdings (Phase 2) ─────────────
+   * One row per physical container in pending_delivery state. Flipped
+   * to 'held' when the delivery agent verifies OTP. */
+  try {
+    createHoldingsForInvoice({ invoiceId, orderId, consumerId: order.consumer_id });
+  } catch (err) {
+    console.error(`[invoice] holdings creation failed for ${invoiceNumber}:`, err.message);
+  }
 
   /* ── Render PDF ──────────────────────────────────────────────────── */
   let pdfPath = null;

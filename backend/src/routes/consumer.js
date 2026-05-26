@@ -11,8 +11,11 @@ const {
   notifyDealerDeliveryAssigned,
   notifyConsumerDeliveryAssigned,
   notifyLinkedDealerOrderRouted,
+  notifyContainerRefundRequested,
 } = require('../services/notificationService');
 const { emitOrderUpdate } = require('../websocket/socketServer');
+const containerHoldings = require('../services/containerHoldingsService');
+const storeCredit       = require('../services/storeCreditService');
 
 const router = express.Router();
 
@@ -60,6 +63,150 @@ router.get('/products/:id', (req, res) => {
   const product = db.prepare(`SELECT * FROM products WHERE id=? AND status='active'`).get(req.params.id);
   if (!product) return res.status(404).json({ error: 'Product not found' });
   res.json({ product });
+});
+
+/* ── Auth: Refill caps per product ────────────────────────────────────
+ * Returns the count of 'held' container_holdings rows grouped by
+ * current_product_id for the calling consumer. Used by the Shop UI to
+ * decide when to show the "Refill" CTA and to cap refill quantity.
+ * Pending-delivery and refund-requested rows are excluded. */
+router.get('/refill-caps', authConsumer, (req, res) => {
+  const rows = db.prepare(`
+    SELECT current_product_id AS product_id, COUNT(*) AS held
+    FROM container_holdings
+    WHERE consumer_id = ? AND status = 'held'
+    GROUP BY current_product_id
+  `).all(req.consumer.id);
+  const caps = {};
+  rows.forEach(r => { caps[r.product_id] = r.held; });
+  res.json({ caps });
+});
+
+/* ── My Containers (Phase 5) ────────────────────────────────────────────
+ * GET  /consumer/containers                          → { held, history, swappable }
+ * POST /consumer/containers/:id/request-refund       → opt-out flow
+ * POST /consumer/containers/:id/cancel-refund        → undo opt-out
+ * POST /consumer/containers/:id/swap                 → same-size product swap
+ */
+router.get('/containers', authConsumer, (req, res) => {
+  const held    = containerHoldings.getHeldContainers(req.consumer.id);
+  const history = containerHoldings.getAllHoldingsForConsumer(req.consumer.id);
+  /* Same-size swap targets, indexed by container_type. The frontend uses
+   * this to populate the swap modal's product picker. */
+  const swappable = db.prepare(`
+    SELECT id, name, unit, container_type, price
+      FROM products
+     WHERE status='active' AND container_type IS NOT NULL
+     ORDER BY container_type, name
+  `).all();
+  res.json({ held, history, swappable });
+});
+
+const handleHoldingError = (e, res) => {
+  if (e.code === 'NOT_FOUND')         return res.status(404).json({ error: e.message });
+  if (e.code === 'INVALID_STATUS')    return res.status(409).json({ error: e.message });
+  if (e.code === 'INVALID_DESTINATION') return res.status(400).json({ error: e.message });
+  if (e.code === 'SIZE_MISMATCH')     return res.status(400).json({ error: e.message });
+  if (e.code === 'NO_CHANGE')         return res.status(400).json({ error: e.message });
+  console.error('[containers] unexpected error', e);
+  return res.status(500).json({ error: 'Internal error' });
+};
+
+router.post('/containers/:id/request-refund',
+  authConsumer,
+  body('destination').isIn(['manual_bank', 'store_credit']),
+  body('notes').optional().isString().isLength({ max: 500 }),
+  (req, res) => {
+    const errs = validationResult(req);
+    if (!errs.isEmpty()) return res.status(400).json({ errors: errs.array() });
+    const holdingId = parseInt(req.params.id, 10);
+    try {
+      containerHoldings.requestRefund({
+        holdingId,
+        consumerId: req.consumer.id,
+        destination: req.body.destination,
+        notes: req.body.notes,
+      });
+
+      /* Fan out: linked dealer + every admin. Linked dealer is the pickup
+       * party regardless of distance. Errors are non-fatal. */
+      try {
+        const ctx = db.prepare(`
+          SELECT h.id AS holding_id, h.container_type,
+                 p.name AS product_name,
+                 c.id AS consumer_id, c.name AS consumer_name, c.phone AS consumer_phone,
+                 c.linked_dealer_id,
+                 u.name AS linked_dealer_name, u.email AS linked_dealer_email,
+                 (SELECT a.address || ', ' || a.pincode FROM consumer_addresses a
+                   WHERE a.consumer_id = c.id AND a.is_default = 1 LIMIT 1) AS consumer_address
+            FROM container_holdings h
+            JOIN products  p ON p.id = h.current_product_id
+            JOIN consumers c ON c.id = h.consumer_id
+            LEFT JOIN users u ON u.id = c.linked_dealer_id
+           WHERE h.id = ?
+        `).get(holdingId);
+        if (ctx) {
+          notifyContainerRefundRequested({
+            holdingId: ctx.holding_id,
+            consumerId: ctx.consumer_id,
+            consumerName: ctx.consumer_name,
+            consumerPhone: ctx.consumer_phone,
+            consumerAddress: ctx.consumer_address,
+            linkedDealerId: ctx.linked_dealer_id,
+            linkedDealerName: ctx.linked_dealer_name,
+            linkedDealerEmail: ctx.linked_dealer_email,
+            productName: ctx.product_name,
+            containerType: ctx.container_type,
+            destination: req.body.destination,
+            notes: req.body.notes,
+          });
+        }
+      } catch (notifyErr) {
+        console.error('[container-refund notify] failed:', notifyErr.message);
+      }
+
+      res.json({ ok: true });
+    } catch (e) { handleHoldingError(e, res); }
+  }
+);
+
+router.post('/containers/:id/cancel-refund', authConsumer, (req, res) => {
+  try {
+    containerHoldings.cancelRefund({
+      holdingId: parseInt(req.params.id, 10),
+      consumerId: req.consumer.id,
+    });
+    res.json({ ok: true });
+  } catch (e) { handleHoldingError(e, res); }
+});
+
+router.post('/containers/:id/swap',
+  authConsumer,
+  body('target_product_id').isInt({ min: 1 }),
+  (req, res) => {
+    const errs = validationResult(req);
+    if (!errs.isEmpty()) return res.status(400).json({ errors: errs.array() });
+    try {
+      containerHoldings.requestSwap({
+        holdingId: parseInt(req.params.id, 10),
+        consumerId: req.consumer.id,
+        targetProductId: parseInt(req.body.target_product_id, 10),
+      });
+      res.json({ ok: true });
+    } catch (e) { handleHoldingError(e, res); }
+  }
+);
+
+/* ── Phase 7: store credit wallet ─────────────────────────────────────── */
+router.get('/store-credit', authConsumer, (req, res) => {
+  try {
+    const balance = storeCredit.getBalance(req.consumer.id);
+    const ledger  = storeCredit.getLedger(req.consumer.id, { limit: 50 });
+    res.json({ balance, ledger });
+  } catch (err) {
+    console.error('GET /consumer/store-credit error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 /* ── Auth: Consumer Me ────────────────────────────────────────────────── */
@@ -278,6 +425,7 @@ router.post('/orders', authConsumer, [
   body('items').isArray({ min: 1 }).withMessage('At least one item required'),
   body('items.*.product_id').isInt({ min: 1 }),
   body('items.*.quantity').isInt({ min: 1 }),
+  body('items.*.is_refill').optional().isBoolean(),
   /* Accept either a saved address id OR inline fields */
   body('address_id').optional().isInt({ min: 1 }),
   body('delivery_address').optional().trim(),
@@ -292,6 +440,8 @@ router.post('/orders', authConsumer, [
   /* Geo fields for H3-based delivery assignment */
   body('delivery_latitude').optional().isFloat({ min: -90, max: 90 }),
   body('delivery_longitude').optional().isFloat({ min: -180, max: 180 }),
+  /* Phase 7 — wallet credit applied to this order. Capped server-side. */
+  body('store_credit_to_apply').optional().isFloat({ min: 0 }),
 ], async (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
@@ -435,62 +585,112 @@ router.post('/orders', authConsumer, [
     }
   }
 
-  /* Validate items (outside transaction — read-only checks) */
+  /* Validate items (outside transaction — read-only checks).
+   * Each item may carry an `is_refill` flag. Refill items don't charge a
+   * container deposit, but the aggregate refill quantity per product must
+   * not exceed the consumer's held-container cap. */
   let subtotal = 0;
   const resolved = [];
+  /* Per-product totals consolidated across cart lines (a consumer may have
+   * both a Refill line and a Buy-more line for the same product) — used for
+   * stock check and refill cap validation. */
+  const stockNeeded = new Map();   // product_id → total qty (refill + buy)
+  const refillWanted = new Map();  // product_id → total refill qty
+
   for (const item of items) {
     const product = db.prepare(`SELECT * FROM products WHERE id=? AND status='active'`).get(item.product_id);
     if (!product) return res.status(400).json({ error: `Product #${item.product_id} not found` });
-    if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
+    const isRefill = !!item.is_refill;
+    if (isRefill && !product.container_type) {
+      return res.status(400).json({ error: `${product.name} is not a refillable product` });
+    }
+    stockNeeded.set(item.product_id, (stockNeeded.get(item.product_id) || 0) + item.quantity);
+    if (isRefill) {
+      refillWanted.set(item.product_id, (refillWanted.get(item.product_id) || 0) + item.quantity);
+    }
     const total = product.price * item.quantity;
     subtotal += total;
-    resolved.push({ ...item, price: product.price, container_cost: product.container_cost || 0, total, name: product.name });
+    resolved.push({
+      ...item,
+      is_refill: isRefill,
+      price: product.price,
+      unit_container_cost: product.container_cost || 0,
+      total,
+      name: product.name,
+      container_type: product.container_type || null,
+    });
+  }
+
+  /* Stock check (after consolidating per-product qty) */
+  for (const [pid, qty] of stockNeeded) {
+    const product = db.prepare(`SELECT name, stock FROM products WHERE id=?`).get(pid);
+    if (product.stock < qty) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
+  }
+
+  /* Refill cap check — held containers per product for this consumer */
+  if (refillWanted.size > 0) {
+    const heldRows = db.prepare(`
+      SELECT current_product_id AS pid, COUNT(*) AS held
+      FROM container_holdings
+      WHERE consumer_id = ? AND status = 'held'
+      GROUP BY current_product_id
+    `).all(consumer.id);
+    const heldMap = new Map(heldRows.map(r => [r.pid, r.held]));
+    for (const [pid, wanted] of refillWanted) {
+      const cap = heldMap.get(pid) || 0;
+      if (wanted > cap) {
+        const product = db.prepare(`SELECT name FROM products WHERE id=?`).get(pid);
+        return res.status(400).json({ error: `Cannot refill ${wanted} × ${product.name} — you only hold ${cap} container(s) of this product` });
+      }
+    }
   }
 
   const discAmt  = parseFloat((subtotal * discPct / 100).toFixed(2));
   const orderNum = `CORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
   const order = db.transaction(() => {
-    /* Container cost check inside the transaction — atomic with the insert,
-       prevents double-charging if two orders are placed simultaneously.
-       Check paid + pending orders so rapid successive placements don't double-charge. */
-    const alreadyOrderedIds = new Set(
-      consumer
-        ? db.prepare(`
-            SELECT DISTINCT coi.product_id
-            FROM consumer_order_items coi
-            JOIN consumer_orders co ON coi.order_id = co.id
-            WHERE co.consumer_id = ? AND co.payment_status IN ('paid', 'pending')
-          `).all(consumer.id).map(r => r.product_id)
-        : []
-    );
+    /* Container deposit: charged per unit on Buy-more lines only. Refill
+     * lines re-use existing held containers, so no fresh deposit. */
     let containerCostsTotal = 0;
     const resolvedWithContainer = resolved.map(it => {
-      const itemContainerCost = (!alreadyOrderedIds.has(it.product_id) && it.container_cost > 0)
-        ? parseFloat(it.container_cost.toFixed(2))
-        : 0;
-      containerCostsTotal += itemContainerCost;
-      return { ...it, container_cost: itemContainerCost };
+      const lineContainerCost = it.is_refill
+        ? 0
+        : parseFloat((it.unit_container_cost * it.quantity).toFixed(2));
+      containerCostsTotal += lineContainerCost;
+      return { ...it, container_cost: lineContainerCost };
     });
     /* Round the final charge UP to the nearest whole rupee so the consumer is
      * billed an integer amount and our Razorpay invoice line items (clamped to
      * ≥ ₹1.00 each by gateway rules) can sum cleanly to the same total. */
-    const totalAmt = Math.ceil(subtotal - discAmt + containerCostsTotal);
+    const grossTotal = Math.ceil(subtotal - discAmt + containerCostsTotal);
+
+    /* Phase 7 — apply store credit if requested. Capped at grossTotal - 1
+     * so Razorpay always sees ≥ ₹1 (gateway minimum). The actual ledger
+     * debit happens at /payments/verify; here we only reserve the amount
+     * by stamping store_credit_applied. */
+    let creditApplied = 0;
+    const requestedCredit = parseFloat(req.body.store_credit_to_apply || 0);
+    if (requestedCredit > 0) {
+      const available = storeCredit.getAvailableBalance(consumer.id);
+      const usable    = Math.min(requestedCredit, available, Math.max(0, grossTotal - 1));
+      creditApplied = parseFloat(usable.toFixed(2));
+    }
+    const totalAmt = grossTotal - creditApplied;
 
     const or = db.prepare(`
       INSERT INTO consumer_orders
         (order_number,consumer_id,linked_dealer_id,delivery_dealer_id,is_direct,status,payment_status,
-         subtotal,discount_percent,discount_amount,container_costs_total,total_amount,pincode,delivery_address,notes,confirmation_sent,
+         subtotal,discount_percent,discount_amount,container_costs_total,store_credit_applied,total_amount,pincode,delivery_address,notes,confirmation_sent,
          delivery_latitude,delivery_longitude,delivery_h3_index,delivery_distance_km,assignment_status)
-      VALUES (?,?,?,?,?,'pending','pending',?,?,?,?,?,?,?,?,1,?,?,?,?,?)
+      VALUES (?,?,?,?,?,'pending','pending',?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)
     `).run(orderNum, consumer.id, linkedDealerId, deliveryDealerId, isDirect,
-           subtotal, discPct, discAmt, containerCostsTotal, totalAmt, pincode, delivery_address, notes||null,
+           subtotal, discPct, discAmt, containerCostsTotal, creditApplied, totalAmt, pincode, delivery_address, notes||null,
            hasGeo ? customerLat : null, hasGeo ? customerLng : null,
            deliveryH3Index, deliveryDistanceKm, assignmentStatus);
 
-    const insI = db.prepare(`INSERT INTO consumer_order_items (order_id,product_id,quantity,price,total,container_cost) VALUES (?,?,?,?,?,?)`);
+    const insI = db.prepare(`INSERT INTO consumer_order_items (order_id,product_id,quantity,price,total,container_cost,is_refill) VALUES (?,?,?,?,?,?,?)`);
     for (const it of resolvedWithContainer) {
-      insI.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total, it.container_cost);
+      insI.run(or.lastInsertRowid, it.product_id, it.quantity, it.price, it.total, it.container_cost, it.is_refill ? 1 : 0);
       db.prepare(`UPDATE products SET stock=stock-? WHERE id=?`).run(it.quantity, it.product_id);
     }
 

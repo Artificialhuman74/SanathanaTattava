@@ -185,7 +185,17 @@ function renderInvoicePdf(inv) {
       totalLine('IGST', `Rs. ${inr(inv.igst_amount)}`);
     }
     if (inv.container_deposit > 0) {
-      totalLine('Refundable Container Deposit', `Rs. ${inr(inv.container_deposit)}`);
+      /* Break the deposit by count of NEW containers (Buy lines with a
+       * container_type), so the consumer can reconcile against their
+       * holdings. Refill lines are excluded — they re-use existing
+       * containers. */
+      const depositUnits = (inv.items || [])
+        .filter(it => !it.is_refill && it.container_type)
+        .reduce((sum, it) => sum + (it.quantity || 0), 0);
+      const label = depositUnits > 0
+        ? `Refundable Container Deposit (${depositUnits} × new)`
+        : 'Refundable Container Deposit';
+      totalLine(label, `Rs. ${inr(inv.container_deposit)}`);
     }
     doc.strokeColor('#cbd5e1').lineWidth(0.5)
        .moveTo(totX, doc.y).lineTo(555, doc.y).stroke();

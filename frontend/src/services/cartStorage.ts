@@ -1,8 +1,11 @@
 const CART_KEY = 'tradehub_consumer_cart_v1';
 
+export type CartMode = 'refill' | 'buy';
+
 export interface StoredCartItem<T = any> {
   product: T;
   quantity: number;
+  mode?: CartMode;
 }
 
 function isBrowser(): boolean {
@@ -15,6 +18,7 @@ function sanitize<T>(items: any[]): StoredCartItem<T>[] {
     .map((it) => ({
       product: it?.product,
       quantity: Number(it?.quantity || 0),
+      mode: (it?.mode === 'refill' ? 'refill' : 'buy') as CartMode,
     }))
     .filter((it) => it.product && Number.isFinite(it.quantity) && it.quantity > 0)
     .map((it) => ({ ...it, quantity: Math.floor(it.quantity) }));

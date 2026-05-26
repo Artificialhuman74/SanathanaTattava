@@ -30,6 +30,8 @@ import AdminSettings      from './pages/admin/Settings';
 import AdminDealerInventory from './pages/admin/DealerInventory';
 import AdminFinance        from './pages/admin/Finance';
 import AdminContainerDeposits from './pages/admin/ContainerDeposits';
+import AdminManualRefunds      from './pages/admin/ManualRefunds';
+import AdminHoldings           from './pages/admin/Holdings';
 
 import TraderDashboard     from './pages/trader/Dashboard';
 import TraderProducts      from './pages/trader/Products';
@@ -46,6 +48,8 @@ import Shop                from './pages/consumer/Shop';
 import ConsumerLogin       from './pages/consumer/Login';
 import ConsumerRegister    from './pages/consumer/Register';
 import ConsumerOrders      from './pages/consumer/Orders';
+import ConsumerContainers  from './pages/consumer/Containers';
+import ConsumerWallet      from './pages/consumer/Wallet';
 import ConsumerAddresses   from './pages/consumer/Addresses';
 import ConsumerCheckout    from './pages/consumer/Checkout';
 import ConsumerProfile     from './pages/consumer/Profile';
@@ -60,6 +64,7 @@ import DeliveryOrders    from './pages/delivery/Orders';
 import DeliveryOrderDetail from './pages/delivery/OrderDetail';
 import DeliveryHistory   from './pages/delivery/History';
 import DeliveryProfile   from './pages/delivery/DeliveryProfile';
+import DeliveryPickups   from './pages/delivery/ContainerPickups';
 
 const PartnerRoutes = () => {
   const { user } = useAuth();
@@ -85,6 +90,8 @@ const PartnerRoutes = () => {
         <Route path="dealer-inventory" element={<AdminDealerInventory />} />
         <Route path="finance"         element={<AdminFinance />} />
         <Route path="container-deposits" element={<AdminContainerDeposits />} />
+        <Route path="manual-refunds"    element={<AdminManualRefunds />} />
+        <Route path="holdings"          element={<AdminHoldings />} />
         <Route path="settings"        element={<AdminSettings />} />
       </Route>
 
@@ -120,6 +127,7 @@ const DeliveryRoutes = () => {
         <Route path="dashboard" element={<DeliveryDashboard />} />
         <Route path="orders"    element={<DeliveryOrders />} />
         <Route path="orders/:id" element={<DeliveryOrderDetail />} />
+        <Route path="pickups"   element={<DeliveryPickups />} />
         <Route path="history"   element={<DeliveryHistory />} />
         <Route path="profile"   element={<DeliveryProfile />} />
       </Route>
@@ -142,6 +150,8 @@ const ConsumerRoutes = () => (
       <Route path="verify-pending"  element={<VerifyPending />} />
       <Route path="resend-verification" element={<VerifyPending />} />
       <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />
+      <Route path="containers" element={<ConsumerRoute><ConsumerContainers /></ConsumerRoute>} />
+      <Route path="wallet"     element={<ConsumerRoute><ConsumerWallet /></ConsumerRoute>} />
       <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
       <Route path="checkout"  element={<ConsumerCheckout />} />
       <Route path="profile"         element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />

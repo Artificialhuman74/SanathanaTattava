@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LocationPrompt from '../components/LocationPrompt';
 import api from '../api/axios';
 import {
-  Home, Package, Clock, User, Truck, ToggleLeft, ToggleRight,
+  Home, Package, Clock, User, Truck, ToggleLeft, ToggleRight, RotateCcw,
 } from 'lucide-react';
 
 export default function DeliveryLayout() {
@@ -37,6 +37,7 @@ export default function DeliveryLayout() {
   const tabs = [
     { to: '/delivery/dashboard', icon: Home,    label: 'Dashboard' },
     { to: '/delivery/orders',    icon: Package,  label: 'Orders' },
+    { to: '/delivery/pickups',   icon: RotateCcw, label: 'Pickups' },
     { to: '/delivery/history',   icon: Clock,    label: 'History' },
     { to: '/delivery/profile',   icon: User,     label: 'Profile' },
   ];
