@@ -199,27 +199,32 @@ function renderInvoicePdf(inv) {
                40, doc.y, { width: 515, align: 'left' });
     }
 
-    doc.moveDown(1.5);
+    /* ── Bottom block: PAYMENT RECEIVED stamp + thank-you, pinned near footer.
+     * We jump to a fixed Y so the stamp always sits just above the footer line,
+     * regardless of how short the invoice body is. Math.max ensures we still
+     * flow normally if a very long item list has already pushed past that point. */
+    const bottomBlockY = Math.max(doc.y + 16, 680);
+    doc.y = bottomBlockY;
 
-    /* ── Payment received stamp ─────────────────────────────────────── */
-    doc.rect(40, doc.y, 515, 36).fill('#f0fdf4').stroke('#16a34a');
+    /* Payment received stamp */
+    const stampY = doc.y;
+    doc.rect(40, stampY, 515, 36).fill('#f0fdf4').stroke('#16a34a');
     doc.fillColor('#15803d').fontSize(13).font('Helvetica-Bold')
-       .text('PAYMENT RECEIVED', 40, doc.y - 28, { align: 'center', width: 515 });
+       .text('PAYMENT RECEIVED', 40, stampY + 6, { align: 'center', width: 515 });
     doc.fontSize(9).font('Helvetica').fillColor('#166534')
        .text(isSupplementary
               ? 'The forfeited deposit (already paid earlier) is recognised here as taxable consideration. No new payment is due.'
               : 'This invoice is a receipt for an already-paid order. No payment is due.',
-            40, doc.y, { align: 'center', width: 515 });
-    doc.moveDown(1.2);
+            40, stampY + 22, { align: 'center', width: 515 });
+    doc.y = stampY + 44;
 
-    /* ── Thank-you note (only on original tax invoice) ──────────────── */
+    /* Thank-you note (only on original tax invoice) */
     if (!isSupplementary) {
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#14532d')
          .text(`Thank you for choosing ${BUSINESS_BRAND || BUSINESS_NAME}!`, 40, doc.y, { align: 'center', width: 515 });
       doc.moveDown(0.3);
       doc.fontSize(9).font('Helvetica-Oblique').fillColor('#475569')
          .text('We are grateful for your trust in our pure, cold-pressed oils and look forward to serving you again.', 40, doc.y, { align: 'center', width: 515 });
-      doc.moveDown(1.2);
     }
 
     /* ── Footer ─────────────────────────────────────────────────────── */
