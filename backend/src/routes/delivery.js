@@ -63,7 +63,7 @@ router.get('/fleet/orders', (req, res) => {
     const orders = db.prepare(`
       SELECT co.id, co.order_number, co.status AS order_status,
              co.delivery_status, co.total_amount, co.delivery_address,
-             co.delivery_phone, co.created_at, co.delivery_dealer_id,
+             co.created_at, co.delivery_dealer_id,
              c.name  AS consumer_name,
              c.phone AS consumer_phone,
              u.name  AS dealer_name,
