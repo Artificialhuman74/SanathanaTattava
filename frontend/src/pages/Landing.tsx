@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Leaf, Droplets, Heart, Zap, Shield, Users, ArrowRight, ChevronDown } from 'lucide-react';
+import { Leaf, Droplets, Heart, Zap, Shield, Users, ArrowRight, ChevronDown } from 'lucide-react';
+import { PARTNER_SITE_URL } from '../appMode';
 
 /* ── Colour tokens ─────────────────────────────────────────────────────── */
 const C = {
@@ -342,18 +343,20 @@ export default function Landing() {
             style={{ background: C.greenDeep, borderColor: `${C.gold}33` }}
           >
             <div>
-              <h3 className="font-bold text-lg mb-1" style={{ color: C.goldLight }}>Already a dealer?</h3>
+              <h3 className="font-bold text-lg mb-1" style={{ color: C.goldLight }}>Ready to grow with us?</h3>
               <p className="text-sm" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                Log in to your partner dashboard to manage orders, inventory, and commissions.
+                Apply to become a partner — manage orders, inventory, and commissions from your dashboard.
               </p>
             </div>
-            <button
-              onClick={() => navigate('/login')}
+            <a
+              href={PARTNER_SITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex-shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-colors"
               style={{ background: C.gold, color: C.greenDeep }}
             >
-              Partner Login <ArrowRight size={14} />
-            </button>
+              Join Us <ArrowRight size={14} />
+            </a>
           </div>
         </div>
       </section>
@@ -363,18 +366,9 @@ export default function Landing() {
         className="py-8 px-6 text-center border-t"
         style={{ background: C.cream, borderColor: C.border }}
       >
-        <p className="text-xs mb-2" style={{ color: C.textMuted }}>
+        <p className="text-xs" style={{ color: C.textMuted }}>
           &copy; {new Date().getFullYear()} Sanathana Tattva. All rights reserved.
         </p>
-        <div className="flex items-center justify-center gap-4 text-xs" style={{ color: C.border }}>
-          <button onClick={() => navigate('/login')} className="hover:opacity-70 transition-opacity flex items-center gap-1">
-            <Lock size={9} /> Partner Portal
-          </button>
-          <span>·</span>
-          <button onClick={() => navigate('/login')} className="hover:opacity-70 transition-opacity flex items-center gap-1">
-            <Lock size={9} /> Admin
-          </button>
-        </div>
       </footer>
 
     </div>

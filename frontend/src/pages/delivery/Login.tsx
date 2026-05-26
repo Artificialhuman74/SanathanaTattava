@@ -21,8 +21,8 @@ export default function DeliveryLogin() {
       const stored = localStorage.getItem('user');
       const user = stored ? JSON.parse(stored) : null;
 
-      if (!user || user.role !== 'trader') {
-        // Not a trader — logout and show error
+      if (!user || (user.role !== 'trader' && user.role !== 'admin')) {
+        // Only traders and admins can sign into the delivery portal
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setError('This account is not authorized as a delivery partner. Please contact admin.');
