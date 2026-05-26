@@ -139,6 +139,10 @@ const { UPLOADS_DIR } = require('./middleware/uploadProof');
 app.use('/uploads', express.static(UPLOADS_DIR, {
   maxAge: '7d',
   fallthrough: false,
+  setHeaders: (res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
 }));
 
 // ─── API Routes ───────────────────────────────────────────────────────────
