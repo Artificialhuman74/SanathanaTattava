@@ -165,7 +165,7 @@ export default function Landing() {
             borderRadius: `0 0 ${logoRadius}px ${logoRadius}px`,
           }}>
             <img
-              src="/logo.webp"
+              src="/Gemini_Generated_Image_agra6kagra6kagra.png"
               alt="Sanathana Tattva"
               className="w-full h-full object-cover"
               style={{ objectPosition: 'center center' }}
@@ -274,7 +274,7 @@ export default function Landing() {
         style={{ background: C.greenDeep }}
       >
         <img
-          src="/logo.webp"
+          src="/Gemini_Generated_Image_agra6kagra6kagra.png"
           alt=""
           aria-hidden
           className="absolute inset-0 w-full h-full object-cover opacity-[0.07] pointer-events-none"

@@ -997,30 +997,31 @@ function runMigrations(db) {
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-   * Migration: Convert product image data URLs from JPEG → WebP
+   * Migration: Convert product image data URLs from WebP → JPEG (q=92)
    *
-   * Historically the admin Inventory cropper exported images as base64
-   * JPEG (image/jpeg @ q=0.85, 800×800) and stored them directly in
-   * products.image_url / products.image_urls. WebP at similar perceptual
-   * quality is ~30% smaller, which shrinks both the SQLite row size and
-   * every product-list API response.
+   * An earlier migration converted product images from JPEG → WebP for
+   * smaller payloads, but WebP at our quality setting produced visibly
+   * "cheap" results on product detail views. We're moving back to JPEG
+   * at q=92 (visually crisp, universally supported).
    *
-   * This migration is idempotent: rows whose data URL already starts with
-   * "data:image/webp" are skipped. Non-data-URL values (e.g. external
-   * https:// URLs) are also left untouched.
+   * This migration is idempotent and only touches WebP data URLs:
+   *   - data:image/webp;base64,...  → re-encoded as JPEG q=92
+   *   - data:image/jpeg;base64,...  → left alone (don't re-encode and
+   *                                   lose more quality)
+   *   - anything else (http URL, null) → left alone
    * ═══════════════════════════════════════════════════════════════════ */
   try {
     const sharp = require('sharp');
-    const isJpegDataUrl = (s) =>
-      typeof s === 'string' && s.startsWith('data:image/jpeg;base64,');
-    const toWebpDataUrl = async (jpegDataUrl) => {
-      const b64 = jpegDataUrl.slice('data:image/jpeg;base64,'.length);
+    const isWebpDataUrl = (s) =>
+      typeof s === 'string' && s.startsWith('data:image/webp;base64,');
+    const toJpegDataUrl = async (webpDataUrl) => {
+      const b64 = webpDataUrl.slice('data:image/webp;base64,'.length);
       const buf = Buffer.from(b64, 'base64');
       const out = await sharp(buf)
         .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 80 })
+        .jpeg({ quality: 92, mozjpeg: true })
         .toBuffer();
-      return `data:image/webp;base64,${out.toString('base64')}`;
+      return `data:image/jpeg;base64,${out.toString('base64')}`;
     };
 
     const rows = db.prepare(`SELECT id, image_url, image_urls FROM products`).all();
@@ -1029,8 +1030,6 @@ function runMigrations(db) {
     let scannedProducts  = 0;
     const update = db.prepare(`UPDATE products SET image_url=?, image_urls=? WHERE id=?`);
 
-    // Run conversion inline (async) — startup blocks until done, which is
-    // acceptable for a one-time pass over the product catalog.
     const work = (async () => {
       for (const r of rows) {
         scannedProducts++;
@@ -1038,13 +1037,13 @@ function runMigrations(db) {
         let urls    = r.image_urls;
         let changed = false;
 
-        if (isJpegDataUrl(primary)) {
+        if (isWebpDataUrl(primary)) {
           try {
-            primary = await toWebpDataUrl(primary);
+            primary = await toJpegDataUrl(primary);
             convertedPrimary++;
             changed = true;
           } catch (e) {
-            console.warn(`[migration] webp convert failed for product ${r.id} primary:`, e.message);
+            console.warn(`[migration] jpeg convert failed for product ${r.id} primary:`, e.message);
           }
         }
 
@@ -1054,13 +1053,13 @@ function runMigrations(db) {
           if (Array.isArray(parsed)) {
             let arrChanged = false;
             for (let i = 0; i < parsed.length; i++) {
-              if (isJpegDataUrl(parsed[i])) {
+              if (isWebpDataUrl(parsed[i])) {
                 try {
-                  parsed[i] = await toWebpDataUrl(parsed[i]);
+                  parsed[i] = await toJpegDataUrl(parsed[i]);
                   convertedExtras++;
                   arrChanged = true;
                 } catch (e) {
-                  console.warn(`[migration] webp convert failed for product ${r.id} extra[${i}]:`, e.message);
+                  console.warn(`[migration] jpeg convert failed for product ${r.id} extra[${i}]:`, e.message);
                 }
               }
             }
@@ -1075,21 +1074,18 @@ function runMigrations(db) {
       }
     })();
 
-    // Block startup on completion. better-sqlite3 is sync, so we use a
-    // deasync-style poll via Atomics on a SharedArrayBuffer? No — simpler:
-    // we just run this as a fire-and-log task and let the server continue.
     work
       .then(() => {
         if (convertedPrimary || convertedExtras) {
           console.log(
-            `[migration] products: converted ${convertedPrimary} primary + ` +
-            `${convertedExtras} extra image(s) to WebP (scanned ${scannedProducts} products)`
+            `[migration] products: re-encoded ${convertedPrimary} primary + ` +
+            `${convertedExtras} extra image(s) WebP → JPEG q=92 (scanned ${scannedProducts} products)`
           );
         }
       })
-      .catch(err => console.warn('[migration] products webp conversion failed:', err.message));
+      .catch(err => console.warn('[migration] products jpeg conversion failed:', err.message));
   } catch (e) {
-    console.warn('[migration] skipping products webp conversion (sharp unavailable):', e.message);
+    console.warn('[migration] skipping products jpeg conversion (sharp unavailable):', e.message);
   }
 
   console.log('[migration] all migrations applied');
