@@ -67,7 +67,7 @@ export default function ConsumerRegister() {
 
         <div className="text-center mb-6">
           <Link to="/" className="inline-flex items-center gap-2.5 justify-center">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-10 w-10 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <img src="/logo.webp" className="h-10 w-10 object-contain rounded-xl" alt="Sanathana Tattva" />
             <span className="text-xl font-extrabold text-slate-900 leading-tight">Sanathana Tattva</span>
           </Link>
           <p className="text-slate-500 mt-2 text-sm">Create your account</p>

@@ -98,7 +98,7 @@ export function showBrowserNotification(
   try {
     const notif = new Notification(title, {
       body,
-      icon: options?.icon || '/Gemini_Generated_Image_agra6kagra6kagra.png',
+      icon: options?.icon || '/logo-192.png',
       tag: options?.tag || `tradehub-${Date.now()}`,
       // silent: false → OS plays its default notification sound
     });

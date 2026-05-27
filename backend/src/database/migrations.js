@@ -996,6 +996,102 @@ function runMigrations(db) {
     console.log(`[migration] container_holdings: backfill complete — ${created.n} held row(s)`);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Convert product image data URLs from JPEG → WebP
+   *
+   * Historically the admin Inventory cropper exported images as base64
+   * JPEG (image/jpeg @ q=0.85, 800×800) and stored them directly in
+   * products.image_url / products.image_urls. WebP at similar perceptual
+   * quality is ~30% smaller, which shrinks both the SQLite row size and
+   * every product-list API response.
+   *
+   * This migration is idempotent: rows whose data URL already starts with
+   * "data:image/webp" are skipped. Non-data-URL values (e.g. external
+   * https:// URLs) are also left untouched.
+   * ═══════════════════════════════════════════════════════════════════ */
+  try {
+    const sharp = require('sharp');
+    const isJpegDataUrl = (s) =>
+      typeof s === 'string' && s.startsWith('data:image/jpeg;base64,');
+    const toWebpDataUrl = async (jpegDataUrl) => {
+      const b64 = jpegDataUrl.slice('data:image/jpeg;base64,'.length);
+      const buf = Buffer.from(b64, 'base64');
+      const out = await sharp(buf)
+        .resize({ width: 800, height: 800, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+      return `data:image/webp;base64,${out.toString('base64')}`;
+    };
+
+    const rows = db.prepare(`SELECT id, image_url, image_urls FROM products`).all();
+    let convertedPrimary = 0;
+    let convertedExtras  = 0;
+    let scannedProducts  = 0;
+    const update = db.prepare(`UPDATE products SET image_url=?, image_urls=? WHERE id=?`);
+
+    // Run conversion inline (async) — startup blocks until done, which is
+    // acceptable for a one-time pass over the product catalog.
+    const work = (async () => {
+      for (const r of rows) {
+        scannedProducts++;
+        let primary = r.image_url;
+        let urls    = r.image_urls;
+        let changed = false;
+
+        if (isJpegDataUrl(primary)) {
+          try {
+            primary = await toWebpDataUrl(primary);
+            convertedPrimary++;
+            changed = true;
+          } catch (e) {
+            console.warn(`[migration] webp convert failed for product ${r.id} primary:`, e.message);
+          }
+        }
+
+        if (typeof urls === 'string' && urls.length > 0) {
+          let parsed = null;
+          try { parsed = JSON.parse(urls); } catch (_) { parsed = null; }
+          if (Array.isArray(parsed)) {
+            let arrChanged = false;
+            for (let i = 0; i < parsed.length; i++) {
+              if (isJpegDataUrl(parsed[i])) {
+                try {
+                  parsed[i] = await toWebpDataUrl(parsed[i]);
+                  convertedExtras++;
+                  arrChanged = true;
+                } catch (e) {
+                  console.warn(`[migration] webp convert failed for product ${r.id} extra[${i}]:`, e.message);
+                }
+              }
+            }
+            if (arrChanged) {
+              urls = JSON.stringify(parsed);
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) update.run(primary, urls, r.id);
+      }
+    })();
+
+    // Block startup on completion. better-sqlite3 is sync, so we use a
+    // deasync-style poll via Atomics on a SharedArrayBuffer? No — simpler:
+    // we just run this as a fire-and-log task and let the server continue.
+    work
+      .then(() => {
+        if (convertedPrimary || convertedExtras) {
+          console.log(
+            `[migration] products: converted ${convertedPrimary} primary + ` +
+            `${convertedExtras} extra image(s) to WebP (scanned ${scannedProducts} products)`
+          );
+        }
+      })
+      .catch(err => console.warn('[migration] products webp conversion failed:', err.message));
+  } catch (e) {
+    console.warn('[migration] skipping products webp conversion (sharp unavailable):', e.message);
+  }
+
   console.log('[migration] all migrations applied');
 }
 

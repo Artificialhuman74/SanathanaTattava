@@ -44,7 +44,7 @@ export default function DeliveryLogin() {
       <div className="w-full max-w-sm">
         {/* Branding */}
         <div className="text-center mb-6">
-          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-16 w-16 object-contain rounded-2xl mx-auto mb-4" alt="Sanathana Tattva" />
+          <img src="/logo.webp" className="h-16 w-16 object-contain rounded-2xl mx-auto mb-4" alt="Sanathana Tattva" />
           <h1 className="text-2xl font-bold text-white">Sanathana Tattva</h1>
           <p className="text-green-200 text-sm mt-1">Delivery Partner Sign In</p>
         </div>

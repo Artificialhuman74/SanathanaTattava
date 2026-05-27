@@ -90,7 +90,7 @@ export default function DeliveryLayout() {
       {/* Top Header */}
       <header className="bg-[#14532d] text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 object-contain rounded-lg flex-shrink-0" alt="logo" />
+          <img src="/logo.webp" className="h-8 w-8 object-contain rounded-lg flex-shrink-0" alt="logo" />
           <div>
             <h1 className="text-sm font-bold leading-tight">Sanathana Tattva Delivery</h1>
             <p className="text-xs text-emerald-100 leading-tight">{user?.name}</p>

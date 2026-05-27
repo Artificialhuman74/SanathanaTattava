@@ -34,7 +34,7 @@ export default function AdminLayout() {
     <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
-        <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-9 w-9 object-contain rounded-lg flex-shrink-0" alt="Sanathana Tattva" />
+        <img src="/logo.webp" className="h-9 w-9 object-contain rounded-lg flex-shrink-0" alt="Sanathana Tattva" />
         <span className="text-white font-bold text-sm leading-tight">Sanathana Tattva</span>
         {mobile && (
           <button onClick={() => setSidebarOpen(false)} className="ml-auto text-white/60 hover:text-white">

@@ -129,7 +129,7 @@ export default function Landing() {
         }}
       >
         <div className="max-w-2xl mx-auto px-5 h-14 flex items-center gap-3">
-          <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-8 w-8 rounded-lg object-contain flex-shrink-0" alt="logo" />
+          <img src="/logo.webp" className="h-8 w-8 rounded-lg object-contain flex-shrink-0" alt="logo" />
           <span className="font-bold text-sm flex-1 truncate" style={{ color: C.text }}>Sanathana Tattva</span>
           <button
             onClick={() => navigate('/shop/register')}
@@ -165,7 +165,7 @@ export default function Landing() {
             borderRadius: `0 0 ${logoRadius}px ${logoRadius}px`,
           }}>
             <img
-              src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+              src="/logo.webp"
               alt="Sanathana Tattva"
               className="w-full h-full object-cover"
               style={{ objectPosition: 'center center' }}
@@ -274,7 +274,7 @@ export default function Landing() {
         style={{ background: C.greenDeep }}
       >
         <img
-          src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+          src="/logo.webp"
           alt=""
           aria-hidden
           className="absolute inset-0 w-full h-full object-cover opacity-[0.07] pointer-events-none"

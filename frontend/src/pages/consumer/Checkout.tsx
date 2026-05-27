@@ -343,7 +343,7 @@ export default function Checkout() {
         currency,
         name:        'Sanathana Tattva',
         description: `Order ${data.order.order_number}`,
-        image:       '/Gemini_Generated_Image_agra6kagra6kagra.png',
+        image:       '/logo-192.png',
         order_id:    razorpay_order_id,
         handler: async (response: any) => {
           setPlacing(true);

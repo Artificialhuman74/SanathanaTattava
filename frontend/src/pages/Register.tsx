@@ -80,7 +80,7 @@ export default function Register() {
             <ArrowLeft size={14} /> Back to Login
           </Link>
           <div className="flex items-center justify-center gap-3">
-            <img src="/Gemini_Generated_Image_agra6kagra6kagra.png" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
+            <img src="/logo.webp" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
             <span className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
           </div>
           <p className="text-white/60 mt-2 text-sm">Create your partner account</p>

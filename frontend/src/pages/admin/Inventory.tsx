@@ -167,7 +167,7 @@ export default function AdminInventory() {
         completedCrop.width * scaleX, completedCrop.height * scaleY,
         0, 0, 800, 800
       );
-      dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      dataUrl = canvas.toDataURL('image/webp', 0.85);
     }
     if (target === 'primary') {
       setForm(f => ({ ...f, image_url: dataUrl }));

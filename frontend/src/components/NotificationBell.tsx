@@ -101,7 +101,7 @@ export default function NotificationBell({ variant = 'dealer', align = 'right' }
       if (document.hidden || !open) {
         if (isNotificationPermitted()) {
           showBrowserNotification(notif.title, notif.body, {
-            icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
+            icon: '/logo-192.png',
             tag: `tradehub-notif-${notif.id}`,
             onClick: () => {
               window.focus();
@@ -113,7 +113,7 @@ export default function NotificationBell({ variant = 'dealer', align = 'right' }
             setPushPermission(granted ? 'granted' : 'denied');
             if (granted) {
               showBrowserNotification(notif.title, notif.body, {
-                icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
+                icon: '/logo-192.png',
                 tag: `tradehub-notif-${notif.id}`,
               });
             }
@@ -162,7 +162,7 @@ export default function NotificationBell({ variant = 'dealer', align = 'right' }
     setPushPermission(granted ? 'granted' : 'denied');
     if (granted) {
       showBrowserNotification('Notifications enabled', 'You will now receive push notifications from Sanathana Tattva.', {
-        icon: '/Gemini_Generated_Image_agra6kagra6kagra.png',
+        icon: '/logo-192.png',
       });
     }
   };

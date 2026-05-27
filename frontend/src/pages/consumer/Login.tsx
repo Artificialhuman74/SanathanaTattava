@@ -41,7 +41,7 @@ export default function ConsumerLogin() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">
       {/* Logo as background */}
       <img
-        src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+        src="/logo.webp"
         className="absolute inset-0 z-0 w-full h-full object-cover opacity-15 pointer-events-none"
         style={{ objectPosition: 'center' }}
         alt=""
