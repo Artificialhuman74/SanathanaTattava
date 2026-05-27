@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  LayoutDashboard, Package, Package2, Users, ShoppingBag,
+  LayoutDashboard, Package, Users, ShoppingBag,
   LogOut, Menu, X, ChevronRight,
-  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Banknote, ShieldAlert,
+  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import { DELIVERY_SITE_URL } from '../appMode';
@@ -17,9 +17,8 @@ const navItems = [
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
   { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Partner Inventory' },
   { to: '/admin/payouts',         icon: Landmark,        label: 'Payouts' },
-  { to: '/admin/container-deposits', icon: Package2,     label: 'Container Deposits' },
+  { to: '/admin/container-finance', icon: Wallet,        label: 'Container Finance' },
   { to: '/admin/holdings',        icon: ShieldAlert,     label: 'Holdings' },
-  { to: '/admin/manual-refunds',  icon: Banknote,        label: 'Manual Refunds' },
   { to: '/admin/finance',         icon: BarChart3,       label: 'Finance' },
   { to: '/admin/settings',        icon: Settings,        label: 'Settings' },
 ];

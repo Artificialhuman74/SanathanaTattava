@@ -735,6 +735,7 @@ router.get('/manual-refunds', (req, res) => {
 router.post(
   '/manual-refunds/:holdingId/settle',
   body('utr').isString().trim().isLength({ min: 4 }),
+  body('method').optional({ nullable: true, checkFalsy: true }).isIn(['bank', 'upi']),
   body('notes').optional({ nullable: true, checkFalsy: true }).isString(),
   (req, res) => {
     const errors = validationResult(req);
@@ -743,6 +744,7 @@ router.post(
       const result = settleManualRefund({
         holdingId: Number(req.params.holdingId),
         utr: req.body.utr,
+        method: req.body.method || 'bank',
         notes: req.body.notes,
         paidByUserId: req.user.id,
       });
@@ -1028,35 +1030,134 @@ router.post(
 );
 
 /* Finance log — append-only money trail for Phase 9 events. Drives the
- * "Container finance" tab on the admin Finance page. */
+ * "Container finance" tab on the admin Finance page.
+ *
+ * Search across:
+ *   - consumer.name / consumer.phone
+ *   - driver.name (linked dealer who handled the holding) / trader name
+ *   - actor (admin) name
+ *   - event_type, reference (UTR / UPI ref / proof URL), holding_id
+ *   - container_finance_log.notes is not a column — notes live on the holding
+ */
 router.get('/container-finance/log', (req, res) => {
   try {
-    const limit  = Math.min(parseInt(req.query.limit, 10)  || 100, 500);
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const limit   = Math.min(parseInt(req.query.limit, 10)  || 100, 500);
+    const offset  = parseInt(req.query.offset, 10) || 0;
+    const q       = (req.query.q || '').trim();
+    const eventTypeParam = req.query.event_type
+      ? String(req.query.event_type).split(',').filter(Boolean)
+      : null;
+    const dateFrom = req.query.date_from || null;
+    const dateTo   = req.query.date_to   || null;
+
+    const where = [];
+    const args  = [];
+    if (q) {
+      const like = `%${q}%`;
+      where.push(`(
+        c.name  LIKE ? OR
+        c.phone LIKE ? OR
+        u.name  LIKE ? OR
+        a.name  LIKE ? OR
+        l.event_type LIKE ? OR
+        l.reference  LIKE ? OR
+        CAST(l.holding_id AS TEXT) = ? OR
+        h.manual_refund_utr LIKE ?
+      )`);
+      args.push(like, like, like, like, like, like, q, like);
+    }
+    if (eventTypeParam && eventTypeParam.length) {
+      where.push(`l.event_type IN (${eventTypeParam.map(() => '?').join(',')})`);
+      args.push(...eventTypeParam);
+    }
+    if (dateFrom) { where.push(`l.created_at >= ?`); args.push(dateFrom); }
+    if (dateTo)   { where.push(`l.created_at <  date(?, '+1 day')`); args.push(dateTo); }
+
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
     const rows = db.prepare(`
       SELECT l.id, l.holding_id, l.consumer_id, l.driver_user_id,
              l.event_type, l.amount, l.direction, l.actor_user_id,
              l.reference, l.created_at,
-             c.name AS consumer_name,
-             u.name AS driver_name,
-             a.name AS actor_name
+             c.name  AS consumer_name,
+             c.phone AS consumer_phone,
+             u.name  AS driver_name,
+             a.name  AS actor_name,
+             h.container_type,
+             h.status              AS holding_status,
+             h.refund_proof_url,
+             h.damage_photo_url,
+             h.manual_refund_utr,
+             h.manual_refund_paid_at,
+             h.manual_refund_method,
+             h.resolved_at
         FROM container_finance_log l
-        LEFT JOIN consumers c ON c.id = l.consumer_id
-        LEFT JOIN users u     ON u.id = l.driver_user_id
-        LEFT JOIN users a     ON a.id = l.actor_user_id
+        LEFT JOIN consumers          c ON c.id = l.consumer_id
+        LEFT JOIN users              u ON u.id = l.driver_user_id
+        LEFT JOIN users              a ON a.id = l.actor_user_id
+        LEFT JOIN container_holdings h ON h.id = l.holding_id
+        ${whereSql}
        ORDER BY l.created_at DESC, l.id DESC
        LIMIT ? OFFSET ?
-    `).all(limit, offset);
+    `).all(...args, limit, offset);
+
+    const totalRow = db.prepare(`
+      SELECT COUNT(*) AS n
+        FROM container_finance_log l
+        LEFT JOIN consumers          c ON c.id = l.consumer_id
+        LEFT JOIN users              u ON u.id = l.driver_user_id
+        LEFT JOIN users              a ON a.id = l.actor_user_id
+        LEFT JOIN container_holdings h ON h.id = l.holding_id
+        ${whereSql}
+    `).get(...args);
+
     const totals = db.prepare(`
       SELECT
-        COALESCE(SUM(CASE WHEN event_type='driver_reimbursed' THEN amount END),0) AS driver_paid_total,
+        COALESCE(SUM(CASE WHEN event_type='driver_reimbursed'      THEN amount END),0) AS driver_paid_total,
         COALESCE(SUM(CASE WHEN event_type='admin_verified_upi_proof' THEN amount END),0) AS verified_total,
+        COALESCE(SUM(CASE WHEN event_type='container_forfeited'    THEN amount END),0) AS forfeited_total,
+        COALESCE(SUM(CASE WHEN event_type='store_credit_issued'    THEN amount END),0) AS store_credit_total,
         COUNT(*) AS total_events
         FROM container_finance_log
     `).get();
-    res.json({ events: rows, totals });
+
+    res.json({
+      events:    rows,
+      totals,
+      pagination: { limit, offset, total: totalRow.n },
+    });
   } catch (err) {
     console.error('GET /admin/container-finance/log error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/* Manual purge of a stored proof image (admin). Removes the file from
+ * disk and nulls the column so the audit row no longer references it. */
+router.delete('/container-finance/holdings/:id/proof', (req, res) => {
+  try {
+    const fs    = require('fs');
+    const path  = require('path');
+    const { UPLOADS_DIR } = require('../middleware/uploadProof');
+
+    const id  = parseInt(req.params.id, 10);
+    const which = req.query.kind === 'damage' ? 'damage_photo_url' : 'refund_proof_url';
+    const row = db.prepare(`SELECT id, ${which} AS url FROM container_holdings WHERE id=?`).get(id);
+    if (!row)      return res.status(404).json({ error: 'Holding not found' });
+    if (!row.url)  return res.json({ ok: true, noop: true });
+
+    /* Resolve the on-disk path. Stored URLs are of the form
+     * /uploads/<subdir>/<filename>; strip the /uploads/ prefix and
+     * join under UPLOADS_DIR so we never traverse out of the volume. */
+    const rel = row.url.replace(/^\/uploads\//, '');
+    const abs = path.join(UPLOADS_DIR, rel);
+    if (abs.startsWith(UPLOADS_DIR) && fs.existsSync(abs)) {
+      try { fs.unlinkSync(abs); } catch (e) { console.warn('[proof-purge] unlink failed', e.message); }
+    }
+    db.prepare(`UPDATE container_holdings SET ${which}=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
+    res.json({ ok: true, purged: row.url });
+  } catch (err) {
+    console.error('DELETE /admin/container-finance/holdings/:id/proof error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

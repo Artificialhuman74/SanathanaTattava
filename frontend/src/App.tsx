@@ -29,8 +29,7 @@ import AdminConsumers     from './pages/admin/Consumers';
 import AdminSettings      from './pages/admin/Settings';
 import AdminDealerInventory from './pages/admin/DealerInventory';
 import AdminFinance        from './pages/admin/Finance';
-import AdminContainerDeposits from './pages/admin/ContainerDeposits';
-import AdminManualRefunds      from './pages/admin/ManualRefunds';
+import AdminContainerFinance from './pages/admin/ContainerFinance';
 import AdminHoldings           from './pages/admin/Holdings';
 
 import TraderDashboard     from './pages/trader/Dashboard';
@@ -89,8 +88,9 @@ const PartnerRoutes = () => {
         <Route path="payouts"         element={<AdminPayouts />} />
         <Route path="dealer-inventory" element={<AdminDealerInventory />} />
         <Route path="finance"         element={<AdminFinance />} />
-        <Route path="container-deposits" element={<AdminContainerDeposits />} />
-        <Route path="manual-refunds"    element={<AdminManualRefunds />} />
+        <Route path="container-finance"   element={<AdminContainerFinance />} />
+        <Route path="container-deposits"  element={<Navigate to="/admin/container-finance" replace />} />
+        <Route path="manual-refunds"      element={<Navigate to="/admin/container-finance" replace />} />
         <Route path="holdings"          element={<AdminHoldings />} />
         <Route path="settings"        element={<AdminSettings />} />
       </Route>

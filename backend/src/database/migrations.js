@@ -796,6 +796,14 @@ function runMigrations(db) {
     db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_paid_by INTEGER REFERENCES users(id)`);
     console.log('[migration] container_holdings: added manual_refund_paid_by');
   }
+  /* Phase 10 — admin-paid refunds can now go out via UPI, not only bank
+   * wire. `manual_refund_method` records which channel was used so the
+   * finance report can split bank vs UPI. `manual_refund_utr` is reused
+   * as the generic payment reference (UTR for bank, UPI txn id for UPI). */
+  if (!hasColumn('container_holdings', 'manual_refund_method')) {
+    db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_method TEXT`);
+    console.log('[migration] container_holdings: added manual_refund_method');
+  }
 
   /* Phase 8 — admin holdings override audit. Every admin-initiated status
    * change on a container_holdings row writes one row here. Append-only. */

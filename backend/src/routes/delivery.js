@@ -23,6 +23,74 @@ router.use(authenticate, requireTraderOrAdmin);
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
+/**
+ * Per-line type tag for a consumer_order_item.
+ *
+ *   refill   — consumer brings their held container; container_cost is 0
+ *   new      — fresh container, consumer paid container_cost
+ *   standard — product without a container (or container info missing)
+ */
+function classifyLine(item) {
+  if (item.is_refill === 1 || item.is_refill === true) return 'refill';
+  if ((item.container_cost || 0) > 0) return 'new';
+  return 'standard';
+}
+
+/**
+ * Other open requests for the same consumer that the driver should be
+ * aware of: open consumer_orders (excluding the current one) and any
+ * standalone container pickups (refund_requested holdings).
+ *
+ *   excludeOrderId    : skip this consumer_order from the result
+ *   excludeHoldingId  : skip this container_holdings row from the result
+ *
+ * Each entry carries `kind` ('delivery' | 'pickup') and `id` so the UI
+ * can deep-link to the matching card on the dashboard.
+ */
+function getConsumerPendingElsewhere({ consumerId, excludeOrderId = null, excludeHoldingId = null }) {
+  const orders = db.prepare(`
+    SELECT co.id, co.order_number, co.delivery_status, co.total_amount, co.created_at,
+           (SELECT COUNT(*) FROM consumer_order_items oi WHERE oi.order_id=co.id) AS item_count
+      FROM consumer_orders co
+     WHERE co.consumer_id = ?
+       AND co.payment_status = 'paid'
+       AND co.status NOT IN ('cancelled')
+       AND co.delivery_status NOT IN ('delivered','failed','cancelled')
+       AND co.id != COALESCE(?, -1)
+     ORDER BY co.created_at DESC
+  `).all(consumerId, excludeOrderId);
+
+  const pickups = db.prepare(`
+    SELECT h.id, h.container_type, h.deposit_amount, h.refund_destination,
+           h.requested_at, h.created_at,
+           p_cur.name AS current_product_name
+      FROM container_holdings h
+      JOIN products p_cur ON p_cur.id = h.current_product_id
+     WHERE h.consumer_id = ?
+       AND h.status = 'refund_requested'
+       AND h.id != COALESCE(?, -1)
+     ORDER BY h.requested_at ASC, h.id ASC
+  `).all(consumerId, excludeHoldingId);
+
+  return [
+    ...orders.map(o => ({
+      kind: 'delivery',
+      id: o.id,
+      order_number: o.order_number,
+      summary: `${o.item_count} item${o.item_count === 1 ? '' : 's'} · ₹${Math.round(o.total_amount)}`,
+      status: o.delivery_status,
+      created_at: o.created_at,
+    })),
+    ...pickups.map(p => ({
+      kind: 'pickup',
+      id: p.id,
+      summary: `Refund ${p.container_type} (${p.current_product_name}) · ₹${Math.round(p.deposit_amount)}`,
+      destination: p.refund_destination,
+      created_at: p.requested_at || p.created_at,
+    })),
+  ];
+}
+
 /** Send a notification to a consumer (DB + real-time push) */
 function notifyConsumer(consumerId, title, bodyText, data = {}) {
   const r = db.prepare(`
@@ -132,7 +200,12 @@ router.get('/orders/assigned', (req, res) => {
     `);
 
     for (const order of orders) {
-      order.items = itemStmt.all(order.id);
+      const items = itemStmt.all(order.id);
+      order.items = items.map(it => ({ ...it, line_type: classifyLine(it) }));
+      order.consumer_pending_elsewhere = getConsumerPendingElsewhere({
+        consumerId: order.consumer_id,
+        excludeOrderId: order.id,
+      });
     }
 
     res.json({ orders });
@@ -642,6 +715,12 @@ router.get('/history', (req, res) => {
 router.get('/container-pickups', (req, res) => {
   try {
     const rows = getPendingPickups({ userId: req.user.id, role: req.user.role });
+    for (const r of rows) {
+      r.consumer_pending_elsewhere = getConsumerPendingElsewhere({
+        consumerId: r.consumer_id,
+        excludeHoldingId: r.id,
+      });
+    }
     res.json({ pickups: rows });
   } catch (err) {
     console.error('GET /delivery/container-pickups error:', err);

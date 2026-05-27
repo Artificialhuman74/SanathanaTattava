@@ -6,6 +6,7 @@ import {
   Package, Truck, CheckCircle2, ChevronRight,
   ToggleLeft, ToggleRight, Loader2, AlertCircle, MapPin,
   Users, Info, HelpCircle, ChevronDown,
+  Recycle, PackagePlus, ArrowLeftRight, ArrowDownToLine, Link2,
 } from 'lucide-react';
 
 interface DeliveryContext {
@@ -39,10 +40,18 @@ export default function DeliveryDashboard() {
   const isAdmin = user?.role === 'admin';
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [pickups, setPickups] = useState<any[]>([]);
   const [fleetOrders, setFleetOrders] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [helpOpen, setHelpOpen] = useState<boolean>(() => {
+    const v = localStorage.getItem('delivery_help_open');
+    return v === null ? true : v === '1';
+  });
+  useEffect(() => {
+    localStorage.setItem('delivery_help_open', helpOpen ? '1' : '0');
+  }, [helpOpen]);
 
   useEffect(() => {
     fetchData();
@@ -53,13 +62,15 @@ export default function DeliveryDashboard() {
       const calls: Promise<any>[] = [
         api.get('/delivery/orders/assigned'),
         api.get('/delivery/stats'),
+        api.get('/delivery/container-pickups'),
       ];
       if (isAdmin) calls.push(api.get('/delivery/fleet/orders'));
 
       const results = await Promise.all(calls);
       setOrders(results[0].data.orders || []);
       setStats(results[1].data.stats || null);
-      if (isAdmin) setFleetOrders(results[2].data.orders || []);
+      setPickups(results[2].data.pickups || []);
+      if (isAdmin) setFleetOrders(results[3].data.orders || []);
     } catch (err: any) {
       setError('Failed to load delivery data');
     } finally {
@@ -71,6 +82,38 @@ export default function DeliveryDashboard() {
     ['pending', 'accepted', 'packed', 'out_for_delivery'].includes(o.delivery_status || 'pending')
   );
   const outForDelivery = orders.filter(o => o.delivery_status === 'out_for_delivery');
+
+  /* Unified card feed: active orders + standalone pickups, newest first.
+   * Each card is keyed by `${kind}-${id}` for scroll-into-view linking. */
+  const stopCards: any[] = [
+    ...activeOrders.map(o => ({
+      kind: 'delivery',
+      id: o.id,
+      created_at: o.created_at,
+      data: o,
+    })),
+    ...pickups.map(p => ({
+      kind: 'pickup',
+      id: p.id,
+      created_at: p.requested_at || p.created_at,
+      data: p,
+    })),
+  ].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
+  /* When the driver clicks a "Also pending" row, try to scroll to that card
+   * on the same page. If it's not in the visible list, navigate to its
+   * detail page. */
+  const handlePendingLink = (entry: { kind: string; id: number }) => {
+    const el = document.getElementById(`stop-${entry.kind}-${entry.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-emerald-400');
+      setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400'), 1800);
+      return;
+    }
+    if (entry.kind === 'delivery') navigate(`/delivery/orders/${entry.id}`);
+    else navigate('/delivery/pickups');
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -122,17 +165,21 @@ export default function DeliveryDashboard() {
         </div>
       )}
 
-      {/* Simple Guide — collapsible */}
-      <details className="bg-emerald-50 border border-emerald-200 rounded-2xl group" open>
-        <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer list-none">
+      {/* Simple Guide — collapsible, state persisted to localStorage */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl">
+        <button
+          type="button"
+          onClick={() => setHelpOpen(o => !o)}
+          className="w-full flex items-center justify-between gap-3 p-4 text-left"
+        >
           <div className="flex items-center gap-2">
             <HelpCircle className="w-5 h-5 text-emerald-700" />
             <span className="font-bold text-emerald-900 text-sm">How to deliver an order (tap to show/hide)</span>
           </div>
-          <ChevronDown className="w-5 h-5 text-emerald-700 transition-transform group-open:rotate-180" />
-        </summary>
+          <ChevronDown className={`w-5 h-5 text-emerald-700 transition-transform ${helpOpen ? 'rotate-180' : ''}`} />
+        </button>
 
-        <div className="px-4 pb-4 space-y-4 text-sm text-emerald-900">
+        {helpOpen && <div className="px-4 pb-4 space-y-4 text-sm text-emerald-900">
           <div>
             <p className="font-bold mb-1">In simple words</p>
             <p className="text-emerald-800">
@@ -181,8 +228,8 @@ export default function DeliveryDashboard() {
               <li>Use the <b>same email and password</b> as your trader login. No separate account.</li>
             </ul>
           </div>
-        </div>
-      </details>
+        </div>}
+      </div>
 
       {/* Stats Grid (own deliveries) */}
       <div className="grid grid-cols-3 gap-3">
@@ -208,11 +255,11 @@ export default function DeliveryDashboard() {
         <FleetView orders={fleetOrders} onOpen={id => navigate(`/delivery/orders/${id}`)} />
       )}
 
-      {/* My Active / Assigned Orders */}
+      {/* Active visits — orders + standalone pickups in one unified feed */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-slate-800">
-            {isAdmin ? 'My Delivery Requests' : 'Active Orders'}
+            {isAdmin ? 'My Delivery Requests' : 'Active Visits'}
           </h2>
           {!isAdmin && (
             <button
@@ -224,61 +271,168 @@ export default function DeliveryDashboard() {
           )}
         </div>
 
-        {activeOrders.length === 0 ? (
+        {stopCards.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
             <p className="text-sm text-slate-500">
               {isAdmin
                 ? 'No deliveries assigned to admin right now'
-                : 'No active orders right now'}
+                : 'No active visits right now'}
             </p>
             <p className="text-xs text-slate-400 mt-1">
               {isAdmin
                 ? 'Admin is only used as last-resort fallback'
-                : 'New orders will appear here when assigned'}
+                : 'New orders and pickups will appear here when assigned'}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {activeOrders.slice(0, 5).map(order => {
-              const status = order.delivery_status || 'pending';
-              return (
-                <button
-                  key={order.id}
-                  onClick={() => navigate(`/delivery/orders/${order.id}`)}
-                  className="w-full bg-white rounded-xl border border-slate-100 p-4 text-left hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">
-                        Order #{order.order_number}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {order.consumer_name || 'Customer'}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-                      {DELIVERY_STATUS_LABELS[status] || status}
-                    </span>
-                  </div>
-                  {order.delivery_address && (
-                    <div className="flex items-start gap-1.5 mt-2">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-slate-500 line-clamp-1">{order.delivery_address}</p>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
-                    <p className="text-xs text-slate-400">
-                      {order.items?.length || 0} items · ₹{parseFloat(order.total_amount || 0).toFixed(0)}
-                    </p>
-                    <QuickAction status={status} />
-                  </div>
-                </button>
-              );
-            })}
+            {stopCards.slice(0, 8).map(card => (
+              <StopCard
+                key={`${card.kind}-${card.id}`}
+                card={card}
+                onOpen={() => {
+                  if (card.kind === 'delivery') navigate(`/delivery/orders/${card.id}`);
+                  else navigate('/delivery/pickups');
+                }}
+                onPendingClick={handlePendingLink}
+              />
+            ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Unified card that renders either a delivery order or a standalone
+ * container pickup. Each card shows tagged lines + a footer listing
+ * other open requests for the same consumer. The footer rows are
+ * clickable and scroll to (or navigate to) the matching card.
+ * ────────────────────────────────────────────────────────────────────── */
+const LINE_BADGE: Record<string, { label: string; className: string; Icon: any }> = {
+  new:      { label: 'NEW',     className: 'bg-emerald-100 text-emerald-700 border-emerald-200', Icon: PackagePlus },
+  refill:   { label: 'REFILL',  className: 'bg-sky-100 text-sky-700 border-sky-200',             Icon: Recycle },
+  swap:     { label: 'SWAP',    className: 'bg-amber-100 text-amber-700 border-amber-200',       Icon: ArrowLeftRight },
+  standard: { label: 'ITEM',    className: 'bg-slate-100 text-slate-600 border-slate-200',       Icon: Package },
+};
+
+function StopCard({
+  card,
+  onOpen,
+  onPendingClick,
+}: {
+  card: { kind: 'delivery' | 'pickup'; id: number; data: any };
+  onOpen: () => void;
+  onPendingClick: (e: { kind: string; id: number }) => void;
+}) {
+  const isDelivery = card.kind === 'delivery';
+  const d = card.data;
+  const status = d.delivery_status || (isDelivery ? 'pending' : 'pickup_pending');
+  const pending: any[] = d.consumer_pending_elsewhere || [];
+
+  return (
+    <div
+      id={`stop-${card.kind}-${card.id}`}
+      className="bg-white rounded-xl border border-slate-100 p-4 transition-shadow hover:shadow-md"
+    >
+      <button onClick={onOpen} className="w-full text-left">
+        <div className="flex items-start justify-between mb-2 gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-800 truncate">
+              {isDelivery ? `Order #${d.order_number}` : `Pickup #PCK-${d.id}`}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{d.consumer_name || 'Customer'}</p>
+          </div>
+          <span
+            className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              isDelivery
+                ? DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'
+                : 'bg-rose-100 text-rose-700'
+            }`}
+          >
+            {isDelivery ? DELIVERY_STATUS_LABELS[status] || status : 'Pickup requested'}
+          </span>
+        </div>
+
+        {(d.delivery_address || d.consumer_address) && (
+          <div className="flex items-start gap-1.5 mt-2">
+            <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-slate-500 line-clamp-1">
+              {d.delivery_address || d.consumer_address}
+            </p>
+          </div>
+        )}
+
+        {/* Lines / tasks for THIS request */}
+        <div className="mt-3 space-y-1.5">
+          {isDelivery ? (
+            (d.items || []).map((it: any) => {
+              const meta = LINE_BADGE[it.line_type] || LINE_BADGE.standard;
+              const Icon = meta.Icon;
+              return (
+                <div key={it.id} className="flex items-center gap-2 text-xs">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold ${meta.className}`}>
+                    <Icon className="w-3 h-3" />
+                    {meta.label}
+                  </span>
+                  <span className="text-slate-700 truncate">
+                    {it.product_name} × {it.quantity}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold bg-rose-100 text-rose-700 border-rose-200">
+                <ArrowDownToLine className="w-3 h-3" />
+                PICKUP
+              </span>
+              <span className="text-slate-700 truncate">
+                {d.container_type} ({d.current_product_name}) · refund ₹{Math.round(d.deposit_amount || 0)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
+          <p className="text-xs text-slate-400">
+            {isDelivery
+              ? `${d.items?.length || 0} items · ₹${parseFloat(d.total_amount || 0).toFixed(0)}`
+              : `Destination: ${(d.refund_destination || 'pending').replace('_', ' ')}`}
+          </p>
+          <QuickAction status={status} />
+        </div>
+      </button>
+
+      {/* Also pending for this customer — clickable cross-references */}
+      {pending.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+            <Link2 className="w-3 h-3" />
+            Also pending for this customer
+          </p>
+          <div className="space-y-1.5">
+            {pending.map(p => (
+              <button
+                key={`${p.kind}-${p.id}`}
+                onClick={(e) => { e.stopPropagation(); onPendingClick(p); }}
+                className="w-full text-left flex items-center gap-2 text-xs bg-slate-50 hover:bg-slate-100 rounded-md px-2 py-1.5 transition-colors"
+              >
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                  p.kind === 'pickup' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {p.kind === 'pickup' ? <ArrowDownToLine className="w-3 h-3" /> : <Truck className="w-3 h-3" />}
+                  {p.kind === 'pickup' ? 'PICKUP' : 'ORDER'}
+                </span>
+                <span className="text-slate-700 truncate flex-1">{p.summary}</span>
+                <ChevronRight className="w-3 h-3 text-slate-400 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

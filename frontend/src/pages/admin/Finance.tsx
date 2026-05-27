@@ -19,8 +19,17 @@ interface Summary {
     consumer_orders:  { amount: number; count: number };
     manual:           { amount: number; count: number };
     trader_payments:  { amount: number; count: number };
+    container_forfeits?: { amount: number; count: number };
   };
-  expense: { total: number; restock: number; commission: number };
+  expense: {
+    total: number; restock: number; commission: number;
+    container_payouts?: {
+      amount: number;
+      driver_reimbursed: { amount: number; count: number };
+      manual_refunds:    { amount: number; count: number };
+      store_credit:      { amount: number; count: number };
+    };
+  };
   net: number;
 }
 interface ConsumerOrderRow {
@@ -296,6 +305,7 @@ export default function AdminFinance() {
                 { label: 'Consumer orders',    value: summary.income.consumer_orders.amount, color: 'bg-emerald-500' },
                 { label: 'Partner payments',   value: summary.income.trader_payments.amount, color: 'bg-indigo-500' },
                 { label: 'Manual / misc.',     value: summary.income.manual.amount,          color: 'bg-amber-500' },
+                { label: 'Container forfeits retained', value: summary.income.container_forfeits?.amount || 0, color: 'bg-teal-500' },
               ]} total={summary.income.total} />
             </div>
             <div className="card p-4">
@@ -303,6 +313,9 @@ export default function AdminFinance() {
               <Breakdown rows={[
                 { label: 'Restock cost',     value: summary.expense.restock,    color: 'bg-rose-500' },
                 { label: 'Commissions',      value: summary.expense.commission, color: 'bg-orange-500' },
+                { label: 'Driver reimbursements', value: summary.expense.container_payouts?.driver_reimbursed.amount || 0, color: 'bg-amber-600' },
+                { label: 'Manual refunds',        value: summary.expense.container_payouts?.manual_refunds.amount    || 0, color: 'bg-emerald-600' },
+                { label: 'Store credit issued',   value: summary.expense.container_payouts?.store_credit.amount      || 0, color: 'bg-violet-500' },
               ]} total={summary.expense.total} />
             </div>
           </div>

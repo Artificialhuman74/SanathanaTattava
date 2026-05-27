@@ -103,16 +103,19 @@ function getPendingManualRefunds() {
   `).all();
 }
 
-/* Stamp a UTR on a manual_bank refund. Idempotent guard: refuses if a UTR
- * is already present. */
-function settleManualRefund({ holdingId, utr, notes, paidByUserId }) {
+/* Stamp a payment reference on a manual_bank refund. Method is 'bank'
+ * (UTR) or 'upi' (UPI transaction id). Idempotent guard refuses if a
+ * reference is already present. Also writes a `manual_refund_settled`
+ * event into container_finance_log so it shows in the Finance trail. */
+function settleManualRefund({ holdingId, utr, method, notes, paidByUserId }) {
   if (!utr || typeof utr !== 'string' || utr.trim().length < 4) {
-    const err = new Error('utr must be a non-empty string of at least 4 chars');
+    const err = new Error('reference must be a non-empty string of at least 4 chars');
     err.code = 'INVALID_UTR';
     throw err;
   }
+  const channel = method === 'upi' ? 'upi' : 'bank';
   const row = db.prepare(`
-    SELECT id, status, refund_destination, manual_refund_utr
+    SELECT id, consumer_id, deposit_amount, status, refund_destination, manual_refund_utr
       FROM container_holdings WHERE id=?
   `).get(holdingId);
   if (!row) {
@@ -126,20 +129,30 @@ function settleManualRefund({ holdingId, utr, notes, paidByUserId }) {
     throw err;
   }
   if (row.manual_refund_utr) {
-    const err = new Error(`already settled with UTR ${row.manual_refund_utr}`);
+    const err = new Error(`already settled with reference ${row.manual_refund_utr}`);
     err.code = 'ALREADY_SETTLED';
     throw err;
   }
-  db.prepare(`
-    UPDATE container_holdings
-       SET manual_refund_utr=?,
-           manual_refund_paid_at=CURRENT_TIMESTAMP,
-           manual_refund_paid_by=?,
-           notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
-           updated_at=CURRENT_TIMESTAMP
-     WHERE id=?
-  `).run(utr.trim(), paidByUserId || null, notes || null, holdingId);
-  return { ok: true, utr: utr.trim() };
+  const tx = db.transaction(() => {
+    db.prepare(`
+      UPDATE container_holdings
+         SET manual_refund_utr=?,
+             manual_refund_method=?,
+             manual_refund_paid_at=CURRENT_TIMESTAMP,
+             manual_refund_paid_by=?,
+             notes=COALESCE(? || char(10) || COALESCE(notes,''), notes),
+             updated_at=CURRENT_TIMESTAMP
+       WHERE id=?
+    `).run(utr.trim(), channel, paidByUserId || null, notes || null, holdingId);
+
+    db.prepare(`
+      INSERT INTO container_finance_log
+        (holding_id, consumer_id, event_type, amount, direction, actor_user_id, reference)
+      VALUES (?, ?, 'manual_refund_settled', ?, 'expense', ?, ?)
+    `).run(holdingId, row.consumer_id, row.deposit_amount, paidByUserId || null, `${channel}:${utr.trim()}`);
+  });
+  tx();
+  return { ok: true, reference: utr.trim(), method: channel };
 }
 
 module.exports = {

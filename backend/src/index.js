@@ -329,6 +329,43 @@ function runSweeper() {
 setTimeout(runSweeper, 90_000);
 setInterval(runSweeper, 10 * 60 * 1000);
 
+/* ── Container-finance proof retention ────────────────────────────────────
+ * After a holding has been resolved for 30 days we delete any stored proof
+ * images from disk and null the columns. The audit row in
+ * container_finance_log keeps the historical reference. */
+function purgeStaleContainerProofs() {
+  try {
+    const rows = db.prepare(`
+      SELECT id, refund_proof_url, damage_photo_url
+        FROM container_holdings
+       WHERE resolved_at IS NOT NULL
+         AND resolved_at < datetime('now', '-30 days')
+         AND (refund_proof_url IS NOT NULL OR damage_photo_url IS NOT NULL)
+    `).all();
+    let purged = 0;
+    for (const row of rows) {
+      for (const kind of ['refund_proof_url', 'damage_photo_url']) {
+        const url = row[kind];
+        if (!url) continue;
+        const rel = url.startsWith('/uploads/') ? url.slice('/uploads/'.length) : null;
+        if (rel) {
+          const abs = path.join(UPLOADS_DIR, rel);
+          try { if (fs.existsSync(abs)) fs.unlinkSync(abs); }
+          catch (e) { console.warn(`[proof-purge] unlink ${abs}: ${e.message}`); }
+        }
+        const col = kind === 'refund_proof_url' ? 'refund_proof_url' : 'damage_photo_url';
+        db.prepare(`UPDATE container_holdings SET ${col}=NULL WHERE id=?`).run(row.id);
+        purged++;
+      }
+    }
+    if (purged) console.log(`[proof-purge] removed ${purged} stale proof file(s)`);
+  } catch (err) {
+    console.error('[proof-purge] error:', err.message);
+  }
+}
+setTimeout(purgeStaleContainerProofs, 120_000);
+setInterval(purgeStaleContainerProofs, 60 * 60 * 1000);
+
 // ─── Global error handler ─────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);

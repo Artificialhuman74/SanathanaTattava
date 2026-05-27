@@ -77,21 +77,62 @@ router.get('/summary', (req, res) => {
       AND (co.id IS NULL OR co.status != 'cancelled')
   `).get(start, end);
 
-  const income  = consumerIncome.s + manualIncome.s + traderPayments.s;
-  const expense = restockExpense.s + commissionExpense.s;
+  /* Container money trail — driven by container_finance_log so we can
+   * separate income (forfeits retained, where company keeps the deposit)
+   * from expense (cash that actually left the company: driver UPI
+   * reimbursements, bank/UPI wire refunds, store-credit issuance). */
+  const containerForfeitedIncome = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c
+      FROM container_finance_log
+     WHERE event_type='container_forfeited'
+       AND created_at >= ? AND created_at < ?
+  `).get(start, end);
+
+  const driverReimbExpense = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c
+      FROM container_finance_log
+     WHERE event_type='driver_reimbursed'
+       AND created_at >= ? AND created_at < ?
+  `).get(start, end);
+
+  const manualRefundExpense = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c
+      FROM container_finance_log
+     WHERE event_type='manual_refund_settled'
+       AND created_at >= ? AND created_at < ?
+  `).get(start, end);
+
+  const storeCreditExpense = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS s, COUNT(*) AS c
+      FROM container_finance_log
+     WHERE event_type='store_credit_issued'
+       AND created_at >= ? AND created_at < ?
+  `).get(start, end);
+
+  const containerPayoutExpense = driverReimbExpense.s + manualRefundExpense.s + storeCreditExpense.s;
+
+  const income  = consumerIncome.s + manualIncome.s + traderPayments.s + containerForfeitedIncome.s;
+  const expense = restockExpense.s + commissionExpense.s + containerPayoutExpense;
 
   res.json({
     month,
     income: {
       total: income,
-      consumer_orders:   { amount: consumerIncome.s,  count: consumerIncome.c },
-      manual:            { amount: manualIncome.s,    count: manualIncome.c },
-      trader_payments:   { amount: traderPayments.s,  count: traderPayments.c },
+      consumer_orders:    { amount: consumerIncome.s,  count: consumerIncome.c },
+      manual:             { amount: manualIncome.s,    count: manualIncome.c },
+      trader_payments:    { amount: traderPayments.s,  count: traderPayments.c },
+      container_forfeits: { amount: containerForfeitedIncome.s, count: containerForfeitedIncome.c },
     },
     expense: {
       total: expense,
-      restock:    restockExpense.s,
-      commission: commissionExpense.s,
+      restock:           restockExpense.s,
+      commission:        commissionExpense.s,
+      container_payouts: {
+        amount:             containerPayoutExpense,
+        driver_reimbursed:  { amount: driverReimbExpense.s,    count: driverReimbExpense.c },
+        manual_refunds:     { amount: manualRefundExpense.s,   count: manualRefundExpense.c },
+        store_credit:       { amount: storeCreditExpense.s,    count: storeCreditExpense.c },
+      },
     },
     net: income - expense,
   });
@@ -188,15 +229,27 @@ router.get('/monthly', (req, res) => {
         AND (co.id IS NULL OR co.status != 'cancelled')
     `).get(start, end).s;
 
-    const income  = consumer + manual + traderPay;
-    const expense = restock + commission;
+    const containerIncome = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS s FROM container_finance_log
+      WHERE event_type='container_forfeited' AND created_at >= ? AND created_at < ?
+    `).get(start, end).s;
+    const containerExpense = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS s FROM container_finance_log
+      WHERE event_type IN ('driver_reimbursed','manual_refund_settled','store_credit_issued')
+        AND created_at >= ? AND created_at < ?
+    `).get(start, end).s;
+
+    const income  = consumer + manual + traderPay + containerIncome;
+    const expense = restock + commission + containerExpense;
     return {
       month,
       income_consumer:        consumer,
       income_manual:          manual,
       income_trader_payment:  traderPay,
+      income_container:       containerIncome,
       expense_restock:        restock,
       expense_commission:     commission,
+      expense_container:      containerExpense,
       income, expense, net: income - expense,
     };
   });
