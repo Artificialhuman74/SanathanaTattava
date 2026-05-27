@@ -805,6 +805,15 @@ function runMigrations(db) {
     console.log('[migration] container_holdings: added manual_refund_method');
   }
 
+  /* Phase 10 — admins can hide stale entries from the Container Finance
+   * History tab without losing the row (Finance summary still sums them).
+   * Setting hidden_at to a timestamp removes the row from the default
+   * History view; the row stays in the DB and in /admin/finance/summary. */
+  if (!hasColumn('container_finance_log', 'hidden_at')) {
+    db.exec(`ALTER TABLE container_finance_log ADD COLUMN hidden_at TIMESTAMP`);
+    console.log('[migration] container_finance_log: added hidden_at');
+  }
+
   /* Phase 8 — admin holdings override audit. Every admin-initiated status
    * change on a container_holdings row writes one row here. Append-only. */
   db.exec(`

@@ -1049,9 +1049,11 @@ router.get('/container-finance/log', (req, res) => {
       : null;
     const dateFrom = req.query.date_from || null;
     const dateTo   = req.query.date_to   || null;
+    const includeHidden = req.query.include_hidden === '1' || req.query.include_hidden === 'true';
 
     const where = [];
     const args  = [];
+    if (!includeHidden) where.push(`l.hidden_at IS NULL`);
     if (q) {
       const like = `%${q}%`;
       where.push(`(
@@ -1078,7 +1080,7 @@ router.get('/container-finance/log', (req, res) => {
     const rows = db.prepare(`
       SELECT l.id, l.holding_id, l.consumer_id, l.driver_user_id,
              l.event_type, l.amount, l.direction, l.actor_user_id,
-             l.reference, l.created_at,
+             l.reference, l.created_at, l.hidden_at,
              c.name  AS consumer_name,
              c.phone AS consumer_phone,
              u.name  AS driver_name,
@@ -1158,6 +1160,38 @@ router.delete('/container-finance/holdings/:id/proof', (req, res) => {
     res.json({ ok: true, purged: row.url });
   } catch (err) {
     console.error('DELETE /admin/container-finance/holdings/:id/proof error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/* Hide / unhide a single audit row from the History tab.
+ *
+ * Hiding is non-destructive: the row stays in container_finance_log and
+ * is still summed by /admin/finance/summary, so the books are unaffected.
+ * History queries filter `hidden_at IS NULL` by default; pass
+ * `include_hidden=1` to see them. */
+router.post('/container-finance/events/:id/hide', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const row = db.prepare(`SELECT id FROM container_finance_log WHERE id=?`).get(id);
+    if (!row) return res.status(404).json({ error: 'Event not found' });
+    db.prepare(`UPDATE container_finance_log SET hidden_at=CURRENT_TIMESTAMP WHERE id=?`).run(id);
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error('POST /admin/container-finance/events/:id/hide error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/container-finance/events/:id/unhide', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const row = db.prepare(`SELECT id FROM container_finance_log WHERE id=?`).get(id);
+    if (!row) return res.status(404).json({ error: 'Event not found' });
+    db.prepare(`UPDATE container_finance_log SET hidden_at=NULL WHERE id=?`).run(id);
+    res.json({ ok: true, id });
+  } catch (err) {
+    console.error('POST /admin/container-finance/events/:id/unhide error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

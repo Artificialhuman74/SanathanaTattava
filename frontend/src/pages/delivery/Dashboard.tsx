@@ -184,7 +184,8 @@ export default function DeliveryDashboard() {
             <p className="font-bold mb-1">In simple words</p>
             <p className="text-emerald-800">
               When a customer places an order near you, it will show up here. Take the order to the
-              customer, ask them for a <b>4-digit OTP</b>, type it in this app, and you're done.
+              customer, ask them to check their <b>email</b> for a <b>6-digit OTP</b>, type it in this
+              app, and you're done.
             </p>
           </div>
 
@@ -193,11 +194,38 @@ export default function DeliveryDashboard() {
             <ol className="list-decimal pl-5 space-y-1 text-emerald-800">
               <li>Turn the <b>ONLINE</b> switch above ON so the app can give you orders.</li>
               <li>A new order appears in <b>Active Orders</b>. Tap it to open.</li>
+              <li>Check the <b>tags</b> on the card (NEW / REFILL / SWAP / PICKUP) so you know what to carry and what to collect — see the section below.</li>
               <li>Tap <b>Accept</b> → then <b>Mark Packed</b> when ready to leave.</li>
               <li>Tap <b>Start Delivery</b> when you leave for the customer.</li>
-              <li>At the customer's door, ask them: <i>"Please tell me the 4-digit OTP from your app."</i></li>
+              <li>At the customer's door, ask them: <i>"Please check your email and tell me the 6-digit OTP."</i></li>
               <li>Type the OTP in the app and tap <b>Confirm</b>. Done — delivery is complete.</li>
             </ol>
+          </div>
+
+          <div>
+            <p className="font-bold mb-1">What the tags mean</p>
+            <ul className="space-y-2 text-emerald-800">
+              <li>
+                <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-[11px] font-bold mr-1">NEW</span>
+                First-time purchase that includes a refundable container deposit.
+                <div className="text-emerald-700 text-xs mt-0.5"><b>Action:</b> Hand over the new sealed container. Nothing to collect back.</div>
+              </li>
+              <li>
+                <span className="inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[11px] font-bold mr-1">REFILL</span>
+                Customer already has a container from a previous order — they want it refilled.
+                <div className="text-emerald-700 text-xs mt-0.5"><b>Action:</b> <b>Collect their empty container</b> and leave the filled one. Don't leave without the empty.</div>
+              </li>
+              <li>
+                <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-bold mr-1">SWAP</span>
+                Customer is changing the oil/product type, so the old container can't be refilled.
+                <div className="text-emerald-700 text-xs mt-0.5"><b>Action:</b> <b>Collect the old empty container</b> and deliver the new filled one of the new type.</div>
+              </li>
+              <li>
+                <span className="inline-block px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[11px] font-bold mr-1">PICKUP</span>
+                Standalone container return — no goods to deliver. Customer wants their deposit refunded or store credit.
+                <div className="text-emerald-700 text-xs mt-0.5"><b>Action:</b> <b>Only collect the empty container.</b> Do not hand over any product. Mark pickup complete in the app.</div>
+              </li>
+            </ul>
           </div>
 
           <div>
@@ -214,8 +242,8 @@ export default function DeliveryDashboard() {
           <div className="bg-white/70 rounded-lg p-3 border border-emerald-200">
             <p className="font-bold mb-1 text-emerald-900">If the customer doesn't have the OTP</p>
             <ul className="space-y-1 text-emerald-800">
-              <li>Open the order page and tap <b>Resend OTP</b>. A new code will be sent to their phone and email.</li>
-              <li>Ask them to <b>check their SMS and email</b>, including the spam folder.</li>
+              <li>Ask them to <b>check their email inbox</b> (including the spam folder) — the 6-digit OTP is sent there.</li>
+              <li>If they still can't find it, open the order page and tap <b>Resend OTP</b>. A fresh code will be emailed to them.</li>
               <li>Still no OTP? Call admin before handing over the items.</li>
             </ul>
           </div>

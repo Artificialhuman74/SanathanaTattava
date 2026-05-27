@@ -4,7 +4,7 @@ import {
   Package, CheckCircle2, AlertTriangle, Info, RefreshCcw, X,
   Phone, MapPin, Calendar, FileText, Download, ShieldCheck, ShieldAlert,
   IndianRupee, Image as ImageIcon, Loader2, Search, Filter, Trash2,
-  Banknote, History, Wallet, Inbox,
+  Banknote, History, Wallet, Inbox, EyeOff, RotateCcw,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { formatIstDate } from '../../utils/dateTime';
@@ -399,6 +399,7 @@ interface FinanceEvent {
   manual_refund_paid_at: string | null;
   manual_refund_method: string | null;
   resolved_at: string | null;
+  hidden_at: string | null;
 }
 
 interface FinanceTotals {
@@ -434,6 +435,8 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
   const [limit]               = useState(100);
   const [loading, setLoading] = useState(true);
   const [purging, setPurging] = useState<number | null>(null);
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [busyEventId, setBusyEventId] = useState<number | null>(null);
 
   const apiBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
   const fullUrl = (u: string | null) => u ? (u.startsWith('http') ? u : `${apiBase}${u}`) : null;
@@ -451,6 +454,7 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
       if (eventTypes.length) params.event_type = eventTypes.join(',');
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo)   params.date_to   = dateTo;
+      if (includeHidden) params.include_hidden = 1;
       const r = await api.get('/admin/container-finance/log', { params });
       setEvents(r.data.events || []);
       setTotals(r.data.totals || null);
@@ -460,7 +464,7 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
     } finally { setLoading(false); }
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [debouncedQ, eventTypes.join(','), dateFrom, dateTo, offset]);
+  useEffect(() => { load(); }, [debouncedQ, eventTypes.join(','), dateFrom, dateTo, offset, includeHidden]);
 
   const toggleType = (v: string) =>
     setEventTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -476,6 +480,20 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Failed');
     } finally { setPurging(null); }
+  };
+
+  /* Hide / unhide a row from the History view. Audit row stays in the DB
+   * and is still counted by the Finance summary — this is a view-only
+   * toggle. */
+  const toggleHidden = async (eventId: number, currentlyHidden: boolean) => {
+    setBusyEventId(eventId);
+    try {
+      await api.post(`/admin/container-finance/events/${eventId}/${currentlyHidden ? 'unhide' : 'hide'}`);
+      toast.success(currentlyHidden ? 'Entry restored' : 'Entry hidden');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Failed');
+    } finally { setBusyEventId(null); }
   };
 
   return (
@@ -526,6 +544,11 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
           {eventTypes.length > 0 && (
             <button onClick={() => setEventTypes([])} className="text-xs text-slate-500 hover:text-slate-800 ml-1 underline">Clear</button>
           )}
+          <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={includeHidden}
+              onChange={e => { setOffset(0); setIncludeHidden(e.target.checked); }} />
+            Show hidden entries
+          </label>
         </div>
       </div>
 
@@ -544,7 +567,9 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
               fullUrl={fullUrl}
               onPreview={setPreview}
               onPurge={purgeProof}
-              purging={purging} />
+              onToggleHidden={toggleHidden}
+              purging={purging}
+              busyEventId={busyEventId} />
           ))}
         </div>
       )}
@@ -778,21 +803,27 @@ function DepositRow({ d, onRefund, onForfeit }: {
 }
 
 function EventRow({
-  e, fullUrl, onPreview, onPurge, purging,
+  e, fullUrl, onPreview, onPurge, onToggleHidden, purging, busyEventId,
 }: {
   e: FinanceEvent;
   fullUrl: (u: string | null) => string | null;
   onPreview: (u: string | null) => void;
   onPurge: (holdingId: number | null, kind: 'refund' | 'damage') => void;
+  onToggleHidden: (eventId: number, currentlyHidden: boolean) => void;
   purging: number | null;
+  busyEventId: number | null;
 }) {
   const meta = EVENT_META[e.event_type] || { label: e.event_type, tone: 'neutral' as const };
   const tone =
     e.direction === 'income' ? 'text-emerald-700' :
     e.direction === 'expense' ? 'text-red-700' : 'text-slate-700';
   const sign = e.direction === 'income' ? '+' : e.direction === 'expense' ? '−' : '';
+  const isHidden = !!e.hidden_at;
+  /* Don't surface raw upload paths as "ref" — that's the proof URL we
+   * stash for the verify event, not a human-meaningful reference. */
+  const displayRef = e.reference && !e.reference.startsWith('/uploads/') ? e.reference : null;
   return (
-    <div className="p-3 md:p-4 grid grid-cols-1 md:grid-cols-[auto,1fr,auto] gap-3 items-start">
+    <div className={`p-3 md:p-4 grid grid-cols-1 md:grid-cols-[auto,1fr,auto] gap-3 items-start ${isHidden ? 'opacity-60' : ''}`}>
       <div className="flex items-start gap-3 min-w-0">
         {/* Proof thumbnails */}
         <div className="flex flex-col gap-1">
@@ -803,7 +834,7 @@ function EventRow({
               <img src={fullUrl(e.refund_proof_url) || ''} alt="refund proof" className="w-full h-full object-cover" />
               <button onClick={(ev) => { ev.stopPropagation(); onPurge(e.holding_id, 'refund'); }}
                 disabled={purging === (e.holding_id || 0) * 10 + 1}
-                title="Remove image"
+                title="Remove image (audit row stays)"
                 className="absolute -top-1 -right-1 bg-white border border-slate-200 rounded-full p-0.5 shadow-sm text-slate-500 hover:text-red-600">
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -816,7 +847,7 @@ function EventRow({
               <img src={fullUrl(e.damage_photo_url) || ''} alt="damage" className="w-full h-full object-cover" />
               <button onClick={(ev) => { ev.stopPropagation(); onPurge(e.holding_id, 'damage'); }}
                 disabled={purging === (e.holding_id || 0) * 10 + 2}
-                title="Remove image"
+                title="Remove image (audit row stays)"
                 className="absolute -top-1 -right-1 bg-white border border-slate-200 rounded-full p-0.5 shadow-sm text-slate-500 hover:text-red-600">
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -835,7 +866,8 @@ function EventRow({
           </p>
           <p className="text-xs mt-0.5">
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
-            {e.reference && <span className="ml-2 text-slate-500">ref {e.reference}</span>}
+            {isHidden && <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200 text-slate-700">Hidden</span>}
+            {displayRef && <span className="ml-2 text-slate-500">ref {displayRef}</span>}
             {e.manual_refund_method && <span className="ml-2 text-slate-500">({e.manual_refund_method})</span>}
           </p>
           <p className="text-[11px] text-slate-500 mt-0.5">
@@ -847,8 +879,15 @@ function EventRow({
         </div>
       </div>
       <div /> {/* spacer */}
-      <div className={`text-right text-base font-extrabold ${tone} whitespace-nowrap`}>
-        {Number(e.amount) ? `${sign}₹${Number(e.amount).toFixed(2)}` : '—'}
+      <div className="flex items-center gap-3 justify-end">
+        <span className={`text-base font-extrabold ${tone} whitespace-nowrap`}>
+          {Number(e.amount) ? `${sign}₹${Number(e.amount).toFixed(2)}` : '—'}
+        </span>
+        <button onClick={() => onToggleHidden(e.id, isHidden)} disabled={busyEventId === e.id}
+          title={isHidden ? 'Restore to history' : 'Hide from history (audit row stays, books unaffected)'}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          {isHidden ? <RotateCcw className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+        </button>
       </div>
     </div>
   );

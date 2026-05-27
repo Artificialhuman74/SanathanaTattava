@@ -47,8 +47,12 @@ function classifyLine(item) {
  * Each entry carries `kind` ('delivery' | 'pickup') and `id` so the UI
  * can deep-link to the matching card on the dashboard.
  */
-function getConsumerPendingElsewhere({ consumerId, excludeOrderId = null, excludeHoldingId = null }) {
-  const orders = db.prepare(`
+function getConsumerPendingElsewhere({ consumerId, viewerId, viewerRole, excludeOrderId = null, excludeHoldingId = null }) {
+  /* Scope to the viewer: a delivery driver should only see their own
+   * assigned orders + pickups in the cross-reference footer. Admins
+   * see everything (they're not picking these cards to act on). */
+  const isAdmin = viewerRole === 'admin';
+  const ordersSql = `
     SELECT co.id, co.order_number, co.delivery_status, co.total_amount, co.created_at,
            (SELECT COUNT(*) FROM consumer_order_items oi WHERE oi.order_id=co.id) AS item_count
       FROM consumer_orders co
@@ -57,20 +61,27 @@ function getConsumerPendingElsewhere({ consumerId, excludeOrderId = null, exclud
        AND co.status NOT IN ('cancelled')
        AND co.delivery_status NOT IN ('delivered','failed','cancelled')
        AND co.id != COALESCE(?, -1)
+       ${isAdmin ? '' : 'AND co.delivery_dealer_id = ?'}
      ORDER BY co.created_at DESC
-  `).all(consumerId, excludeOrderId);
+  `;
+  const orderArgs = isAdmin ? [consumerId, excludeOrderId] : [consumerId, excludeOrderId, viewerId];
+  const orders = db.prepare(ordersSql).all(...orderArgs);
 
-  const pickups = db.prepare(`
+  const pickupsSql = `
     SELECT h.id, h.container_type, h.deposit_amount, h.refund_destination,
            h.requested_at, h.created_at,
            p_cur.name AS current_product_name
       FROM container_holdings h
+      JOIN consumers c    ON c.id = h.consumer_id
       JOIN products p_cur ON p_cur.id = h.current_product_id
      WHERE h.consumer_id = ?
        AND h.status = 'refund_requested'
        AND h.id != COALESCE(?, -1)
+       ${isAdmin ? '' : 'AND c.linked_dealer_id = ?'}
      ORDER BY h.requested_at ASC, h.id ASC
-  `).all(consumerId, excludeHoldingId);
+  `;
+  const pickupArgs = isAdmin ? [consumerId, excludeHoldingId] : [consumerId, excludeHoldingId, viewerId];
+  const pickups = db.prepare(pickupsSql).all(...pickupArgs);
 
   return [
     ...orders.map(o => ({
@@ -204,6 +215,8 @@ router.get('/orders/assigned', (req, res) => {
       order.items = items.map(it => ({ ...it, line_type: classifyLine(it) }));
       order.consumer_pending_elsewhere = getConsumerPendingElsewhere({
         consumerId: order.consumer_id,
+        viewerId: req.user.id,
+        viewerRole: req.user.role,
         excludeOrderId: order.id,
       });
     }
@@ -718,6 +731,8 @@ router.get('/container-pickups', (req, res) => {
     for (const r of rows) {
       r.consumer_pending_elsewhere = getConsumerPendingElsewhere({
         consumerId: r.consumer_id,
+        viewerId: req.user.id,
+        viewerRole: req.user.role,
         excludeHoldingId: r.id,
       });
     }
