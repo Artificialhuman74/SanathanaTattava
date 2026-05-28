@@ -182,15 +182,17 @@ router.get('/fleet/orders', (req, res) => {
  * see the order on their dashboard (read-only). Idempotent — calling
  * twice has no extra effect.
  * ═════════════════════════════════════════════════════════════════════ */
-router.post('/orders/:id/takeover', param('id').isInt(), (req, res) => {
+router.post('/orders/:id/takeover', (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' });
   }
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  const orderId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: 'Invalid order id' });
+  }
 
   try {
-    const order = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(req.params.id);
+    const order = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (order.delivery_dealer_id === req.user.id) {
       return res.json({ ok: true, message: 'Already assigned to you', order });

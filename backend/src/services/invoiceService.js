@@ -103,20 +103,33 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
   totalTaxable = +totalTaxable.toFixed(2);
   totalTax     = +totalTax.toFixed(2);
 
-  const cgst = isIntraState ? +(totalTax / 2).toFixed(2) : 0;
-  const sgst = isIntraState ? +(totalTax - cgst).toFixed(2) : 0;
-  const igst = isIntraState ? 0 : totalTax;
-
   /* Refundable container deposit — not part of taxable supply.
    * Safe under CGST Act §2(31) Explanation: refundable deposits aren't
    * "consideration" until forfeited. Must be refunded on undamaged return. */
   const containerDeposit = +(order.container_costs_total || 0).toFixed(2);
 
-  /* Invoice total = full taxable supply (including tax + refundable deposit).
-   * Phase 7: any store credit applied is a payment instrument, NOT a discount
-   * on the consideration. So the invoice total stays at gross; only the
-   * Razorpay charge (order.total_amount) is reduced. */
-  const totalAmount = +(totalTaxable + totalTax + containerDeposit).toFixed(2);
+  /* Cart-level discount, applied only to taxable supply (the MRP subtotal)
+   * — NOT to the container deposit. The discount amount stored on the order
+   * is GST-inclusive (subtotal × discount_percent / 100), so we split it
+   * back into a taxable component and a tax component using the same default
+   * rate. The invoice then shows full per-item prices and a single discount
+   * line that reduces both taxable amount and tax. */
+  const discountGross   = +(order.discount_amount || 0).toFixed(2);
+  const discountTaxable = +(discountGross / (1 + DEFAULT_TAX_RATE / 100)).toFixed(2);
+  const discountTax     = +(discountGross - discountTaxable).toFixed(2);
+
+  const netTaxable = +(totalTaxable - discountTaxable).toFixed(2);
+  const netTax     = +(totalTax     - discountTax).toFixed(2);
+
+  const cgst = isIntraState ? +(netTax / 2).toFixed(2) : 0;
+  const sgst = isIntraState ? +(netTax - cgst).toFixed(2) : 0;
+  const igst = isIntraState ? 0 : netTax;
+
+  /* Invoice total = net taxable supply (post-discount, with tax) + refundable
+   * deposit. Phase 7: any store credit applied is a payment instrument, NOT a
+   * discount on the consideration. So the invoice total stays at gross; only
+   * the Razorpay charge (order.total_amount) is reduced. */
+  const totalAmount = +(netTaxable + netTax + containerDeposit).toFixed(2);
 
   const invoiceNumber = allocateInvoiceNumber();
 
@@ -134,7 +147,7 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
     consumer.name, consumer.email || null, consumer.phone || null,
     order.delivery_address || null, customerState || null, consumer.gstin || null,
     JSON.stringify(invoiceItems),
-    totalTaxable, cgst, sgst, igst, containerDeposit, totalAmount,
+    netTaxable, cgst, sgst, igst, containerDeposit, totalAmount,
     paymentId || order.razorpay_payment_id || null
   );
   const invoiceId = result.lastInsertRowid;
@@ -162,7 +175,10 @@ async function generateInvoiceForOrder(orderId, { paymentId } = {}) {
       customer_state:      customerState,
       customer_gstin:      consumer.gstin,
       items:               invoiceItems,
-      taxable_amount:      totalTaxable,
+      taxable_amount:      netTaxable,
+      gross_taxable_amount: totalTaxable,
+      discount_amount:     discountGross,
+      discount_percent:    order.discount_percent || 0,
       cgst_amount:         cgst,
       sgst_amount:         sgst,
       igst_amount:         igst,

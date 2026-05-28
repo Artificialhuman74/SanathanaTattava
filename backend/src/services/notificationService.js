@@ -84,7 +84,7 @@ function notifyDealerDeliveryAssigned({
         SELECT coi.quantity, p.name AS product_name
         FROM consumer_order_items coi
         LEFT JOIN products p ON p.id = coi.product_id
-        WHERE coi.consumer_order_id = ?
+        WHERE coi.order_id = ?
       `).all(orderId);
       const ord = db.prepare(`SELECT total_amount FROM consumer_orders WHERE id = ?`).get(orderId);
       totalAmount = ord?.total_amount || 0;

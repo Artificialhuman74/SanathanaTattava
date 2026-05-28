@@ -166,17 +166,31 @@ function renderInvoicePdf(inv) {
        .moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.6);
 
-    /* ── Totals block (right-aligned) ───────────────────────────────── */
-    const totX = 360, totW = 195;
+    /* ── Totals block (right-aligned) ─────────────────────────────────
+     * Widened label column + dynamic row height so long labels (e.g.
+     * "Refundable Container Deposit (N × new)") can wrap without
+     * overlapping the row below. */
+    const totX = 320, labelW = 150, valueW = 85;
     const totalLine = (label, value, opts = {}) => {
       const y = doc.y;
-      doc.fontSize(opts.bold ? 11 : 9.5).font(opts.bold ? 'Helvetica-Bold' : 'Helvetica')
+      const size = opts.bold ? 11 : 9.5;
+      doc.fontSize(size).font(opts.bold ? 'Helvetica-Bold' : 'Helvetica')
          .fillColor(opts.bold ? '#0f172a' : '#475569');
-      doc.text(label, totX, y, { width: 110, align: 'left' });
-      doc.text(value, totX + 110, y, { width: 85, align: 'right' });
-      doc.y = y + (opts.bold ? 18 : 14);
+      const labelH = doc.heightOfString(label, { width: labelW });
+      const valueH = doc.heightOfString(value, { width: valueW });
+      const rowH = Math.max(labelH, valueH);
+      doc.text(label, totX, y, { width: labelW, align: 'left' });
+      doc.text(value, totX + labelW, y, { width: valueW, align: 'right' });
+      doc.y = y + rowH + (opts.bold ? 6 : 3);
     };
 
+    const hasDiscount = (inv.discount_amount || 0) > 0;
+    if (hasDiscount) {
+      totalLine('Subtotal', `Rs. ${inr(inv.gross_taxable_amount ?? inv.taxable_amount)}`);
+      const pct = Number(inv.discount_percent) || 0;
+      const discLabel = pct > 0 ? `Discount (${pct}%)` : 'Discount';
+      totalLine(discLabel, `- Rs. ${inr(inv.discount_amount)}`);
+    }
     totalLine('Taxable Amount', `Rs. ${inr(inv.taxable_amount)}`);
     if (isIntraState) {
       totalLine('CGST', `Rs. ${inr(inv.cgst_amount)}`);
