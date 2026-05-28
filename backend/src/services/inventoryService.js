@@ -78,15 +78,19 @@ function restockDealer(dealerId, items, notes = '') {
 /* ── Order Deduction: Decrease dealer stock on PACKED ────────────────── */
 
 /**
- * Deduct order items from a dealer's inventory.
+ * Deduct order items from inventory.
  * Called when order status changes to 'processing' (packed).
  *
+ * If the fulfilling user is an admin (e.g. after a delivery takeover), stock
+ * is pulled from the warehouse (products.stock) instead of dealer_inventory —
+ * the original dealer's stock must not be touched.
+ *
  * @param {number} orderId
- * @param {number} dealerId  The delivery or linked dealer
+ * @param {number} fulfillerId  The user fulfilling delivery (dealer OR admin)
  * @returns {{ success: boolean, deducted: object[] }}
- * @throws If dealer has insufficient stock for any item
+ * @throws If stock is insufficient for any item
  */
-function deductOrderInventory(orderId, dealerId) {
+function deductOrderInventory(orderId, fulfillerId) {
   const items = db.prepare(`
     SELECT oi.product_id, oi.quantity, p.name as product_name
     FROM consumer_order_items oi
@@ -95,6 +99,9 @@ function deductOrderInventory(orderId, dealerId) {
   `).all(orderId);
 
   if (items.length === 0) throw new Error('No items found for this order');
+
+  const fulfiller = db.prepare(`SELECT role FROM users WHERE id = ?`).get(fulfillerId);
+  const isAdmin = fulfiller && fulfiller.role === 'admin';
 
   return db.transaction(() => {
     // Idempotency: skip if already deducted for this order
@@ -107,50 +114,74 @@ function deductOrderInventory(orderId, dealerId) {
     const deducted = [];
 
     for (const item of items) {
-      // Check dealer has enough stock
-      const inv = db.prepare(`
-        SELECT quantity FROM dealer_inventory
-        WHERE dealer_id = ? AND product_id = ?
-      `).get(dealerId, item.product_id);
+      if (isAdmin) {
+        // Admin-fulfilled (e.g. takeover): pull from warehouse, NOT dealer stock
+        const product = db.prepare(`SELECT stock, name FROM products WHERE id = ?`).get(item.product_id);
+        const currentQty = product ? product.stock : 0;
+        if (currentQty < item.quantity) {
+          throw new Error(
+            `Insufficient warehouse stock for "${item.product_name}" ` +
+            `(warehouse has ${currentQty}, order needs ${item.quantity})`
+          );
+        }
+        db.prepare(`
+          UPDATE products SET stock = stock - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `).run(item.quantity, item.product_id);
 
-      const currentQty = inv ? inv.quantity : 0;
-      if (currentQty < item.quantity) {
-        throw new Error(
-          `Insufficient dealer stock for "${item.product_name}" ` +
-          `(dealer has ${currentQty}, order needs ${item.quantity})`
-        );
+        deducted.push({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity_deducted: item.quantity,
+          remaining: currentQty - item.quantity,
+          source: 'warehouse',
+        });
+      } else {
+        // Check dealer has enough stock
+        const inv = db.prepare(`
+          SELECT quantity FROM dealer_inventory
+          WHERE dealer_id = ? AND product_id = ?
+        `).get(fulfillerId, item.product_id);
+
+        const currentQty = inv ? inv.quantity : 0;
+        if (currentQty < item.quantity) {
+          throw new Error(
+            `Insufficient dealer stock for "${item.product_name}" ` +
+            `(dealer has ${currentQty}, order needs ${item.quantity})`
+          );
+        }
+
+        // Deduct
+        db.prepare(`
+          UPDATE dealer_inventory
+          SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP
+          WHERE dealer_id = ? AND product_id = ?
+        `).run(item.quantity, fulfillerId, item.product_id);
+
+        // Log transaction
+        db.prepare(`
+          INSERT INTO inventory_transactions (dealer_id, product_id, quantity, type, reference_id, notes)
+          VALUES (?, ?, ?, 'order_deduct', ?, ?)
+        `).run(fulfillerId, item.product_id, -item.quantity, orderId, `Order #${orderId} packed`);
+
+        deducted.push({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity_deducted: item.quantity,
+          remaining: currentQty - item.quantity,
+          source: 'dealer',
+        });
       }
-
-      // Deduct
-      db.prepare(`
-        UPDATE dealer_inventory
-        SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE dealer_id = ? AND product_id = ?
-      `).run(item.quantity, dealerId, item.product_id);
-
-      // Log transaction
-      db.prepare(`
-        INSERT INTO inventory_transactions (dealer_id, product_id, quantity, type, reference_id, notes)
-        VALUES (?, ?, ?, 'order_deduct', ?, ?)
-      `).run(dealerId, item.product_id, -item.quantity, orderId, `Order #${orderId} packed`);
-
-      deducted.push({
-        product_id: item.product_id,
-        product_name: item.product_name,
-        quantity_deducted: item.quantity,
-        remaining: currentQty - item.quantity,
-      });
     }
 
-    // Mark order as deducted + record which dealer fulfilled it
+    // Mark order as deducted + record who fulfilled it (admin id when taken over)
     db.prepare(`
       UPDATE consumer_orders
       SET inventory_deducted = 1, fulfilled_by_dealer_id = ?
       WHERE id = ?
-    `).run(dealerId, orderId);
+    `).run(fulfillerId, orderId);
 
-    // Check low stock after deduction
-    checkLowStockAlerts(dealerId);
+    // Low-stock alerts only meaningful for dealer fulfilment
+    if (!isAdmin) checkLowStockAlerts(fulfillerId);
 
     return { success: true, deducted };
   })();
