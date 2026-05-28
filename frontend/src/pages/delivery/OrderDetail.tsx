@@ -173,6 +173,7 @@ export default function DeliveryOrderDetail() {
   const status = order.delivery_status || 'pending';
   const items = order.items || [];
   const timeline = order.timeline;
+  const readOnly = !!order.read_only;
 
   return (
     <div className="animate-fade-in pb-6">
@@ -194,6 +195,16 @@ export default function DeliveryOrderDetail() {
       </div>
 
       <div className="p-4 space-y-4">
+        {readOnly && (
+          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-800">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>
+              <b>Admin{order.admin_takeover_name ? ` (${order.admin_takeover_name})` : ''} has taken over this delivery.</b>{' '}
+              You can still view the order, but only the admin can now take action on it.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -410,7 +421,7 @@ export default function DeliveryOrderDetail() {
         </div>
 
         {/* Action Buttons */}
-        {status === 'pending' && (
+        {!readOnly && status === 'pending' && (
           <button
             onClick={handleAccept}
             disabled={actionLoading}
@@ -421,7 +432,7 @@ export default function DeliveryOrderDetail() {
           </button>
         )}
 
-        {status === 'accepted' && (
+        {!readOnly && status === 'accepted' && (
           <button
             onClick={handlePacked}
             disabled={actionLoading}
@@ -432,7 +443,7 @@ export default function DeliveryOrderDetail() {
           </button>
         )}
 
-        {status === 'packed' && (
+        {!readOnly && status === 'packed' && (
           <button
             onClick={handleStartDelivery}
             disabled={actionLoading}
@@ -443,7 +454,7 @@ export default function DeliveryOrderDetail() {
           </button>
         )}
 
-        {status === 'out_for_delivery' && (
+        {!readOnly && status === 'out_for_delivery' && (
           <div className="space-y-3">
             {/* Send OTP to customer notification */}
             <button

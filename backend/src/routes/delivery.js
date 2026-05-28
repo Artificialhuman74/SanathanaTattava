@@ -150,14 +150,17 @@ router.get('/fleet/orders', (req, res) => {
       SELECT co.id, co.order_number, co.status AS order_status,
              co.delivery_status, co.total_amount, co.delivery_address,
              co.created_at, co.delivery_dealer_id,
+             co.original_delivery_dealer_id, co.admin_taken_over_at,
              c.name  AS consumer_name,
              c.phone AS consumer_phone,
              u.name  AS dealer_name,
              u.phone AS dealer_phone,
-             u.role  AS dealer_role
+             u.role  AS dealer_role,
+             ou.name AS original_dealer_name
       FROM consumer_orders co
       LEFT JOIN consumers c ON c.id = co.consumer_id
       LEFT JOIN users u     ON u.id = co.delivery_dealer_id
+      LEFT JOIN users ou    ON ou.id = co.original_delivery_dealer_id
       WHERE co.payment_status = 'paid'
         AND co.status NOT IN ('cancelled')
         AND co.delivery_status IN ('pending','accepted','packed','out_for_delivery')
@@ -173,6 +176,59 @@ router.get('/fleet/orders', (req, res) => {
 });
 
 /* ═════════════════════════════════════════════════════════════════════
+ * POST /delivery/orders/:id/takeover
+ * Admin-only. Reassigns delivery_dealer_id to the admin while preserving
+ * the original driver's id in original_delivery_dealer_id so they still
+ * see the order on their dashboard (read-only). Idempotent — calling
+ * twice has no extra effect.
+ * ═════════════════════════════════════════════════════════════════════ */
+router.post('/orders/:id/takeover', param('id').isInt(), (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  try {
+    const order = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.delivery_dealer_id === req.user.id) {
+      return res.json({ ok: true, message: 'Already assigned to you', order });
+    }
+
+    const previousDealerId = order.delivery_dealer_id;
+    const originalToPreserve = order.original_delivery_dealer_id || previousDealerId;
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE consumer_orders
+         SET original_delivery_dealer_id = ?,
+             delivery_dealer_id          = ?,
+             admin_taken_over_at         = ?,
+             updated_at                  = ?
+       WHERE id = ?
+    `).run(originalToPreserve, req.user.id, now, now, order.id);
+
+    const updated = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(order.id);
+
+    emitOrderUpdate({
+      orderId: updated.id,
+      orderNumber: updated.order_number,
+      status: updated.status,
+      deliveryStatus: updated.delivery_status,
+      consumerId: updated.consumer_id,
+      linkedDealerId: updated.linked_dealer_id,
+      deliveryDealerId: updated.delivery_dealer_id,
+    });
+
+    res.json({ ok: true, order: updated });
+  } catch (err) {
+    console.error('POST /delivery/orders/:id/takeover error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/* ═════════════════════════════════════════════════════════════════════
  * GET /delivery/orders/assigned
  * ═════════════════════════════════════════════════════════════════════ */
 router.get('/orders/assigned', (req, res) => {
@@ -180,17 +236,22 @@ router.get('/orders/assigned', (req, res) => {
     const dealerId = req.user.id;
     const { delivery_status } = req.query;
 
+    /* Drivers see orders directly assigned to them, AND orders that were
+     * previously assigned to them but admin has taken over (read-only, so
+     * the driver knows what happened to their queue). */
     let sql = `
       SELECT co.*,
              c.name  AS consumer_name,
-             c.phone AS consumer_phone
+             c.phone AS consumer_phone,
+             admin_u.name AS admin_takeover_name
       FROM consumer_orders co
       LEFT JOIN consumers c ON c.id = co.consumer_id
-      WHERE co.delivery_dealer_id = ?
+      LEFT JOIN users admin_u ON admin_u.id = co.delivery_dealer_id AND co.admin_taken_over_at IS NOT NULL
+      WHERE (co.delivery_dealer_id = ? OR co.original_delivery_dealer_id = ?)
         AND co.payment_status = 'paid'
         AND co.status NOT IN ('cancelled')
     `;
-    const params = [dealerId];
+    const params = [dealerId, dealerId];
 
     if (delivery_status) {
       sql += ` AND co.delivery_status = ?`;
@@ -200,6 +261,12 @@ router.get('/orders/assigned', (req, res) => {
     sql += ` ORDER BY co.created_at DESC`;
 
     const orders = db.prepare(sql).all(...params);
+
+    /* Flag read-only orders: ones admin has taken over and the viewer is
+     * the original driver (not the current delivery_dealer_id). */
+    for (const o of orders) {
+      o.read_only = !!(o.admin_taken_over_at && o.delivery_dealer_id !== dealerId);
+    }
 
     // Attach items with product details for each order
     const itemStmt = db.prepare(`

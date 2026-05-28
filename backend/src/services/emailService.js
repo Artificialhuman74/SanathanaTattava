@@ -644,6 +644,65 @@ async function sendAdminDisputeOpenedEmail({
   return sendMail({ to: ADMIN_EMAIL, subject, text, html });
 }
 
+/* ── Delivery assignment notification (to assigned trader) ────────────── */
+async function sendDeliveryAssignmentEmail({
+  toEmail, traderName, orderNumber, consumerName, consumerPhone,
+  deliveryAddress, itemsSummary, totalAmount, orderUrl,
+}) {
+  const subject  = `New delivery assigned · Order ${orderNumber}`;
+  const text     =
+    `Hi ${traderName || 'there'},\n\n` +
+    `A new consumer order has been assigned to you for delivery.\n\n` +
+    `Order:    ${orderNumber}\n` +
+    `Customer: ${consumerName || '—'}${consumerPhone ? ` (${consumerPhone})` : ''}\n` +
+    `Address:  ${deliveryAddress || '—'}\n` +
+    `Items:    ${itemsSummary || '—'}\n` +
+    `Total:    ₹${Number(totalAmount || 0).toFixed(2)}\n\n` +
+    `Open the order to accept and start delivery: ${orderUrl}\n`;
+  const html     = buildEmailHtml({
+    title:     'New delivery assigned',
+    preheader: `Order ${orderNumber} — ${consumerName || 'customer'}`,
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi <strong>${traderName || 'there'}</strong>, a new consumer order has been assigned to you for delivery.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;background:#f8fafc;border-radius:12px;padding:16px;margin:0 0 20px;">
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;width:96px;">Order</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;font-family:monospace;">${orderNumber}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;">Customer</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;">${consumerName || '—'}${consumerPhone ? ` · ${consumerPhone}` : ''}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;vertical-align:top;">Address</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;">${deliveryAddress || '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;vertical-align:top;">Items</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;">${itemsSummary || '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;">Total</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:700;">₹${Number(totalAmount || 0).toFixed(2)}</td>
+        </tr>
+      </table>
+      <div style="text-align:center;margin:0 0 16px;">
+        <a href="${orderUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#14532d,#16a34a);color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 28px;border-radius:12px;">
+          Open delivery dashboard
+        </a>
+      </div>
+      <p style="margin:0;color:#64748b;font-size:13px;text-align:center;">
+        Accept the order, pack it, and confirm the customer's 6-digit OTP at the door.
+      </p>
+    `,
+    footer: 'You are receiving this because you were assigned this order on Sanathana Tattva.',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
 module.exports = {
   sendVerificationEmail, sendPasswordResetEmail, sendDeliveryOtpEmail, sendReviewRequestEmail,
   sendCommissionConfirmationEmail, sendCommissionDisputeEmail, sendAdminStockAlert,
@@ -651,5 +710,6 @@ module.exports = {
   sendOrderConfirmedEmail, sendOutForDeliveryEmail, sendInvoiceEmail,
   sendContainerRefundRequestEmail,
   sendAdminDamageReportEmail, sendAdminDisputeOpenedEmail,
+  sendDeliveryAssignmentEmail,
   DEV_MODE,
 };

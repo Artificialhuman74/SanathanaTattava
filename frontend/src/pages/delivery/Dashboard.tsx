@@ -280,7 +280,12 @@ export default function DeliveryDashboard() {
 
       {/* Admin: Fleet view */}
       {isAdmin && (
-        <FleetView orders={fleetOrders} onOpen={id => navigate(`/delivery/orders/${id}`)} />
+        <FleetView
+          orders={fleetOrders}
+          adminId={user?.id}
+          onOpen={id => navigate(`/delivery/orders/${id}`)}
+          onChanged={fetchData}
+        />
       )}
 
       {/* Active visits — orders + standalone pickups in one unified feed */}
@@ -465,7 +470,16 @@ function StopCard({
   );
 }
 
-function FleetView({ orders, onOpen }: { orders: any[]; onOpen: (id: number) => void }) {
+function FleetView({
+  orders, onOpen, onChanged, adminId,
+}: {
+  orders: any[];
+  onOpen: (id: number) => void;
+  onChanged: () => void;
+  adminId?: number;
+}) {
+  const [takingOver, setTakingOver] = useState<number | null>(null);
+
   const counts = orders.reduce(
     (acc: Record<string, number>, o) => {
       const s = o.delivery_status || 'pending';
@@ -474,6 +488,20 @@ function FleetView({ orders, onOpen }: { orders: any[]; onOpen: (id: number) => 
     },
     { pending: 0, accepted: 0, packed: 0, out_for_delivery: 0 },
   );
+
+  const handleTakeOver = async (e: React.MouseEvent, orderId: number) => {
+    e.stopPropagation();
+    if (!confirm('Take over delivery for this order? The original driver will keep visibility but read-only.')) return;
+    setTakingOver(orderId);
+    try {
+      await api.post(`/delivery/orders/${orderId}/takeover`);
+      onChanged();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to take over order');
+    } finally {
+      setTakingOver(null);
+    }
+  };
 
   return (
     <div>
@@ -502,37 +530,57 @@ function FleetView({ orders, onOpen }: { orders: any[]; onOpen: (id: number) => 
           {orders.slice(0, 15).map(o => {
             const status = o.delivery_status || 'pending';
             const unassigned = !o.delivery_dealer_id;
+            const takenOver = !!o.admin_taken_over_at;
+            const isMine = adminId && o.delivery_dealer_id === adminId;
+            const canTakeOver = !isMine && !['delivered', 'cancelled', 'failed'].includes(status);
             return (
-              <button
+              <div
                 key={o.id}
-                onClick={() => onOpen(o.id)}
-                className="w-full p-3 text-left hover:bg-slate-50 transition-colors"
+                className="w-full p-3 hover:bg-slate-50 transition-colors"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-800 truncate">
-                        #{o.order_number}
+                <button onClick={() => onOpen(o.id)} className="w-full text-left">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          #{o.order_number}
+                        </p>
+                        <span className="text-xs text-slate-400">·</span>
+                        <p className="text-xs text-slate-500 truncate">{o.consumer_name || 'Customer'}</p>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {unassigned ? (
+                          <span className="text-red-600 font-semibold">UNASSIGNED</span>
+                        ) : takenOver ? (
+                          <>
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold mr-1">TAKEN OVER</span>
+                            Original: <b>{o.original_dealer_name || `#${o.original_delivery_dealer_id}`}</b>
+                          </>
+                        ) : (
+                          <>
+                            Dealer: <b>{o.dealer_name || `#${o.delivery_dealer_id}`}</b>
+                            {o.dealer_role === 'admin' && <span className="text-amber-600 ml-1">(admin fallback)</span>}
+                          </>
+                        )}
                       </p>
-                      <span className="text-xs text-slate-400">·</span>
-                      <p className="text-xs text-slate-500 truncate">{o.consumer_name || 'Customer'}</p>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      {unassigned ? (
-                        <span className="text-red-600 font-semibold">UNASSIGNED</span>
-                      ) : (
-                        <>
-                          Dealer: <b>{o.dealer_name || `#${o.delivery_dealer_id}`}</b>
-                          {o.dealer_role === 'admin' && <span className="text-amber-600 ml-1">(admin fallback)</span>}
-                        </>
-                      )}
-                    </p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
+                      {DELIVERY_STATUS_LABELS[status] || status}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-                    {DELIVERY_STATUS_LABELS[status] || status}
-                  </span>
-                </div>
-              </button>
+                </button>
+                {canTakeOver && (
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={(e) => handleTakeOver(e, o.id)}
+                      disabled={takingOver === o.id}
+                      className="text-[11px] font-semibold px-3 py-1 rounded-full bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50"
+                    >
+                      {takingOver === o.id ? 'Taking over…' : 'Take Over'}
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
           {orders.length > 15 && (

@@ -997,6 +997,32 @@ function runMigrations(db) {
   }
 
   /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Admin takeover + manual-override columns on consumer_orders
+   *
+   * - original_delivery_dealer_id: the driver the order was originally
+   *   assigned to before admin took over. Lets the original driver still
+   *   see the order (read-only) on their dashboard.
+   * - admin_taken_over_at: timestamp when admin took over. Drives the
+   *   read-only banner for the original driver and the "Delivered by
+   *   [Admin] (admin)" card label when admin completes via OTP.
+   * - admin_overridden_at: timestamp when admin completed delivery via
+   *   the manual status dropdown (bypassing OTP). Drives the
+   *   "Delivered directly by [Admin]" card label.
+   * ═══════════════════════════════════════════════════════════════════ */
+  if (!hasColumn('consumer_orders', 'original_delivery_dealer_id')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN original_delivery_dealer_id INTEGER REFERENCES users(id)`);
+    console.log('[migration] consumer_orders: added original_delivery_dealer_id');
+  }
+  if (!hasColumn('consumer_orders', 'admin_taken_over_at')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN admin_taken_over_at TIMESTAMP`);
+    console.log('[migration] consumer_orders: added admin_taken_over_at');
+  }
+  if (!hasColumn('consumer_orders', 'admin_overridden_at')) {
+    db.exec(`ALTER TABLE consumer_orders ADD COLUMN admin_overridden_at TIMESTAMP`);
+    console.log('[migration] consumer_orders: added admin_overridden_at');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
    * Migration: Convert product image data URLs from WebP → JPEG (q=92)
    *
    * An earlier migration converted product images from JPEG → WebP for

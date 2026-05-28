@@ -12,6 +12,8 @@ const {
   updateThreshold,
   returnOrderInventory,
 } = require('../services/inventoryService');
+const { markHoldingsDelivered } = require('../services/containerHoldingsService');
+const { notifyDealerDeliveryAssigned, notifyConsumerDeliveryAssigned } = require('../services/notificationService');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -235,11 +237,13 @@ router.get('/consumer-orders', (req, res) => {
   let sql = `
     SELECT co.*, c.name as consumer_name, c.phone as consumer_phone,
            u.name as dealer_name, u.tier as dealer_tier, u.phone as dealer_phone,
-           d2.name as delivery_dealer_name
+           d2.name as delivery_dealer_name,
+           orig.name as original_delivery_dealer_name
     FROM consumer_orders co
     JOIN consumers c   ON co.consumer_id = c.id
     LEFT JOIN users u  ON co.linked_dealer_id = u.id
     LEFT JOIN users d2 ON co.delivery_dealer_id = d2.id
+    LEFT JOIN users orig ON co.original_delivery_dealer_id = orig.id
     WHERE 1=1
   `, params = [];
   if (status)         { sql += ` AND co.status = ?`;         params.push(status); }
@@ -284,24 +288,77 @@ router.get('/consumer-orders/:id', (req, res) => {
   res.json({ order, items, commissions });
 });
 
+/* Admin's dropdown on the Consumer Orders page drives the delivery
+ * lifecycle directly. The dropdown now uses the same labels the delivery
+ * portal uses (pending / accepted / packed / out_for_delivery / delivered
+ * / failed / cancelled), and selecting 'delivered' triggers the same
+ * side-effects as a driver completing via OTP — including flipping
+ * container_holdings from pending_delivery → held. The admin_overridden_at
+ * timestamp lets the UI label this card "Delivered directly by [Admin]". */
 router.put('/consumer-orders/:id/status', (req, res) => {
-  const valid = ['pending','confirmed','processing','shipped','delivered','cancelled'];
+  const valid = ['pending','accepted','packed','out_for_delivery','delivered','failed','cancelled'];
   const { status, payment_status } = req.body;
   const order = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Not found' });
   if (status && !valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  if (status)         db.prepare(`UPDATE consumer_orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(status, req.params.id);
-  if (payment_status) db.prepare(`UPDATE consumer_orders SET payment_status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(payment_status, req.params.id);
 
-  if (status === 'cancelled') {
-    try { returnOrderInventory(order.id); }
-    catch (invErr) { console.error('[admin cancel] inventory restore failed:', invErr.message); }
+  let nextDeliveryStatus = order.delivery_status;
+  let nextOrderStatus    = order.status;
+
+  if (status) {
+    const now = new Date().toISOString();
+
+    if (status === 'delivered') {
+      // Mirror the OTP-completion side-effects so containers transfer
+      // custody and the order lifecycle closes cleanly.
+      db.prepare(`
+        UPDATE consumer_orders
+           SET status              = 'delivered',
+               delivery_status     = 'delivered',
+               delivery_verified_at= ?,
+               delivery_otp        = NULL,
+               admin_overridden_at = ?,
+               updated_at          = ?
+         WHERE id = ?
+      `).run(now, now, now, order.id);
+      nextOrderStatus    = 'delivered';
+      nextDeliveryStatus = 'delivered';
+
+      try { markHoldingsDelivered(order.id); }
+      catch (hErr) { console.error('[admin override] markHoldingsDelivered failed:', hErr.message); }
+    } else if (status === 'cancelled') {
+      db.prepare(`
+        UPDATE consumer_orders
+           SET status         = 'cancelled',
+               updated_at     = ?
+         WHERE id = ?
+      `).run(now, order.id);
+      nextOrderStatus = 'cancelled';
+      try { returnOrderInventory(order.id); }
+      catch (invErr) { console.error('[admin cancel] inventory restore failed:', invErr.message); }
+    } else {
+      // pending / accepted / packed / out_for_delivery / failed — drive
+      // delivery_status only; keep order.status moving in lockstep with
+      // 'pending' while in motion.
+      db.prepare(`
+        UPDATE consumer_orders
+           SET delivery_status = ?,
+               status          = CASE WHEN status='delivered' THEN status ELSE 'pending' END,
+               updated_at      = ?
+         WHERE id = ?
+      `).run(status, now, order.id);
+      nextDeliveryStatus = status;
+    }
+  }
+
+  if (payment_status) {
+    db.prepare(`UPDATE consumer_orders SET payment_status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(payment_status, req.params.id);
   }
 
   if (status) {
     emitOrderUpdate({
       orderId: order.id, orderNumber: order.order_number,
-      status, deliveryStatus: order.delivery_status,
+      status: nextOrderStatus, deliveryStatus: nextDeliveryStatus,
       consumerId: order.consumer_id, linkedDealerId: order.linked_dealer_id,
       deliveryDealerId: order.delivery_dealer_id,
     });
@@ -318,7 +375,35 @@ router.put('/consumer-orders/:id/delivery', (req, res) => {
     const dealer = db.prepare(`SELECT id FROM users WHERE id = ? AND role = 'trader' AND delivery_enabled = 1`).get(delivery_dealer_id);
     if (!dealer) return res.status(400).json({ error: 'Dealer not eligible for delivery' });
   }
+  const previousDealerId = order.delivery_dealer_id;
   db.prepare(`UPDATE consumer_orders SET delivery_dealer_id=? WHERE id=?`).run(delivery_dealer_id||null, req.params.id);
+
+  /* Notify + email the newly assigned dealer (skip if unchanged or cleared). */
+  if (delivery_dealer_id && delivery_dealer_id !== previousDealerId) {
+    try {
+      const newDealer = db.prepare('SELECT id,name,phone FROM users WHERE id=?').get(delivery_dealer_id);
+      const consumer  = db.prepare('SELECT id,name,phone FROM consumers WHERE id=?').get(order.consumer_id);
+      if (newDealer) {
+        notifyDealerDeliveryAssigned({
+          dealerId:        newDealer.id,
+          dealerName:      newDealer.name,
+          orderId:         order.id,
+          orderNumber:     order.order_number,
+          consumerName:    consumer?.name ?? 'Customer',
+          consumerPhone:   consumer?.phone,
+          deliveryAddress: order.delivery_address,
+          distanceKm:      order.delivery_distance_km ?? 0,
+        });
+        notifyConsumerDeliveryAssigned({
+          consumerId:  order.consumer_id,
+          orderNumber: order.order_number,
+          dealerName:  newDealer.name,
+          dealerPhone: newDealer.phone,
+        });
+      }
+    } catch (e) { console.error('[admin reassign notify] failed:', e.message); }
+  }
+
   res.json({ success: true });
 });
 

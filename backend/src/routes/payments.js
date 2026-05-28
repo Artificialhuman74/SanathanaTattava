@@ -194,15 +194,17 @@ router.post('/verify', authConsumer, async (req, res) => {
 
   /* Delivery assignment notifications — deferred from order creation until payment confirmed */
   try {
-    const consumer = db.prepare('SELECT id,name FROM consumers WHERE id=?').get(order.consumer_id);
+    const consumer = db.prepare('SELECT id,name,phone FROM consumers WHERE id=?').get(order.consumer_id);
     if (order.delivery_dealer_id) {
       const deliveryDealer = db.prepare('SELECT id,name,phone FROM users WHERE id=?').get(order.delivery_dealer_id);
       if (deliveryDealer) {
         notifyDealerDeliveryAssigned({
           dealerId:        deliveryDealer.id,
           dealerName:      deliveryDealer.name,
+          orderId:         order.id,
           orderNumber:     order.order_number,
           consumerName:    consumer?.name ?? 'Customer',
+          consumerPhone:   consumer?.phone,
           deliveryAddress: order.delivery_address,
           distanceKm:      order.delivery_distance_km ?? 0,
         });

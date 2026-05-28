@@ -24,6 +24,10 @@ interface ConsumerOrder {
   dealer_tier: number;
   delivery_dealer_id: number | null;
   delivery_dealer_name: string | null;
+  delivery_status: string | null;
+  admin_overridden_at: string | null;
+  admin_taken_over_at: string | null;
+  original_delivery_dealer_name: string | null;
   total_amount: number;
   status: string;
   payment_status: string;
@@ -51,16 +55,38 @@ interface CommissionLine {
   amount: number;
 }
 
-const STATUS_OPTIONS = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+/* Aligned with the delivery flow's state machine (delivery_status), so admins
+ * see and drive the same lifecycle drivers see in the delivery portal. */
+const STATUS_OPTIONS = ['pending', 'accepted', 'packed', 'out_for_delivery', 'delivered', 'failed', 'cancelled'];
 const PAYMENT_OPTIONS = ['pending', 'paid', 'failed', 'refunded'];
 
+const STATUS_LABELS: Record<string, string> = {
+  pending:          'Not yet accepted',
+  accepted:         'Accepted',
+  packed:           'Packed',
+  out_for_delivery: 'Out for delivery',
+  delivered:        'Delivered',
+  failed:           'Failed',
+  cancelled:        'Cancelled',
+};
+
 const STATUS_COLORS: Record<string, string> = {
-  pending:    'bg-amber-100 text-amber-700',
-  confirmed:  'bg-blue-100 text-blue-700',
-  processing: 'bg-purple-100 text-purple-700',
-  shipped:    'bg-orange-100 text-orange-700',
-  delivered:  'bg-emerald-100 text-emerald-700',
-  cancelled:  'bg-red-100 text-red-700',
+  pending:          'bg-amber-100 text-amber-700',
+  accepted:         'bg-blue-100 text-blue-700',
+  packed:           'bg-purple-100 text-purple-700',
+  out_for_delivery: 'bg-orange-100 text-orange-700',
+  delivered:        'bg-emerald-100 text-emerald-700',
+  failed:           'bg-red-100 text-red-600',
+  cancelled:        'bg-red-100 text-red-700',
+};
+
+/* Pick the effective status to display/drive from the dropdown. When the
+ * order is in the delivery pipeline (paid + not cancelled), delivery_status
+ * is the source of truth — that's what the driver/admin manipulates. Once
+ * the order is delivered or cancelled, the top-level status is final. */
+const effectiveStatus = (o: { status: string; delivery_status: string | null }): string => {
+  if (o.status === 'delivered' || o.status === 'cancelled') return o.status;
+  return o.delivery_status || o.status;
 };
 
 const PAYMENT_COLORS: Record<string, string> = {
@@ -180,7 +206,21 @@ export default function AdminConsumerOrders() {
                     className="cursor-pointer hover:bg-slate-50 transition-colors"
                     onClick={() => setSelected(o)}
                   >
-                    <td className="font-mono text-brand-600 font-medium text-xs">{o.order_number}</td>
+                    <td className="font-mono text-brand-600 font-medium text-xs">
+                      {o.order_number}
+                      {o.admin_overridden_at && (
+                        <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                          Delivered directly by {o.delivery_dealer_name || 'admin'}
+                        </p>
+                      )}
+                      {!o.admin_overridden_at && o.admin_taken_over_at && (
+                        <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                          {o.status === 'delivered'
+                            ? `Delivered by ${o.delivery_dealer_name || 'admin'} (admin)`
+                            : `Admin taken over from ${o.original_delivery_dealer_name || 'driver'}`}
+                        </p>
+                      )}
+                    </td>
                     <td>
                       <p className="font-medium text-sm text-slate-900">{o.consumer_name}</p>
                       <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={9} />{o.consumer_phone}</p>
@@ -193,14 +233,19 @@ export default function AdminConsumerOrders() {
                     </td>
                     <td className="font-semibold">₹{parseFloat(String(o.total_amount)).toFixed(2)}</td>
                     <td onClick={e => e.stopPropagation()}>
-                      <select
-                        value={o.status}
-                        onChange={e => updateStatus(o.id, 'status', e.target.value)}
-                        disabled={updatingId === o.id}
-                        className={`badge border-0 cursor-pointer text-xs font-semibold rounded-full px-2 py-1 ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}
-                      >
-                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      {(() => {
+                        const eff = effectiveStatus(o);
+                        return (
+                          <select
+                            value={eff}
+                            onChange={e => updateStatus(o.id, 'status', e.target.value)}
+                            disabled={updatingId === o.id}
+                            className={`badge border-0 cursor-pointer text-xs font-semibold rounded-full px-2 py-1 ${STATUS_COLORS[eff] || 'bg-slate-100 text-slate-600'}`}
+                          >
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>)}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       <select
@@ -247,7 +292,14 @@ export default function AdminConsumerOrders() {
                 <p className="text-xs text-slate-400 mt-0.5">{formatIst(selected.created_at)}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`badge ${STATUS_COLORS[selected.status]}`}>{selected.status}</span>
+                {(() => {
+                  const eff = effectiveStatus(selected);
+                  return (
+                    <span className={`badge ${STATUS_COLORS[eff] || 'bg-slate-100 text-slate-600'}`}>
+                      {STATUS_LABELS[eff] || eff}
+                    </span>
+                  );
+                })()}
                 <span className={`badge ${PAYMENT_COLORS[selected.payment_status]}`}>{selected.payment_status}</span>
                 <button onClick={() => setSelected(null)} className="btn-ghost p-2"><X size={18} /></button>
               </div>
@@ -351,17 +403,40 @@ export default function AdminConsumerOrders() {
                 </div>
               )}
 
+              {/* Admin takeover / override notice */}
+              {selected.admin_overridden_at && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl p-3 text-sm">
+                  <b>Delivered directly by {selected.delivery_dealer_name || 'admin'}.</b>{' '}
+                  This order was completed via the admin dropdown — the standard OTP flow was bypassed.
+                </div>
+              )}
+              {!selected.admin_overridden_at && selected.admin_taken_over_at && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-xl p-3 text-sm">
+                  {selected.status === 'delivered' ? (
+                    <>
+                      <b>Delivered by {selected.delivery_dealer_name || 'admin'} (admin).</b>{' '}
+                      Originally assigned to {selected.original_delivery_dealer_name || 'a driver'}; admin took over and completed it.
+                    </>
+                  ) : (
+                    <>
+                      <b>Admin has taken over this delivery</b> from {selected.original_delivery_dealer_name || 'the original driver'}.
+                      The original driver still sees it in read-only mode.
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Update Actions */}
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="form-label">Update Status</label>
                   <select
-                    value={selected.status}
+                    value={effectiveStatus(selected)}
                     onChange={e => updateStatus(selected.id, 'status', e.target.value)}
                     className="form-input"
                     disabled={updatingId === selected.id}
                   >
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>)}
                   </select>
                 </div>
                 <div>

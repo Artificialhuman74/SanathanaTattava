@@ -51,14 +51,16 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_notifications_user
 function notifyDealerDeliveryAssigned({
   dealerId,
   dealerName,
+  orderId,
   orderNumber,
   consumerName,
+  consumerPhone,
   deliveryAddress,
   distanceKm,
 }) {
   const title = `New delivery assigned — ${orderNumber}`;
   const body  = `Deliver to ${consumerName} (${distanceKm} km away). Address: ${deliveryAddress}`;
-  const data  = JSON.stringify({ orderNumber, consumerName, deliveryAddress, distanceKm });
+  const data  = JSON.stringify({ orderId, orderNumber, consumerName, deliveryAddress, distanceKm });
 
   const r = db.prepare(`
     INSERT INTO notifications (user_type, user_id, title, body, data, channel)
@@ -69,6 +71,46 @@ function notifyDealerDeliveryAssigned({
     id: r.lastInsertRowid, title, body, data: JSON.parse(data), created_at: new Date().toISOString(),
   });
   console.log(`[NOTIFICATION] Dealer "${dealerName}" (id=${dealerId}): ${title}`);
+
+  /* Email the assigned dealer with order details + CTA. Non-fatal: log and move on. */
+  try {
+    const dealer = db.prepare(`SELECT email, name FROM users WHERE id = ?`).get(dealerId);
+    if (!dealer?.email) return;
+
+    let items = [];
+    let totalAmount = 0;
+    if (orderId) {
+      items = db.prepare(`
+        SELECT coi.quantity, p.name AS product_name
+        FROM consumer_order_items coi
+        LEFT JOIN products p ON p.id = coi.product_id
+        WHERE coi.consumer_order_id = ?
+      `).all(orderId);
+      const ord = db.prepare(`SELECT total_amount FROM consumer_orders WHERE id = ?`).get(orderId);
+      totalAmount = ord?.total_amount || 0;
+    }
+    const itemsSummary = items.length
+      ? items.map(i => `${i.quantity} × ${i.product_name || 'item'}`).join(', ')
+      : '—';
+
+    const baseUrl = process.env.FRONTEND_URL || 'https://sanathanatattva.shop';
+    const orderUrl = `${baseUrl.replace(/\/$/, '')}/delivery/orders${orderId ? `/${orderId}` : ''}`;
+
+    const { sendDeliveryAssignmentEmail } = require('./emailService');
+    sendDeliveryAssignmentEmail({
+      toEmail:         dealer.email,
+      traderName:      dealer.name || dealerName,
+      orderNumber,
+      consumerName,
+      consumerPhone,
+      deliveryAddress,
+      itemsSummary,
+      totalAmount,
+      orderUrl,
+    }).catch(err => console.error('[delivery-assigned email] send failed:', err.message));
+  } catch (err) {
+    console.error('[delivery-assigned email] prep failed:', err.message);
+  }
 }
 
 /**
