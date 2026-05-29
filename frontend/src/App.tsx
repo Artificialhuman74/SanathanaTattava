@@ -54,6 +54,7 @@ import ConsumerCheckout    from './pages/consumer/Checkout';
 import ConsumerProfile     from './pages/consumer/Profile';
 import ConsumerAccount     from './pages/consumer/Account';
 import ConsumerSupport     from './pages/consumer/Support';
+import ConsumerLegal       from './pages/consumer/Legal';
 import ConsumerReview      from './pages/consumer/Review';
 import VerifyPending       from './pages/consumer/VerifyPending';
 
@@ -157,6 +158,7 @@ const ConsumerRoutes = () => (
       <Route path="profile"         element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />
       <Route path="profile/account" element={<ConsumerRoute><ConsumerAccount /></ConsumerRoute>} />
       <Route path="support"         element={<ConsumerSupport />} />
+      <Route path="legal"           element={<ConsumerLegal />} />
       <Route path="review"          element={<ConsumerReview />} />
     </Route>
 

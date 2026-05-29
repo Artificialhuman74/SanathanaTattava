@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   Phone, Mail, MessageCircle, Package, Truck,
-  ChevronRight, X, ShoppingBag, RotateCcw,
+  ChevronRight, X, ShoppingBag, RotateCcw, ScrollText,
 } from 'lucide-react';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
 
@@ -133,6 +133,19 @@ export default function Support() {
             </div>
             <ChevronRight size={14} className="text-gray-300" />
           </a>
+          <Link
+            to="/shop/legal"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
+          >
+            <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <ScrollText size={18} className="text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Terms, Privacy &amp; Refunds</p>
+              <p className="text-xs text-gray-400">Policies, grievance officer &amp; more</p>
+            </div>
+            <ChevronRight size={14} className="text-gray-300" />
+          </Link>
         </div>
       </div>
 
