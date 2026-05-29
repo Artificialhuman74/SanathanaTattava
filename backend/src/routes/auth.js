@@ -6,6 +6,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
+const { verifyIdToken: verifyFirebaseToken } = require('../services/firebaseAdmin');
 
 const router = express.Router();
 
@@ -397,6 +398,85 @@ router.post('/reset-password', [
   db.prepare('UPDATE consumers SET password = ? WHERE email = ?').run(newHash, record.email);
 
   res.json({ success: true });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   POST /consumer/google
+   Firebase Google sign-in. Frontend authenticates with Google via
+   Firebase, sends us the ID token, we verify it server-side, then
+   either log the user in (matched google_uid or email) or create a
+   new consumer row.
+
+   Does NOT require email_verified — Google has already verified the
+   email. Does NOT trigger the email OTP flow.
+
+   New Google signups don't have a phone yet — they'll be prompted
+   for one at checkout (saved into consumer.phone there).
+   ══════════════════════════════════════════════════════════════ */
+router.post('/consumer/google', [
+  body('id_token').notEmpty().withMessage('id_token is required'),
+  body('referral_code').optional({ nullable: true }).trim(),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  let decoded;
+  try {
+    decoded = await verifyFirebaseToken(req.body.id_token);
+  } catch (err) {
+    console.error('[consumer/google] token verify failed:', err.message);
+    return res.status(401).json({ error: 'Invalid Google token' });
+  }
+
+  const googleUid = decoded.uid;
+  const email     = decoded.email ? String(decoded.email).toLowerCase() : null;
+  const name      = decoded.name || (email ? email.split('@')[0] : 'Google User');
+
+  if (!email) return res.status(400).json({ error: 'Google account has no email' });
+
+  // 1) Match by google_uid (returning user)
+  let consumer = db.prepare('SELECT * FROM consumers WHERE google_uid = ?').get(googleUid);
+
+  // 2) Auto-merge: match by email
+  if (!consumer) {
+    consumer = db.prepare('SELECT * FROM consumers WHERE email = ?').get(email);
+    if (consumer) {
+      db.prepare(`UPDATE consumers SET google_uid = ?, email_verified = 1 WHERE id = ?`)
+        .run(googleUid, consumer.id);
+      consumer.google_uid = googleUid;
+      consumer.email_verified = 1;
+    }
+  }
+
+  // 3) New consumer
+  if (!consumer) {
+    let linkedDealerId = null, usedCode = null;
+    const refCode = (req.body.referral_code || '').trim().toUpperCase();
+    if (refCode) {
+      const dealer = db.prepare(
+        `SELECT id FROM users WHERE referral_code = ? AND role='trader' AND status='active'`
+      ).get(refCode);
+      if (dealer) { linkedDealerId = dealer.id; usedCode = refCode; }
+    }
+
+    const result = db.prepare(`
+      INSERT INTO consumers
+        (name, email, google_uid, password, phone, referral_code_used, linked_dealer_id, email_verified, status)
+      VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, 'active')
+    `).run(name, email, googleUid, usedCode, linkedDealerId);
+
+    consumer = db.prepare('SELECT * FROM consumers WHERE id = ?').get(result.lastInsertRowid);
+  }
+
+  if (consumer.status !== 'active') {
+    return res.status(403).json({ error: 'Account suspended.' });
+  }
+
+  res.json({
+    token: signConsumerToken(consumer.id),
+    consumer: safeConsumer(consumer),
+    needs_phone: !consumer.phone,
+  });
 });
 
 module.exports = router;

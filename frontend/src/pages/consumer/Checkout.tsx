@@ -279,6 +279,9 @@ export default function Checkout() {
         if (!newAddr.address.trim() || !newAddr.pincode.trim()) {
           toast.error('Please enter a delivery address and PIN code'); return;
         }
+        if (!newAddr.phone.trim()) {
+          toast.error('Phone number is required for delivery'); return;
+        }
         payload = {
           ...payload,
           delivery_address:     newAddr.address.trim(),

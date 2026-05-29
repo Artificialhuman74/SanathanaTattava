@@ -558,6 +558,21 @@ router.post('/orders', authConsumer, [
   }
   const consumer = req.consumer;
 
+  /* Backfill consumer.phone from delivery_phone for consumers who signed up
+   * via Google (no phone yet). Required so the delivery handover OTP can be
+   * sent to a known number. */
+  if (!consumer.phone && delivery_phone) {
+    const existing = db.prepare('SELECT id FROM consumers WHERE phone = ? AND id != ?')
+      .get(delivery_phone, consumer.id);
+    if (!existing) {
+      db.prepare('UPDATE consumers SET phone = ? WHERE id = ?').run(delivery_phone, consumer.id);
+      consumer.phone = delivery_phone;
+    }
+  }
+  if (!consumer.phone && !delivery_phone) {
+    return res.status(400).json({ error: 'A phone number is required for delivery.' });
+  }
+
   /* Determine linked dealer (consumer's own or from checkout code) */
   let linkedDealerId = consumer.linked_dealer_id ?? null;
   if (!linkedDealerId && referral_code && referral_code.trim()) {

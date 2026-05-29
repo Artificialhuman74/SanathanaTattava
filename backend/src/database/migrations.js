@@ -1114,6 +1114,18 @@ function runMigrations(db) {
     console.warn('[migration] skipping products jpeg conversion (sharp unavailable):', e.message);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Add google_uid to consumers (Firebase Google sign-in)
+   * ═══════════════════════════════════════════════════════════════════ */
+  if (!hasColumn('consumers', 'google_uid')) {
+    db.exec(`ALTER TABLE consumers ADD COLUMN google_uid TEXT`);
+    console.log('[migration] consumers: added google_uid');
+  }
+  if (!hasIndex('idx_consumers_google_uid')) {
+    db.exec(`CREATE UNIQUE INDEX idx_consumers_google_uid ON consumers(google_uid) WHERE google_uid IS NOT NULL`);
+    console.log('[migration] consumers: created idx_consumers_google_uid');
+  }
+
   console.log('[migration] all migrations applied');
 }
 
