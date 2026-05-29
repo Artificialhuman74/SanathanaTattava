@@ -6,7 +6,14 @@
  */
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, type Auth } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  type Auth,
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -30,13 +37,45 @@ function ensureFirebase(): Auth {
 }
 
 /**
- * Pop up Google sign-in, return the Firebase ID token on success.
- * Caller posts this token to POST /api/auth/consumer/google.
+ * Try popup first (better UX on desktop). If the browser blocks the popup,
+ * fall back to a full-page redirect — the caller should then handle the
+ * redirect result on page load via `consumeGoogleRedirectResult()`.
+ *
+ * Returns the Firebase ID token if popup succeeded, or null if a redirect
+ * was kicked off (caller should not navigate; the browser will).
  */
-export async function signInWithGoogleAndGetIdToken(): Promise<string> {
+export async function signInWithGoogleAndGetIdToken(): Promise<string | null> {
   const a = ensureFirebase();
   const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(a, provider);
+  try {
+    const result = await signInWithPopup(a, provider);
+    return result.user.getIdToken();
+  } catch (err: any) {
+    const code = err?.code || '';
+    const popupBlocked =
+      code === 'auth/popup-blocked' ||
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      code === 'auth/operation-not-supported-in-this-environment';
+    if (!popupBlocked) throw err;
+    // Mark that we kicked off a redirect so Login can consume the result.
+    sessionStorage.setItem('google_redirect_pending', '1');
+    await signInWithRedirect(a, provider);
+    return null;
+  }
+}
+
+/**
+ * Call on Login page mount. If we previously kicked off a redirect, this
+ * resolves with the Firebase ID token; otherwise returns null.
+ */
+export async function consumeGoogleRedirectResult(): Promise<string | null> {
+  if (!isFirebaseConfigured()) return null;
+  if (!sessionStorage.getItem('google_redirect_pending')) return null;
+  sessionStorage.removeItem('google_redirect_pending');
+  const a = ensureFirebase();
+  const result = await getRedirectResult(a);
+  if (!result) return null;
   return result.user.getIdToken();
 }
 

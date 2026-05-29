@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import { signInWithGoogleAndGetIdToken, isFirebaseConfigured } from '../../lib/firebase';
+import {
+  signInWithGoogleAndGetIdToken,
+  consumeGoogleRedirectResult,
+  isFirebaseConfigured,
+} from '../../lib/firebase';
 
 export default function ConsumerLogin() {
   const { consumerLogin, consumerLoginWithToken } = useAuth();
@@ -16,23 +20,43 @@ export default function ConsumerLogin() {
   const [loading,  setLoading]  = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const exchangeIdTokenAndLogin = async (idToken: string) => {
+    const { data } = await consumerApi.post('/auth/consumer/google', { id_token: idToken });
+    consumerLoginWithToken(data.token, data.consumer);
+    navigate('/shop', { replace: true });
+  };
+
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
       const idToken = await signInWithGoogleAndGetIdToken();
-      const { data } = await consumerApi.post('/auth/consumer/google', { id_token: idToken });
-      consumerLoginWithToken(data.token, data.consumer);
-      navigate('/shop', { replace: true });
+      if (idToken === null) return; // Browser is mid-redirect; result picked up on return.
+      await exchangeIdTokenAndLogin(idToken);
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
-        // User dismissed — silent
-      } else {
-        toast.error(err.response?.data?.error || err?.message || 'Google sign-in failed');
-      }
+      toast.error(err.response?.data?.error || err?.message || 'Google sign-in failed');
     } finally {
       setGoogleLoading(false);
     }
   };
+
+  // On mount: if we just came back from a Google redirect, finish the login.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const idToken = await consumeGoogleRedirectResult();
+        if (!idToken || cancelled) return;
+        setGoogleLoading(true);
+        await exchangeIdTokenAndLogin(idToken);
+      } catch (err: any) {
+        if (!cancelled) toast.error(err.response?.data?.error || err?.message || 'Google sign-in failed');
+      } finally {
+        if (!cancelled) setGoogleLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
