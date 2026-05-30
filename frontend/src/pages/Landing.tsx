@@ -110,8 +110,26 @@ const PAGE_STYLES = `
     --z-skip:      90;  /* skip-to-content link when focused */
 
     /* The fixed nav is h-14 = 56px. Used by chapters that pin via
-     * position: sticky, so the pinned content starts BELOW the nav. */
-    --nav-h:       56px;
+     * position: sticky. On notched devices we add the top safe-area
+     * inset so the nav (and anything pinning below it) sits clear of
+     * the notch. The fallback to 0 keeps non-notched browsers correct. */
+    --nav-h:       calc(56px + env(safe-area-inset-top, 0px));
+
+    /* Hero height: prefer small-viewport-height so iOS Safari doesn't
+     * inflate the hero with the URL bar's worth of phantom pixels.
+     * Fallback to vh for browsers without svh support. */
+    --hero-h:      100vh;
+    --hero-h:      100svh;
+  }
+
+  /* On touch devices, hover handlers don't fire. Provide a tiny tap
+   * feedback so interactive elements feel responsive without depending
+   * on visual hover state. */
+  @media (hover: none) {
+    button:active, a:active {
+      opacity: 0.82;
+      transition: opacity 60ms linear;
+    }
   }
 
   /* Skip-to-content link: invisible until focused (keyboard users only) */
@@ -665,6 +683,9 @@ export default function Landing() {
           pointerEvents: navShown ? 'auto' : 'none',
           transform: `translateY(${navShown ? 0 : -10}px)`,
           transition: 'opacity 360ms var(--ease-out-quart), transform 360ms var(--ease-out-quart)',
+          /* iOS notch safe area: pad the top so the nav row sits below
+           * the notch instead of being clipped by it. */
+          paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center gap-3">
@@ -715,7 +736,7 @@ export default function Landing() {
               background: C.gold,
               color: C.oilDeep,
               fontFamily: 'var(--st-body)',
-              minHeight: 40,  /* 40 in tight nav; sign-in is duplicated below at full 44+ */
+              minHeight: 44,  /* touch-target floor */
             }}
           >
             Sign in
@@ -727,9 +748,11 @@ export default function Landing() {
       <section
         id="story"
         tabIndex={-1}
-        className="relative min-h-screen flex flex-col"
+        className="relative flex flex-col"
         style={{
+          minHeight: 'var(--hero-h)',
           background: `radial-gradient(ellipse 100% 70% at 50% 25%, ${C.oil} 0%, ${C.oilDeep} 100%)`,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1039,8 +1062,8 @@ export default function Landing() {
               centred against the tall bottle. A small top pad keeps it
               from sitting flush against the nav. */}
           <div
-            className="max-w-6xl w-full mx-auto px-6 sm:px-10 grid gap-8 lg:gap-14 md:grid-cols-[0.9fr_1.1fr] items-start"
-            style={{ paddingTop: 'clamp(40px, 8vh, 96px)' }}
+            className="max-w-6xl w-full mx-auto px-6 sm:px-10 grid gap-6 sm:gap-8 lg:gap-14 md:grid-cols-[0.9fr_1.1fr] items-start"
+            style={{ paddingTop: 'clamp(24px, 6vh, 96px)' }}
           >
 
             {/* LEFT — Bottle. WebGL liquid: real-time shader with ripples,
@@ -1076,15 +1099,15 @@ export default function Landing() {
                 An oil that still smells like the seed it came from.
               </h2>
 
-              {/* Card slot: relative container with fixed height to host
-                  absolutely-positioned cards that swap on scroll. Heading
-                  stays anchored near the top of the pane; the slot lives
-                  in the middle band so the cards land at mid-viewport. */}
+              {/* Card slot: heading stays anchored near the top of the
+                  pane; the slot lives in the middle band so cards land
+                  at mid-viewport. Lower min on mobile so the slot
+                  doesn't overflow on a 360×640 phone. */}
               <div
                 className="relative"
                 style={{
-                  marginTop: 'clamp(120px, 18vh, 240px)',
-                  height: 'clamp(180px, 22vh, 220px)',
+                  marginTop: 'clamp(40px, 14vh, 240px)',
+                  height: 'clamp(180px, 24vh, 220px)',
                 }}
               >
                 {CHAPTER3_CARDS.map((card, i) => {
@@ -1369,8 +1392,8 @@ export default function Landing() {
           }}
         >
           <span>© {new Date().getFullYear()} Sanathana Tattva</span>
-          <span>FSSAI · [License No.]</span>
-          <span>GSTIN · [GSTIN]</span>
+          <span>FSSAI Reg. · 21226159000012</span>
+          <span>GSTIN · 29AIGPB6124Q2ZW</span>
           <span className="ml-auto st-lede" style={{ color: C.lightBody, fontSize: 'var(--type-xs)' }}>
             Purity of tradition in every drop.
           </span>

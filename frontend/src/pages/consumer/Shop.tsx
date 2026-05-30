@@ -7,7 +7,7 @@ import RollingNumber from '../../components/RollingNumber';
 import { loadCart, saveCart } from '../../services/cartStorage';
 import { Link } from 'react-router-dom';
 import {
-  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, ChevronDown, Info, Star, MessageSquare,
+  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, Info, Star, MessageSquare,
 } from 'lucide-react';
 import { consumerApi } from '../../contexts/AuthContext';
 import { formatIstDate } from '../../utils/dateTime';
@@ -142,6 +142,17 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+
+  /* Once the visitor scrolls past the original page top, the layout's
+   * persistent nav cart takes over. Hide the in-toolbar cart so there
+   * aren't two carts competing in the same view. */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 100);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   const [cart, setCart] = useState<CartItem[]>(() =>
     loadCart<Product>().map(i => ({ product: i.product, quantity: i.quantity, mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode }))
   );
@@ -605,83 +616,99 @@ export default function Shop() {
   const selectedHasContainer = !!selectedProduct?.container_type;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto">
 
-      {/* Page header — not sticky, scrolls away */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {consumer
-            ? <h1 className="text-xl font-bold text-gray-900">Hi, {consumer.name.split(' ')[0]}!</h1>
-            : <h1 className="text-xl font-bold text-gray-900">Shop</h1>
-          }
-          <p className="text-gray-400 text-xs mt-0.5">{products.length} products available</p>
-        </div>
-        <button
-          ref={cartButtonRef}
-          data-cart-fly-target="shop"
-          data-cart-fly-priority="1"
-          onClick={() => setCartOpen(true)}
-          className={`relative w-10 h-10 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-colors ${cartIconBounce ? 'animate-cart-land' : ''}`}
-        >
-          <ShoppingCart size={18} />
-          {cartCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-              <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="form-input pl-9"
-            placeholder="Search products..."
-          />
-        </div>
-        <div className="relative">
-          <select
-            value={catFilter}
-            onChange={e => setCatFilter(e.target.value)}
-            className="form-input appearance-none pr-8 min-w-36"
-          >
-            <option value="">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Category chips */}
-      {categories.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setCatFilter('')}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              !catFilter ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            All
-          </button>
-          {categories.map(c => (
+      {/* ── Sticky toolbar: title + cart, search, then category chips.
+          One grouped header bar keeps cart access available while
+          scrolling. Filter chips replace the redundant <select>.
+          z-20: below the layout's sticky nav header (z-40) so its
+          notification dropdown isn't clipped. ── */}
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-100">
+        <div className="px-4 sm:px-6 pt-5 pb-2">
+          {/* Title row: tight grouping (title + count + cart) */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              {consumer
+                ? <h1 className="text-2xl font-bold text-slate-900 leading-tight truncate">Hi, {consumer.name.split(' ')[0]}</h1>
+                : <h1 className="text-2xl font-bold text-slate-900 leading-tight">Shop</h1>
+              }
+              <p className="text-slate-500 text-xs font-medium mt-0.5">{products.length} {products.length === 1 ? 'product' : 'products'} available</p>
+            </div>
             <button
-              key={c}
-              onClick={() => setCatFilter(catFilter === c ? '' : c)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                catFilter === c ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              ref={cartButtonRef}
+              data-cart-fly-target="shop"
+              data-cart-fly-priority="1"
+              onClick={() => setCartOpen(true)}
+              aria-label={`Open cart with ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`}
+              aria-hidden={scrolled}
+              tabIndex={scrolled ? -1 : 0}
+              className={`relative w-11 h-11 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-all flex-shrink-0 ${cartIconBounce ? 'animate-cart-land' : ''}`}
+              style={{
+                opacity:       scrolled ? 0 : 1,
+                pointerEvents: scrolled ? 'none' : 'auto',
+                transform:     scrolled ? 'scale(0.85)' : 'scale(1)',
+                transitionDuration: '200ms',
+              }}
+            >
+              <ShoppingCart size={18} />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Search row */}
+          <div className="mt-3">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="form-input pl-9"
+                placeholder="Search products"
+                aria-label="Search products"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Category chips: scroll horizontally on overflow instead of
+            wrapping (keeps toolbar height predictable on long taxonomies). */}
+        {categories.length > 0 && (
+          <div
+            className="pb-3 flex gap-2 overflow-x-auto px-4 sm:px-6"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' as any }}
+          >
+            <button
+              type="button"
+              onClick={() => setCatFilter('')}
+              className={`flex-shrink-0 min-h-[36px] px-4 rounded-full text-xs font-semibold transition-colors ${
+                !catFilter ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {c}
+              All
             </button>
-          ))}
-        </div>
-      )}
+            {categories.map(c => (
+              <button
+                type="button"
+                key={c}
+                onClick={() => setCatFilter(catFilter === c ? '' : c)}
+                className={`flex-shrink-0 min-h-[36px] px-4 rounded-full text-xs font-semibold transition-colors ${
+                  catFilter === c ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Products grid */}
+      {/* Products grid: generous gap below the sticky toolbar so the
+          grouping reads as a clear new section. */}
+      <div className="px-4 sm:px-6 pt-8 pb-12">
       {loading ? (
         <div className="flex items-center justify-center h-48">
           <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
@@ -716,9 +743,9 @@ export default function Shop() {
                 </div>
 
                 <div className="p-3 pb-2 flex flex-col flex-1 min-h-0">
-                  <span className="text-xs font-semibold text-brand-600 flex items-center gap-1 min-w-0 truncate">
+                  <span className="text-xs font-semibold text-brand-600 inline-flex items-center gap-1 whitespace-nowrap">
                     <Tag size={10} className="flex-shrink-0" />
-                    <span className="truncate">{p.category}</span>
+                    {p.category}
                   </span>
                   <p className="font-bold text-slate-900 mt-1 leading-snug line-clamp-2 text-sm">{p.name}</p>
                   {p.stock > 0 && p.stock <= 10 && (
@@ -728,12 +755,12 @@ export default function Shop() {
                   )}
                   <div className="mt-2">
                     <p className="text-base font-extrabold text-slate-900">₹{p.price.toFixed(2)}</p>
-                    <p className="text-xs text-slate-400 truncate">per {p.unit || 'can'}</p>
+                    <p className="text-xs text-slate-500 truncate">per {p.unit || 'can'}</p>
                     {hasContainer && (p.container_cost || 0) > 0 && (
-                      <p className="text-[11px] text-amber-600 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} container deposit (refundable)</p>
+                      <p className="text-[11px] text-amber-700 font-medium mt-0.5">+₹{p.container_cost.toFixed(2)} can deposit (refundable)</p>
                     )}
                     {hasContainer && cap > 0 && (
-                      <p className="text-[11px] text-emerald-600 font-medium mt-0.5">You hold {cap} · refills free</p>
+                      <p className="text-[11px] text-emerald-700 font-medium mt-0.5">You hold {cap} · refills free</p>
                     )}
                   </div>
                 </div>
@@ -746,17 +773,17 @@ export default function Shop() {
                       <button
                         onClick={(e) => addToCart(p, e.currentTarget, 'refill')}
                         disabled={outOfStock}
-                        className={`w-full min-h-[36px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                          outOfStock ? 'bg-slate-100 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]'
+                        className={`w-full min-h-[44px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                          outOfStock ? 'bg-slate-100 text-slate-500' : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]'
                         }`}
                       >
                         <span className="truncate">Refill ({cap} held)</span>
                       </button>
                     ) : (
-                      <div className="w-full min-h-[36px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
+                      <div className="w-full min-h-[44px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
                         <button
                           onClick={() => updateQty(p.id, refillQty - 1, 'refill')}
-                          className="w-9 h-9 flex items-center justify-center text-emerald-700"
+                          className="w-11 h-11 flex items-center justify-center text-emerald-700"
                           aria-label="Decrease refill"
                         >
                           <Minus size={14} />
@@ -765,7 +792,7 @@ export default function Shop() {
                         <button
                           onClick={() => addToCart(p, null, 'refill')}
                           disabled={refillQty >= cap}
-                          className="w-9 h-9 flex items-center justify-center text-emerald-700 disabled:opacity-40"
+                          className="w-11 h-11 flex items-center justify-center text-emerald-700 disabled:opacity-40"
                           aria-label="Increase refill"
                         >
                           <Plus size={14} />
@@ -777,7 +804,7 @@ export default function Shop() {
                   {buyQty === 0 ? (
                     <button
                       onClick={(e) => addToCart(p, e.currentTarget, 'buy')}
-                      className={`w-full min-h-[40px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
+                      className={`w-full min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
                         outOfStock
                           ? `bg-red-50 text-red-500 ${shakingId === p.id ? 'animate-shake' : ''}`
                           : 'bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.99]'
@@ -787,10 +814,10 @@ export default function Shop() {
                       <span className="truncate">{hasContainer && cap > 0 ? 'Buy more' : 'Add to Cart'}</span>
                     </button>
                   ) : (
-                    <div className="w-full min-h-[40px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
+                    <div className="w-full min-h-[44px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
                       <button
                         onClick={() => updateQty(p.id, buyQty - 1, 'buy')}
-                        className="w-10 h-10 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
+                        className="w-11 h-11 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                         aria-label={`Decrease ${p.name}`}
                       >
                         <Minus size={16} />
@@ -800,7 +827,7 @@ export default function Shop() {
                       </div>
                       <button
                         onClick={() => addToCart(p, null, 'buy')}
-                        className="w-10 h-10 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
+                        className="w-11 h-11 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
                         aria-label={`Increase ${p.name}`}
                       >
                         <Plus size={16} />
@@ -812,13 +839,17 @@ export default function Shop() {
             );
           })}
           {products.length === 0 && (
-            <div className="col-span-full text-center py-16 text-slate-400">
-              <Package size={40} className="mx-auto mb-3 opacity-30" />
+            <div className="col-span-full text-center py-16 text-slate-500">
+              <Package size={40} className="mx-auto mb-3 text-slate-300" />
               <p className="font-medium">No products found</p>
+              {(search || catFilter) && (
+                <p className="text-xs text-slate-500 mt-1">Try a different search or category.</p>
+              )}
             </div>
           )}
         </div>
       )}
+      </div>
 
       {/* Product Detail Sheet */}
       {selectedProduct && (
@@ -849,25 +880,25 @@ export default function Shop() {
               <div className="p-4 sm:p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-brand-600 flex items-center gap-1">
+                    <p className="text-xs font-semibold text-brand-600 inline-flex items-center gap-1 whitespace-nowrap">
                       <Tag size={10} />
-                      <span className="truncate">{selectedProduct.category}</span>
+                      {selectedProduct.category}
                     </p>
                     <h3 className="text-lg sm:text-xl font-bold text-slate-900 mt-1 break-words">{selectedProduct.name}</h3>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-xl font-extrabold text-slate-900">₹{selectedProduct.price.toFixed(2)}</p>
-                    <p className="text-xs text-slate-400">per {selectedProduct.unit || 'can'}</p>
+                    <p className="text-xs text-slate-500">per {selectedProduct.unit || 'can'}</p>
                     {selectedHasContainer && (selectedProduct.container_cost || 0) > 0 && (
-                      <p className="text-xs text-amber-600 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} container deposit (refundable)</p>
+                      <p className="text-xs text-amber-700 font-medium mt-0.5">+₹{selectedProduct.container_cost.toFixed(2)} can deposit (refundable)</p>
                     )}
                     {selectedHasContainer && selectedCap > 0 && (
-                      <p className="text-xs text-emerald-600 font-medium mt-0.5">You hold {selectedCap} · refills free</p>
+                      <p className="text-xs text-emerald-700 font-medium mt-0.5">You hold {selectedCap} · refills free</p>
                     )}
                   </div>
                 </div>
 
-                <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap break-words">
+                <p className="text-sm leading-6 text-slate-700 whitespace-pre-wrap break-words">
                   {selectedProduct.description?.trim() || 'No description added for this product yet.'}
                 </p>
               </div>
@@ -946,8 +977,10 @@ export default function Shop() {
         </div>
       )}
 
-      {/* Fly-to-cart animation layer */}
-      <div className="pointer-events-none fixed inset-0 z-[69]">
+      {/* Fly-to-cart: collapse-and-lift layer.
+          Same z-index as the fly-trail layer below; DOM order keeps the
+          trail on top. Avoids arbitrary [69]/[70] z-values. */}
+      <div className="pointer-events-none fixed inset-0 z-50">
         {collapseItems.map(item => (
           <div
             key={item.id}
@@ -973,8 +1006,9 @@ export default function Shop() {
         ))}
       </div>
 
-      {/* Fly-to-cart animation layer */}
-      <div className="pointer-events-none fixed inset-0 z-[70]">
+      {/* Fly-to-cart: trail dots + ghost image. Rendered after the
+          collapse layer so it stacks above it via DOM order. */}
+      <div className="pointer-events-none fixed inset-0 z-50">
         {flyItems.map(item => (
           <React.Fragment key={item.id}>
             {item.trail.map((node, idx) => {
@@ -1048,10 +1082,10 @@ export default function Shop() {
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 overscroll-contain">
             {cart.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <ShoppingCart size={40} className="mx-auto mb-3 opacity-20" />
-                <p className="font-medium">Your cart is empty</p>
-                <p className="text-xs mt-1">Add some products to get started</p>
+              <div className="text-center py-16">
+                <ShoppingCart size={40} className="mx-auto mb-3 text-slate-300" />
+                <p className="font-medium text-slate-700">Your cart is empty</p>
+                <p className="text-xs mt-1 text-slate-500">Add a can or two to get started.</p>
               </div>
             ) : cart.map(({ product, quantity, mode }) => {
               const isBuy = mode === 'buy';

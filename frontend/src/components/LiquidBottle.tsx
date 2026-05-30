@@ -313,7 +313,8 @@ function LiquidBottleCanvas({
       style={{
         position: 'relative',
         width: '100%',
-        maxWidth: 320,
+        /* Responsive: smaller on phones, capped on desktop. clamp(min, fluid, max). */
+        maxWidth: 'clamp(190px, 38vw, 320px)',
         aspectRatio: '260 / 480',
       }}
       aria-hidden="true"

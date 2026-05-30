@@ -224,15 +224,15 @@ export default function Legal() {
           </div>
           <div className="space-y-1.5">
             <p className="text-white/40 text-[11px] uppercase tracking-wider">Compliance</p>
-            <p>FSSAI: <span className="text-white/90 tracking-wide">[License No.]</span></p>
-            <p>GSTIN: <span className="text-white/90 tracking-wide">[GSTIN]</span></p>
-            <p>Registered: <span className="text-white/90">Karnataka, India</span></p>
+            <p>FSSAI Reg. No.: <span className="text-white/90 tracking-wide">21226159000012</span></p>
+            <p>GSTIN: <span className="text-white/90 tracking-wide">29AIGPB6124Q2ZW</span></p>
+            <p>Registered: <span className="text-white/90">Tumkur, Karnataka, India</span></p>
           </div>
           <div className="space-y-1.5">
             <p className="text-white/40 text-[11px] uppercase tracking-wider">Reach us</p>
             <p className="flex items-center gap-2"><Mail size={13} /> support@sanathanatattva.shop</p>
-            <p className="flex items-center gap-2"><Phone size={13} /> [Customer Care Number]</p>
-            <p className="flex items-start gap-2"><MapPin size={13} className="mt-0.5" /> [Registered office address]</p>
+            <p className="flex items-center gap-2"><Phone size={13} /> <a href="tel:+919972922415" className="hover:text-white">+91 99729 22415</a></p>
+            <p className="flex items-start gap-2"><MapPin size={13} className="mt-0.5" /> 164/1A, Halekatte, Kachihalli Village, Mayasandra, Turuvekere Taluk, Tumkur — 572227, Karnataka</p>
           </div>
         </div>
         <div className="border-t border-white/5">
@@ -715,18 +715,20 @@ function PolicyGrievance({ refEl }: { refEl: (el: HTMLElement | null) => void })
       <Clause n="5.01" title="Grievance Officer">
         <div className="rounded-xl bg-gradient-to-br from-brand-50 to-parchment-200 border border-brand-200/60 p-5">
           <p className="text-[11px] uppercase tracking-wider text-brand-700 font-semibold mb-2">Designated Officer</p>
-          <p className="text-lg font-semibold text-brand-900">[Officer Name]</p>
-          <p className="text-sm text-slate-600 mb-4">Founder &amp; Grievance Officer, Gravity Traders</p>
+          <p className="text-lg font-semibold text-brand-900">Bharathi B N</p>
+          <p className="text-sm text-slate-600 mb-4">Proprietor &amp; Grievance Officer, Gravity Traders</p>
           <div className="space-y-1.5 text-sm text-slate-700">
             <p className="flex items-center gap-2">
               <Mail size={14} className="text-brand-700" />
               <a href="mailto:grievance@sanathanatattva.shop" className="text-brand-700 hover:underline">grievance@sanathanatattva.shop</a>
             </p>
             <p className="flex items-center gap-2">
-              <Phone size={14} className="text-brand-700" /> [Phone — Mon–Sat, 10 AM – 6 PM IST]
+              <Phone size={14} className="text-brand-700" />
+              <a href="tel:+919972922415" className="text-brand-700 hover:underline">+91 99729 22415</a>
+              <span className="text-slate-500">· Mon–Sat, 10 AM – 6 PM IST</span>
             </p>
             <p className="flex items-start gap-2">
-              <MapPin size={14} className="text-brand-700 mt-0.5" /> [Registered office address, Bengaluru, Karnataka]
+              <MapPin size={14} className="text-brand-700 mt-0.5" /> 164/1A, Halekatte, Kachihalli Village, Mayasandra, Turuvekere Taluk, Tumkur — 572227, Karnataka
             </p>
           </div>
         </div>
