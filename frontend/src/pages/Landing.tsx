@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PARTNER_SITE_URL } from '../appMode';
+import LiquidBottle from '../components/LiquidBottle';
 
 /* ════════════════════════════════════════════════════════════════════════
  *  Sanathana Tattva — Landing
@@ -255,6 +256,31 @@ const PAGE_STYLES = `
     transform: translateY(28px);
   }
 
+  /* ── Chapter 4 (Process compared) ─────────────────────────────────
+   * When the section enters view, the strike-through on each refined-
+   * process item draws across left → right, staggered. The text itself
+   * is always visible; only the strike is animated. */
+  .st-cmp-strike {
+    position: relative;
+    text-decoration: none;
+  }
+  .st-cmp-strike::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 56%;
+    width: 100%;
+    height: 1px;
+    background: currentColor;
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform 540ms var(--ease-out-quart);
+    transition-delay: calc(var(--i, 0) * 100ms + 220ms);
+  }
+  .st-cmp-section.st-seen .st-cmp-strike::after {
+    transform: scaleX(1);
+  }
+
   /* Word stagger on the quote chapters */
   .st-word {
     display: inline-block;
@@ -284,6 +310,11 @@ const PAGE_STYLES = `
     .st-word { transition: opacity 200ms linear !important; opacity: 1 !important; transform: none !important; transition-delay: 0ms !important; }
     .st-spark { display: none; }
     [data-st-animate] { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+    /* Strikes appear instantly, no draw animation. */
+    .st-cmp-strike::after {
+      transition: none !important;
+      transform: scaleX(1) !important;
+    }
   }
 `;
 
@@ -354,8 +385,8 @@ const CHAPTER3_CARDS: Array<{
     body: 'from sun-dried seeds. Light golden, mild taste that does not dominate. Mostly polyunsaturated, with vitamin E. Use for everyday cooking, salad dressings, baking.',
   },
   {
-    tag:        'six months on the shelf',
-    body:       'unrefined oils keep less time than refined ones, because they still hold the compounds that drive oxidation. Store in a cool dark corner of the kitchen. Smell before pouring.',
+    tag:        'the can comes back',
+    body:       'we ship in a reusable steel can, not a plastic bottle. Bring it back empty on the next order; we clean it, refill it, and send it out again. You pay for the oil, not for a new container each time.',
     highlight:  true,
   },
 ];
@@ -599,7 +630,6 @@ export default function Landing() {
 
   const [seedRef,    seedSeen]    = useSeen<HTMLDivElement>();
   const [pressRef,   pressSeen]   = useSeen<HTMLDivElement>();
-  const [kitchenRef, kitchenSeen] = useSeen<HTMLDivElement>();
   const [familyRef,  familySeen]  = useSeen<HTMLDivElement>();
   const [partnerRef, partnerSeen] = useSeen<HTMLDivElement>();
 
@@ -1013,9 +1043,13 @@ export default function Landing() {
             style={{ paddingTop: 'clamp(40px, 8vh, 96px)' }}
           >
 
-            {/* LEFT — Bottle. Color and label shift per phase; liquid fills. */}
+            {/* LEFT — Bottle. WebGL liquid: real-time shader with ripples,
+                caustics, meniscus highlight, and a mouse-down ripple. Color
+                and label shift per phase; liquid fills with scroll. Falls
+                back to a static SVG bottle when WebGL is unavailable or the
+                user prefers reduced motion. */}
             <div className="flex justify-center md:justify-start">
-              <BottleSVG
+              <LiquidBottle
                 fill={bottleFill}
                 topColor={currentOilColor(pinProgress, 'top')}
                 botColor={currentOilColor(pinProgress, 'bot')}
@@ -1085,111 +1119,126 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ══════════════════════ CHAPTER 4 — Kitchen ═════════════════════
-       * No map. A centred typographic moment about the delivery promise,
-       * with one small visual hook: the OTP code boxes that mirror the
-       * real verification step at the door. */}
+      {/* ══════════════════════ CHAPTER 4 — Process compared ══════════
+       * Two columns of steps. Refined sunflower (left) gets a strike-
+       * through cascade when the section enters view; ours (right) is
+       * short and clean from the start. The strike-draw on the left is
+       * the chapter's single, scripted motion. */}
       <section
-        ref={kitchenRef}
-        className={`st-chapter relative px-6 sm:px-10 ${kitchenSeen ? 'st-seen' : ''}`}
+        ref={familyRef}
+        className={`st-chapter st-cmp-section relative px-6 sm:px-10 ${familySeen ? 'st-seen' : ''}`}
         data-shy="true"
         style={{
           background: C.oilDeep,
           color: C.light,
-          paddingTop: 'var(--st-section-tight)',
-          paddingBottom: 'var(--st-section-tight)',
+          paddingTop: 'var(--st-section)',
+          paddingBottom: 'var(--st-section)',
         }}
       >
-        <div className="max-w-3xl mx-auto text-center">
+        <div className="max-w-5xl mx-auto">
           <h2
             className="st-h2"
             style={{
               color: C.light,
               textWrap: 'balance' as any,
+              maxWidth: '24ch',
             }}
           >
-            From the press, to your door, in forty-eight hours.
+            What happens between the seed and the can.
           </h2>
-          <p
-            className="mt-6 mx-auto st-body st-body-on-dark"
-            style={{
-              color: C.lightBody,
-              textWrap: 'pretty' as any,
-            }}
-          >
-            We deliver in Bengaluru, through partners who already live in
-            your neighbourhood. They press the doorbell, they ask for a
-            six-digit code, they leave. The rest of Karnataka will follow
-            over the next year.
-          </p>
 
-          {/* OTP boxes: the real verification step, made visible. */}
-          <div className="mt-10 sm:mt-12 flex justify-center" style={{ gap: 10 }}>
-            {['4', '7', '2', '9', '1', '5'].map((d, i) => (
-              <span
-                key={i}
-                aria-hidden="true"
+          <div
+            className="mt-12 sm:mt-16 grid gap-10 lg:gap-20 md:grid-cols-2"
+            style={{ alignItems: 'start' }}
+          >
+            {/* Refined: the long industrial path, struck through. */}
+            <div>
+              <p
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 'clamp(36px, 7vw, 48px)',
-                  height: 'clamp(48px, 9vw, 62px)',
-                  border: `1px solid ${C.gold}`,
-                  borderRadius: 6,
                   fontFamily: 'var(--st-display)',
-                  fontSize: 'clamp(1.4rem, 3vw, 1.7rem)',
-                  color: C.gold,
-                  background: 'rgba(8, 38, 19, 0.6)',
-                  letterSpacing: '0.02em',
+                  fontStyle: 'italic',
+                  fontSize: 'var(--type-meta)',
+                  color: C.lightMute,
+                  marginBottom: 'var(--st-5)',
                 }}
               >
-                {d}
-              </span>
-            ))}
+                refined sunflower oil
+              </p>
+              <ol
+                style={{
+                  fontFamily: 'var(--st-body)',
+                  fontSize: 'var(--type-body)',
+                  lineHeight: 1.85,
+                  color: C.lightMute,
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                  maxWidth: '34ch',
+                }}
+              >
+                {[
+                  'solvent extraction with hexane',
+                  'degumming with phosphoric acid',
+                  'neutralisation with caustic soda',
+                  'bleaching with activated clay',
+                  'deodorisation at 240°C, under vacuum',
+                  'winterisation to remove waxes',
+                  'plastic bottle, single use',
+                ].map((step, i) => (
+                  <li key={i} style={{ ['--i' as any]: i }}>
+                    <del className="st-cmp-strike">{step}</del>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {/* Ours: short, plain, in display weight. */}
+            <div>
+              <p
+                style={{
+                  fontFamily: 'var(--st-display)',
+                  fontStyle: 'italic',
+                  fontSize: 'var(--type-meta)',
+                  color: C.gold,
+                  marginBottom: 'var(--st-5)',
+                }}
+              >
+                what we do
+              </p>
+              <ol
+                style={{
+                  fontFamily: 'var(--st-display)',
+                  fontWeight: 500,
+                  fontSize: 'clamp(1.3rem, 2.2vw, 1.7rem)',
+                  lineHeight: 1.7,
+                  letterSpacing: 'var(--ls-tight)',
+                  color: C.light,
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: 0,
+                }}
+              >
+                <li>the seed</li>
+                <li>the wooden ghani</li>
+                <li>a cotton filter</li>
+                <li>a steel can we take back</li>
+              </ol>
+            </div>
           </div>
+
           <p
-            className="mt-4 mx-auto st-lede"
-            style={{ color: C.lightMute, fontSize: 'var(--type-meta)' }}
+            className="mt-12 sm:mt-16 st-body st-body-on-dark"
+            style={{ color: C.lightBody, maxWidth: '56ch' }}
           >
-            sent to your phone, verified at the door.
+            Each step on the left strips something away. Refining strips
+            most of it; the plastic bottle goes to a landfill. We do four
+            things, and one of them is taking the can back to refill it
+            for next time.
           </p>
         </div>
       </section>
 
-      {/* ══════════════════════ CHAPTER 5 — Family ════════════════════
-       * Quiet beat — the most generous breathing on the page. */}
-      <section
-        ref={familyRef}
-        className={`st-chapter relative px-6 sm:px-10 ${familySeen ? 'st-seen' : ''}`}
-        data-shy="true"
-        style={{
-          background: C.cream,
-          color: C.ink,
-          paddingTop: 'var(--st-section-quiet)',
-          paddingBottom: 'var(--st-section-quiet)',
-        }}
-      >
-        <div className="max-w-2xl mx-auto">
-          <p
-            className="st-quote"
-            style={{
-              color: C.ink,
-              textWrap: 'balance' as any,
-            }}
-          >
-            <StaggeredPhrase text="My grandfather pressed oil for the village. My father pressed oil for the district. We press oil for the families who care to know how it was made." />
-          </p>
-          <p
-            className="mt-8 st-meta"
-            style={{ color: C.inkMute }}
-          >
-            Chiranth, founder. Bengaluru.
-          </p>
-        </div>
-      </section>
-
-      {/* ══════════════════════ CHAPTER 6 — Partners ══════════════════
+      {/* ══════════════════════ CHAPTER 5 — Partners ══════════════════
        * Tight pacing — transactional. CTA column tightens so the button
        * sits next to the pitch instead of floating in empty space. */}
       <section
@@ -1431,104 +1480,6 @@ function Chapter3Card({
         {body}
       </p>
     </div>
-  );
-}
-
-/* ── Bottle SVG. The bottle fills as the user scrolls (existing pour
- *    metaphor), and while it fills, the oil color shifts through coconut
- *    → groundnut → sunflower. The variety label on the bottle crossfades
- *    between three stacked SVG text elements at the same coordinate. */
-function BottleSVG({
-  fill,
-  topColor,
-  botColor,
-  labels,
-}: {
-  fill: number;
-  topColor: string;
-  botColor: string;
-  labels: { coconut: number; groundnut: number; sunflower: number };
-}) {
-  const f = clamp01(fill);
-  const bodyTop = 152;
-  const bodyBottom = 410;
-  const liquidTop = bodyBottom - (bodyBottom - bodyTop) * f;
-
-  return (
-    <svg viewBox="0 0 260 480" width="100%" style={{ maxWidth: 320 }} aria-hidden="true">
-      <defs>
-        <linearGradient id="oilGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={topColor} />
-          <stop offset="100%" stopColor={botColor} />
-        </linearGradient>
-        <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="rgba(247, 236, 212, 0.10)" />
-          <stop offset="50%"  stopColor="rgba(247, 236, 212, 0.04)" />
-          <stop offset="100%" stopColor="rgba(247, 236, 212, 0.10)" />
-        </linearGradient>
-        <clipPath id="bottleClip">
-          <path d="M105,50 L155,50 L155,90 Q155,118 168,135 Q188,160 188,205 L188,400 Q188,440 148,440 L112,440 Q72,440 72,400 L72,205 Q72,160 92,135 Q105,118 105,90 Z" />
-        </clipPath>
-      </defs>
-
-      {/* Filling liquid — y/height driven by `fill`, fill colour driven by
-         topColor/botColor. No CSS transition; the parent updates per
-         scroll frame (rAF) so motion is already smooth. */}
-      <g clipPath="url(#bottleClip)">
-        <rect
-          x="0"
-          y={liquidTop}
-          width="260"
-          height={bodyBottom - liquidTop + 40}
-          fill="url(#oilGrad)"
-        />
-        {f > 0.02 && (
-          <ellipse
-            cx="130"
-            cy={liquidTop}
-            rx="58"
-            ry="4"
-            fill="rgba(255, 250, 230, 0.50)"
-          />
-        )}
-      </g>
-
-      {/* Glass body outline */}
-      <path
-        d="M105,50 L155,50 L155,90 Q155,118 168,135 Q188,160 188,205 L188,400 Q188,440 148,440 L112,440 Q72,440 72,400 L72,205 Q72,160 92,135 Q105,118 105,90 Z"
-        fill="url(#glassGrad)"
-        stroke={C.lightMute}
-        strokeWidth="1.5"
-      />
-      {/* Cork / cap */}
-      <rect x="100" y="22" width="60" height="32" rx="4" fill={C.goldDeep} />
-      <rect x="100" y="22" width="60" height="6"  rx="2" fill={C.gold} />
-
-      {/* Label */}
-      <rect x="86" y="245" width="108" height="118" rx="2" fill={C.cream} />
-      <text x="140" y="282" textAnchor="middle"
-            fontFamily="EB Garamond, Georgia, serif" fontSize="13" fontStyle="italic"
-            fill={C.ink}>Sanathana</text>
-      <text x="140" y="300" textAnchor="middle"
-            fontFamily="EB Garamond, Georgia, serif" fontSize="13" fontStyle="italic"
-            fill={C.ink}>Tattva</text>
-      <line x1="106" y1="312" x2="174" y2="312" stroke={C.gold} strokeWidth="0.8" />
-      <text x="140" y="332" textAnchor="middle"
-            fontFamily="Inter, system-ui, sans-serif" fontSize="9" letterSpacing="2"
-            fill={C.inkMute}>COLD PRESSED</text>
-
-      {/* Three variety labels stack at the same point. Only the active
-         one is visible at any given scroll position. */}
-      <text x="140" y="351" textAnchor="middle"
-            fontFamily="EB Garamond, Georgia, serif" fontSize="12" fontStyle="italic"
-            fill={C.ink} opacity={labels.coconut}>Coconut</text>
-      <text x="140" y="351" textAnchor="middle"
-            fontFamily="EB Garamond, Georgia, serif" fontSize="12" fontStyle="italic"
-            fill={C.ink} opacity={labels.groundnut}>Groundnut</text>
-      <text x="140" y="351" textAnchor="middle"
-            fontFamily="EB Garamond, Georgia, serif" fontSize="12" fontStyle="italic"
-            fill={C.ink} opacity={labels.sunflower}>Sunflower</text>
-    </svg>
   );
 }
 
