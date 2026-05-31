@@ -143,6 +143,12 @@ function getBounceConstraints(rect: DOMRect) {
   return { minX, maxX, minY, maxY };
 }
 
+/* First-visit welcome callout for the steel-can mechanic.
+ * Shown above the toolbar on a visitor's first time on Shop. Once
+ * dismissed (or once a first cart-add happens implicitly), we set
+ * the localStorage key so it never comes back. */
+const SHOP_INTRO_KEY = 'st_shop_intro_seen';
+
 export default function Shop() {
   const { consumer } = useAuth();
   const navigate = useNavigate();
@@ -152,6 +158,14 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [introOpen, setIntroOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(SHOP_INTRO_KEY) !== 'true';
+  });
+  const dismissIntro = () => {
+    setIntroOpen(false);
+    try { localStorage.setItem(SHOP_INTRO_KEY, 'true'); } catch { /* private mode */ }
+  };
 
   const [cart, setCart] = useState<CartItem[]>(() =>
     loadCart<Product>().map(i => ({ product: i.product, quantity: i.quantity, mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode }))
@@ -618,6 +632,46 @@ export default function Shop() {
   return (
     <div className="max-w-7xl mx-auto">
 
+      {/* ── First-visit welcome callout ─────────────────────────────
+          Explains the steel-can mechanic in one line — it's the
+          unique brand promise and the thing a first-time visitor
+          most needs to understand. Dismissable forever via
+          localStorage; never resurfaces for returning visitors. */}
+      {introOpen && (
+        <div className="px-4 sm:px-6 pt-4">
+          <div
+            role="region"
+            aria-label="Welcome to Sanathana Tattva"
+            className="relative bg-brand-50 border border-brand-200 rounded-2xl p-4 sm:p-5 flex items-start gap-3"
+          >
+            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+              <Package size={18} className="text-brand-700" />
+            </div>
+            <div className="flex-1 min-w-0 pr-7">
+              <p className="font-semibold text-brand-900 text-sm sm:text-base">First time here?</p>
+              <p className="text-sm text-brand-800 mt-1 leading-relaxed">
+                Our oils ship in a reusable steel can. Bring it back on your next order to skip the deposit, or trade it in for store credit.
+              </p>
+              <button
+                type="button"
+                onClick={dismissIntro}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900"
+              >
+                Got it
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={dismissIntro}
+              aria-label="Dismiss welcome message"
+              className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-brand-700 hover:bg-brand-100 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Sticky toolbar: title + cart, search, then category chips.
           One grouped header bar keeps cart access available while
           scrolling. Filter chips replace the redundant <select>.
@@ -693,7 +747,7 @@ export default function Shop() {
               type="button"
               onClick={() => setCatFilter('')}
               className={`flex-shrink-0 min-h-[36px] px-4 rounded-full text-xs font-semibold transition-colors ${
-                !catFilter ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                !catFilter ? 'bg-brand-600 text-white' : 'bg-parchment-200 text-brand-800 hover:bg-parchment-300'
               }`}
             >
               All
@@ -704,7 +758,7 @@ export default function Shop() {
                 key={c}
                 onClick={() => setCatFilter(catFilter === c ? '' : c)}
                 className={`flex-shrink-0 min-h-[36px] px-4 rounded-full text-xs font-semibold transition-colors ${
-                  catFilter === c ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  catFilter === c ? 'bg-brand-600 text-white' : 'bg-parchment-200 text-brand-800 hover:bg-parchment-300'
                 }`}
               >
                 {c}
@@ -738,7 +792,7 @@ export default function Shop() {
                 onClick={() => setSelectedProduct(p)}
                 className={`card overflow-hidden flex flex-col transition-all hover:shadow-card-hover cursor-pointer ${outOfStock ? 'opacity-65' : ''}`}
               >
-                <div data-product-image className="aspect-square relative overflow-hidden bg-slate-100">
+                <div data-product-image className="aspect-square relative overflow-hidden bg-parchment-100">
                   {images.length > 0
                     ? <ProductImageGallery images={images} name={p.name} />
                     : <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-slate-300" /></div>
@@ -774,7 +828,7 @@ export default function Shop() {
                 </div>
 
                 {/* Full-width touch-first CTA bar */}
-                <div className="mt-auto border-t border-[#e8dcc8] p-2 bg-white space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <div className="mt-auto border-t border-[#e8dcc8] p-2 bg-[#fdfaf5] space-y-1.5" onClick={(e) => e.stopPropagation()}>
                   {/* Refill button (only when product has a container and consumer holds at least one) */}
                   {hasContainer && cap > 0 && (
                     refillQty === 0 ? (
@@ -869,8 +923,8 @@ export default function Shop() {
             className="absolute inset-0 bg-black/45 backdrop-blur-sm"
             onClick={() => setSelectedProduct(null)}
           />
-          <div className="relative w-full max-w-2xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden animate-slide-up">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div className="relative w-full max-w-2xl bg-[#fffbf2] rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#e8dcc8]">
               <div className="flex items-center gap-2 text-slate-600 text-sm">
                 <Info size={15} />
                 Product details
@@ -881,7 +935,7 @@ export default function Shop() {
             </div>
 
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              <div className="h-80 sm:h-96 bg-white relative" data-product-modal-image={selectedProduct.id}>
+              <div className="h-80 sm:h-96 bg-[#fdfaf5] relative" data-product-modal-image={selectedProduct.id}>
                 {getProductImages(selectedProduct).length > 0
                   ? <ProductImageGallery images={getProductImages(selectedProduct)} name={selectedProduct.name} contain />
                   : <div className="w-full h-full flex items-center justify-center"><Package className="w-14 h-14 text-slate-300" /></div>
@@ -918,7 +972,7 @@ export default function Shop() {
             </div>
 
 
-            <div className="border-t border-slate-100 p-3 sm:p-4 bg-white space-y-2">
+            <div className="border-t border-[#e8dcc8] p-3 sm:p-4 bg-[#fffbf2] space-y-2">
               {/* Refill control */}
               {selectedHasContainer && selectedCap > 0 && (
                 selectedRefillQty === 0 ? (
@@ -1065,7 +1119,7 @@ export default function Shop() {
 
         {/* Mobile: bottom sheet | Desktop: right drawer */}
         <div className={`
-          absolute bg-white shadow-2xl flex flex-col
+          absolute bg-[#fffbf2] shadow-2xl flex flex-col
           sm:left-auto sm:right-0 sm:top-0 sm:h-full sm:max-h-full sm:w-full sm:max-w-sm sm:rounded-none sm:rounded-l-2xl
           inset-x-0 bottom-0 max-h-[88vh] rounded-t-3xl
           sm:transition-transform sm:duration-300 sm:ease-out
@@ -1077,15 +1131,15 @@ export default function Shop() {
         `}>
           {/* Drag handle (mobile only) */}
           <div className="sm:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
-            <div className="w-10 h-1 rounded-full bg-slate-200" />
+            <div className="w-10 h-1 rounded-full bg-parchment-300" />
           </div>
 
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-[#e8dcc8] flex-shrink-0">
             <div className="flex items-center gap-2">
               <ShoppingCart size={18} className="text-brand-600" />
               <h3 className="font-bold text-slate-900 text-base">Cart ({cartCount})</h3>
             </div>
-            <button onClick={() => setCartOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+            <button onClick={() => setCartOpen(false)} className="w-8 h-8 rounded-full bg-parchment-200 flex items-center justify-center hover:bg-parchment-300 transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -1101,8 +1155,8 @@ export default function Shop() {
               const isBuy = mode === 'buy';
               const showsDeposit = isBuy && (product.container_cost || 0) > 0;
               return (
-                <div key={`${product.id}::${mode}`} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
-                  <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                <div key={`${product.id}::${mode}`} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-2xl">
+                  <div className="w-14 h-14 rounded-xl bg-[#fffbf2] border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                     {getPrimaryImage(product)
                       ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
                       : <Package size={18} className="text-slate-300 m-auto mt-4" />
@@ -1127,14 +1181,14 @@ export default function Shop() {
                     <div className="flex items-center gap-2 mt-2">
                       <button
                         onClick={() => updateQty(product.id, quantity - 1, mode)}
-                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                        className="w-7 h-7 rounded-lg bg-[#fffbf2] border border-[#e8dcc8] flex items-center justify-center hover:bg-parchment-200 active:scale-95 transition-all"
                       >
                         <Minus size={12} />
                       </button>
                       <span className="text-sm font-bold w-6 text-center">{quantity}</span>
                       <button
                         onClick={() => updateQty(product.id, quantity + 1, mode)}
-                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-100 active:scale-95 transition-all"
+                        className="w-7 h-7 rounded-lg bg-[#fffbf2] border border-[#e8dcc8] flex items-center justify-center hover:bg-parchment-200 active:scale-95 transition-all"
                       >
                         <Plus size={12} />
                       </button>
@@ -1156,7 +1210,7 @@ export default function Shop() {
             const cartFinal    = Math.ceil(rawTotal);
             const cartRounding = cartFinal - rawTotal;
             return (
-            <div className="p-4 border-t border-slate-100 space-y-2 flex-shrink-0 pb-safe">
+            <div className="p-4 border-t border-[#e8dcc8] space-y-2 flex-shrink-0 pb-safe">
               <div className="flex justify-between items-center text-sm text-slate-500">
                 <span>{cartCount} item{cartCount !== 1 ? 's' : ''} (incl. GST)</span>
                 <span>₹{cartTotal.toFixed(2)}</span>
@@ -1249,7 +1303,7 @@ function ProductReviews({ productId, consumer }: { productId: number; consumer: 
   }, [productId, consumer]);
 
   return (
-    <div className="border-t border-slate-100 px-4 sm:px-5 pb-4 sm:pb-5 pt-4">
+    <div className="border-t border-[#e8dcc8] px-4 sm:px-5 pb-4 sm:pb-5 pt-4">
       {/* Header row */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -1312,7 +1366,7 @@ function ProductReviews({ productId, consumer }: { productId: number; consumer: 
               {imgs.length > 0 && (
                 <div className="flex gap-2 ml-9 flex-wrap">
                   {imgs.map((img, i) => (
-                    <button key={i} onClick={() => setLightboxImg(img)} className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0">
+                    <button key={i} onClick={() => setLightboxImg(img)} className="w-16 h-16 rounded-lg overflow-hidden border border-[#e8dcc8] flex-shrink-0">
                       <img src={img} alt="Review" className="w-full h-full object-cover" />
                     </button>
                   ))}

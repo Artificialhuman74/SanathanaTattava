@@ -137,9 +137,12 @@ export default function ContainerPickups() {
       )}
 
       {pickups.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <RotateCcw className="w-10 h-10 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No pickup tasks right now.</p>
+        <div className="bg-[#fffbf2] rounded-xl border border-[#e8dcc8] p-8 text-center">
+          <RotateCcw className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+          <p className="text-sm font-medium text-slate-700">No pickup tasks right now</p>
+          <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto">
+            When a consumer asks to return a steel can (for a deposit refund or store credit), it'll appear here as a standalone pickup. Same loop as a refill swap, except you don't hand anything over: just collect the empty.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

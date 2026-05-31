@@ -22,7 +22,7 @@ export default function ConsumerProfile() {
   if (!consumer) {
     return (
       <div className="max-w-md mx-auto px-4 py-12 text-center">
-        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+        <div className="w-20 h-20 rounded-full bg-parchment-200 flex items-center justify-center mx-auto mb-4">
           <User size={36} className="text-gray-300" />
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">You're not logged in</h2>
@@ -54,7 +54,7 @@ export default function ConsumerProfile() {
       </div>
 
       {/* Menu */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+      <div className="bg-[#fffbf2] rounded-2xl shadow-sm border border-[#e8dcc8] overflow-hidden divide-y divide-surface-rim">
         <ProfileMenuItem
           icon={<User size={18} className="text-brand-600" />}
           label="My Account"
@@ -108,7 +108,7 @@ export default function ConsumerProfile() {
       )}
 
       {/* Logout */}
-      <div className="mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="mt-4 bg-[#fffbf2] rounded-2xl shadow-sm border border-[#e8dcc8] overflow-hidden">
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-red-50 transition-colors"
@@ -138,7 +138,7 @@ function ProfileMenuItem({
   return (
     <Link
       to={to}
-      className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
+      className="flex items-center gap-4 px-5 py-4 hover:bg-parchment-100 transition-colors"
     >
       <div className={`w-9 h-9 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>
         {icon}

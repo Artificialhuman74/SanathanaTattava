@@ -155,7 +155,7 @@ export default function SubDealerCommissions() {
 
       {/* Table */}
       <div className="card">
-        <div className="flex items-center gap-2 p-5 border-b border-slate-100">
+        <div className="flex items-center gap-2 p-5 border-b border-[#e8dcc8]">
           <Users size={18} className="text-brand-600" />
           <div>
             <h3 className="font-bold text-slate-900">Commissions Owed to Your Sub-Dealers</h3>
@@ -274,7 +274,7 @@ export default function SubDealerCommissions() {
       {/* Log payment modal */}
       {modal.open && modal.comm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in">
+          <div className="w-full max-w-md bg-[#fffbf2] rounded-2xl shadow-xl overflow-hidden animate-fade-in">
             <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold">Log Commission Payment</h2>
@@ -301,7 +301,7 @@ export default function SubDealerCommissions() {
                       className={`p-3 rounded-xl border text-sm font-medium transition-colors ${
                         modal.method === m
                           ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                          : 'border-[#e8dcc8] text-slate-600 hover:border-[#ede3d0]'
                       }`}
                     >
                       {m === 'cash' ? '💵 Cash (in person)' : '🏦 Bank Transfer'}
@@ -322,7 +322,7 @@ export default function SubDealerCommissions() {
                   placeholder={modal.method === 'cash'
                     ? "e.g. 'Paid in cash on 5th May at shop'"
                     : "e.g. 'UPI ref: 23534543 to HDFC ****1234'"}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
                 />
                 <p className="text-xs text-slate-400 mt-1">{modal.note.length}/500</p>
               </div>
@@ -337,7 +337,7 @@ export default function SubDealerCommissions() {
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => setModal({ open: false, comm: null, method: 'cash', note: '' })}
-                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-parchment-200 hover:bg-parchment-300 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>

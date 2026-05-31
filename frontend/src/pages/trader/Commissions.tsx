@@ -113,7 +113,7 @@ export default function TraderCommissions() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { label: 'Total Earned', value: fmt(total),      icon: TrendingUp,   color: 'bg-slate-50 text-slate-600',     border: 'border-slate-200' },
+          { label: 'Total Earned', value: fmt(total),      icon: TrendingUp,   color: 'bg-parchment-100 text-slate-600',     border: 'border-[#e8dcc8]' },
           { label: 'Paid to Bank', value: fmt(paidToBank), icon: CheckCircle2, color: 'bg-emerald-50 text-emerald-600', border: 'border-emerald-200' },
         ].map(({ label, value, icon: Icon, color, border }) => (
           <div key={label} className={`card p-4 border-l-4 ${border}`}>
@@ -186,7 +186,7 @@ export default function TraderCommissions() {
       {/* Weekly Breakdown */}
       {(data?.weeklyBreakdown || []).length > 0 && (
         <div className="card">
-          <div className="p-5 border-b border-slate-100">
+          <div className="p-5 border-b border-[#e8dcc8]">
             <h3 className="font-bold text-slate-900">Weekly Breakdown</h3>
           </div>
           <div className="table-wrapper">
@@ -194,7 +194,7 @@ export default function TraderCommissions() {
               <thead>
                 <tr><th>Week</th><th>Orders</th><th>Amount</th><th>Status</th></tr>
               </thead>
-              <tbody>
+              <tbody className="tr-stagger">
                 {(data?.weeklyBreakdown || []).map((w, i) => (
                   <tr key={i}>
                     <td className="text-sm text-slate-600">
@@ -217,15 +217,24 @@ export default function TraderCommissions() {
 
       {/* Commission Records */}
       <div className="card">
-        <div className="p-5 border-b border-slate-100">
+        <div className="p-5 border-b border-[#e8dcc8]">
           <h3 className="font-bold text-slate-900">Commission Records</h3>
           <p className="text-slate-400 text-xs mt-0.5">Per-order commission details</p>
         </div>
         {(data?.commissions || []).length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <AlertCircle size={36} className="mx-auto mb-2 opacity-30" />
-            <p className="font-medium">No commissions yet</p>
-            <p className="text-sm mt-1">Commissions appear after consumers complete payment</p>
+          <div className="px-6 py-10 text-center">
+            <AlertCircle size={36} className="mx-auto mb-2 text-slate-300" />
+            <p className="font-medium text-slate-700">No commissions yet</p>
+            <p className="text-sm mt-1 text-slate-500 max-w-md mx-auto">
+              When a consumer places an order using your referral code and completes payment, the commission lands here. Weekly payouts are processed every Sunday.
+            </p>
+            <div className="mt-5 inline-flex items-center gap-4 text-xs text-slate-500 bg-parchment-100 rounded-xl px-4 py-3 border border-[#e8dcc8]">
+              <span><strong className="text-brand-700">1.</strong> Share your code</span>
+              <span className="text-slate-300">›</span>
+              <span><strong className="text-brand-700">2.</strong> They order</span>
+              <span className="text-slate-300">›</span>
+              <span><strong className="text-brand-700">3.</strong> You earn</span>
+            </div>
           </div>
         ) : (
           <div className="table-wrapper">
@@ -233,7 +242,7 @@ export default function TraderCommissions() {
               <thead>
                 <tr><th>Order #</th><th>Amount</th><th>Rate</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr>
               </thead>
-              <tbody>
+              <tbody className="tr-stagger">
                 {(data?.commissions || []).map(c => (
                   <tr key={c.id}>
                     <td className="font-mono text-brand-600 font-medium text-xs">{c.order_number}</td>
@@ -246,7 +255,7 @@ export default function TraderCommissions() {
                     </td>
                     <td>
                       <div>
-                        <span className={`badge ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`badge ${STATUS_COLORS[c.status] || 'bg-parchment-200 text-slate-600'}`}>
                           {STATUS_LABEL[c.status] || c.status}
                         </span>
                         {c.status === 'transferred' && (
@@ -260,7 +269,7 @@ export default function TraderCommissions() {
                         <button
                           onClick={() => syncTransfer(c)}
                           disabled={syncingId === c.id}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-parchment-200 hover:bg-parchment-300 rounded-lg transition-colors disabled:opacity-50"
                         >
                           {syncingId === c.id ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
                           {syncingId === c.id ? 'Checking…' : 'Sync'}

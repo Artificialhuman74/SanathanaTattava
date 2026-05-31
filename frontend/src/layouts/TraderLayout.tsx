@@ -117,8 +117,8 @@ export default function TraderLayout() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white border-b border-parchment-300 flex items-center px-4 sm:px-6 gap-4 flex-shrink-0">
-          <button className="lg:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-500" onClick={() => setSidebarOpen(true)}>
+        <header className="h-16 bg-[#fffbf2] border-b border-[#e8dcc8] flex items-center px-4 sm:px-6 gap-4 flex-shrink-0">
+          <button className="lg:hidden p-2 rounded-lg hover:bg-parchment-200 text-slate-500" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex-1">

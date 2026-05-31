@@ -86,7 +86,7 @@ export default function Support() {
       <h1 className="text-xl font-bold text-gray-900">Get Support</h1>
 
       {/* ── Contact block ──────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm overflow-hidden">
         <div className="px-5 py-4 bg-brand-600">
           <p className="text-white font-bold text-base">Contact Us</p>
           <p className="text-brand-200 text-xs mt-0.5">We're here to help</p>
@@ -94,7 +94,7 @@ export default function Support() {
         <div className="divide-y divide-gray-50">
           <a
             href="tel:+919972922514"
-            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-parchment-100 transition-colors active:bg-parchment-200"
           >
             <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
               <Phone size={18} className="text-green-600" />
@@ -107,7 +107,7 @@ export default function Support() {
           </a>
           <a
             href="mailto:namaste@sanathanatattva.shop"
-            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-parchment-100 transition-colors active:bg-parchment-200"
           >
             <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
               <Mail size={18} className="text-blue-600" />
@@ -122,7 +122,7 @@ export default function Support() {
             href="https://wa.me/919972922514"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-parchment-100 transition-colors active:bg-parchment-200"
           >
             <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
               <MessageCircle size={18} className="text-emerald-600" />
@@ -135,7 +135,7 @@ export default function Support() {
           </a>
           <Link
             to="/shop/legal"
-            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-parchment-100 transition-colors active:bg-parchment-200"
           >
             <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
               <ScrollText size={18} className="text-amber-600" />
@@ -160,7 +160,7 @@ export default function Support() {
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
             </div>
           ) : orders.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+            <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm p-10 text-center">
               <ShoppingBag size={36} className="mx-auto mb-2 text-gray-200" />
               <p className="text-sm text-gray-400">Nothing to ask about yet — place an order first.</p>
             </div>
@@ -170,11 +170,11 @@ export default function Support() {
                 <button
                   key={order.id}
                   onClick={() => setSelected(order)}
-                  className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 active:scale-[0.99] transition-all"
+                  className="w-full text-left bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm px-4 py-3.5 flex items-center gap-3 hover:bg-parchment-100 active:scale-[0.99] transition-all"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-gray-50'}`}>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-parchment-100'}`}>
                         {STATUS_LABELS[order.status] || order.status}
                       </span>
                     </div>
@@ -194,7 +194,7 @@ export default function Support() {
       )}
 
       {!consumer && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+        <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm p-6 text-center">
           <p className="text-sm text-gray-500 mb-3">Log in to get support for a specific order</p>
           <button
             onClick={() => navigate('/shop/login')}
@@ -211,10 +211,10 @@ export default function Support() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex justify-center pt-3 sm:hidden">
-              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+              <div className="w-10 h-1 bg-parchment-300 rounded-full" />
             </div>
 
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#e8dcc8]">
               <div>
                 <p className="font-bold text-gray-900">{selected.order_number}</p>
                 <p className="text-xs text-gray-400">{formatIst(selected.created_at)}</p>
@@ -223,7 +223,7 @@ export default function Support() {
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>
                   {STATUS_LABELS[selected.status] || selected.status}
                 </span>
-                <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-parchment-200">
                   <X size={16} className="text-gray-500" />
                 </button>
               </div>
@@ -236,8 +236,8 @@ export default function Support() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items</p>
                 <div className="space-y-2">
                   {(selected.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
-                      <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
+                    <div key={i} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-xl text-sm">
+                      <div className="w-12 h-12 rounded-lg bg-white border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                           : <Package size={16} className="text-gray-300 m-auto mt-3" />
@@ -250,7 +250,7 @@ export default function Support() {
                       <p className="font-bold text-gray-900 flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center px-3 pt-2 border-t border-gray-100">
+                  <div className="flex justify-between items-center px-3 pt-2 border-t border-[#e8dcc8]">
                     <span className="font-semibold text-gray-700">Total</span>
                     <span className="font-extrabold text-brand-600 text-lg">₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
                   </div>
@@ -267,7 +267,7 @@ export default function Support() {
               </div>
 
               {/* Dealer & Delivery */}
-              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div className="bg-parchment-100 rounded-xl p-4 space-y-3">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Dealer</p>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
@@ -286,7 +286,7 @@ export default function Support() {
                   </span>
                 </div>
                 {selected.delivery_dealer_name && (
-                  <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-3 pt-2 border-t border-[#e8dcc8]">
                     <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                       <Truck size={14} className="text-teal-600" />
                     </div>

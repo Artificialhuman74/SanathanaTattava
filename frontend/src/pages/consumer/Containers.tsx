@@ -90,7 +90,7 @@ const STATUS_COLORS: Record<HoldingStatus, string> = {
   pending_delivery: 'bg-amber-50 text-amber-700 border-amber-200',
   held: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   refund_requested: 'bg-blue-50 text-blue-700 border-blue-200',
-  refunded: 'bg-slate-50 text-slate-700 border-slate-200',
+  refunded: 'bg-parchment-100 text-slate-700 border-[#e8dcc8]',
   forfeited: 'bg-red-50 text-red-700 border-red-200',
 };
 
@@ -170,7 +170,7 @@ export default function ConsumerContainers() {
               In your care ({held.length})
             </h2>
             {held.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              <div className="rounded-xl border border-dashed border-[#e8dcc8] bg-parchment-100 px-4 py-6 text-center text-sm text-slate-500">
                 You currently hold no containers.
               </div>
             ) : (
@@ -256,15 +256,47 @@ function WalletPill({ balance }: { balance: number }) {
 }
 
 function EmptyState() {
+  const [showExplainer, setShowExplainer] = useState(false);
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center">
-      <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 flex items-center justify-center mb-3">
+    <div className="rounded-2xl border border-[#e8dcc8] bg-[#fffbf2] px-6 py-10 text-center">
+      <div className="w-14 h-14 mx-auto rounded-full bg-parchment-200 flex items-center justify-center mb-3">
         <Package className="w-7 h-7 text-slate-400" />
       </div>
       <h3 className="text-base font-semibold text-slate-800">The shelf is empty.</h3>
       <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto">
         Your steel cans will show up here once your first order arrives. Bring one back for the deposit, or refill it next time to skip the deposit.
       </p>
+
+      {/* Inline onboarding: explain the four-step loop on demand. */}
+      <button
+        type="button"
+        onClick={() => setShowExplainer(v => !v)}
+        className="mt-5 text-xs font-semibold text-brand-700 hover:text-brand-800 inline-flex items-center gap-1.5"
+        aria-expanded={showExplainer}
+      >
+        {showExplainer ? 'Hide the loop' : 'How the steel-can loop works'}
+        <ChevronRight size={12} className={`transition-transform ${showExplainer ? 'rotate-90' : ''}`} />
+      </button>
+      {showExplainer && (
+        <ol className="mt-4 text-left max-w-md mx-auto space-y-3 text-sm text-slate-700 bg-parchment-100 rounded-xl p-4 border border-[#e8dcc8]">
+          <li className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center justify-center">1</span>
+            <span>Place your first order. The oil arrives in a reusable steel can with a small refundable deposit on the can.</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center justify-center">2</span>
+            <span>That can shows up in this list with status "In your care".</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center justify-center">3</span>
+            <span>Refill it on your next order to skip the deposit (cheaper), or hand it back for a refund.</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center justify-center">4</span>
+            <span>Refunds come back to your bank or as store credit in your wallet. You choose at the time.</span>
+          </li>
+        </ol>
+      )}
     </div>
   );
 }
@@ -283,7 +315,7 @@ function HeldCard({
   const isHeld = holding.status === 'held';
   const isPending = holding.status === 'pending_delivery';
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-4">
+    <li className="rounded-xl border border-[#e8dcc8] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -325,14 +357,14 @@ function HeldCard({
           </button>
           <button
             onClick={onSwap}
-            className="flex flex-col items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition text-slate-700 py-2 px-2"
+            className="flex flex-col items-center gap-1 rounded-lg border border-[#e8dcc8] bg-[#fffbf2] hover:bg-parchment-100 transition text-slate-700 py-2 px-2"
           >
             <ArrowLeftRight className="w-4 h-4" />
             <span className="text-[11px] font-semibold">Swap product</span>
           </button>
           <button
             onClick={onRefund}
-            className="flex flex-col items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition text-slate-700 py-2 px-2"
+            className="flex flex-col items-center gap-1 rounded-lg border border-[#e8dcc8] bg-[#fffbf2] hover:bg-parchment-100 transition text-slate-700 py-2 px-2"
           >
             <X className="w-4 h-4" />
             <span className="text-[11px] font-semibold">Return</span>
@@ -364,7 +396,7 @@ function HistoryCard({
   const wa = supportWhatsapp ? `https://wa.me/${supportWhatsapp}` : null;
 
   return (
-    <li className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+    <li className="rounded-lg border border-[#e8dcc8] bg-white px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-800 truncate">
@@ -465,7 +497,7 @@ function RefundModal({
 
   return (
     <ModalShell title="Return container" onClose={onClose}>
-      <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700 mb-4">
+      <div className="rounded-lg bg-parchment-100 border border-[#e8dcc8] px-3 py-2 text-sm text-slate-700 mb-4">
         <p className="font-medium">{holding.container_type} · {holding.current_product_name}</p>
         <p className="text-xs text-slate-500 mt-0.5">Deposit ₹{holding.deposit_amount.toFixed(0)}</p>
       </div>
@@ -480,7 +512,7 @@ function RefundModal({
       <div className="space-y-2 mb-4">
         {(['manual_bank', 'store_credit'] as const).map(opt => (
           <label key={opt} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${
-            destination === opt ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'
+            destination === opt ? 'border-emerald-500 bg-emerald-50' : 'border-[#e8dcc8] bg-white'
           }`}>
             <input
               type="radio"
@@ -500,7 +532,7 @@ function RefundModal({
         rows={2}
         value={notes}
         onChange={e => setNotes(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 text-sm p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+        className="w-full rounded-lg border border-[#e8dcc8] text-sm p-2 mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-200"
         placeholder="Anything the dealer should know?"
       />
 
@@ -508,7 +540,7 @@ function RefundModal({
         <button
           onClick={onClose}
           disabled={submitting}
-          className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg border border-[#e8dcc8] text-slate-700 text-sm font-medium hover:bg-parchment-100 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -559,7 +591,7 @@ function SwapModal({
 
   return (
     <ModalShell title="Swap product" onClose={onClose}>
-      <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700 mb-4">
+      <div className="rounded-lg bg-parchment-100 border border-[#e8dcc8] px-3 py-2 text-sm text-slate-700 mb-4">
         <p className="font-medium">{holding.container_type} · {holding.current_product_name}</p>
         <p className="text-xs text-slate-500 mt-0.5">
           Only same-size ({holding.container_type}) products are eligible. The deposit stays the same.
@@ -574,7 +606,7 @@ function SwapModal({
         <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
           {sameSize.map(p => (
             <label key={p.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${
-              targetId === p.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'
+              targetId === p.id ? 'border-emerald-500 bg-emerald-50' : 'border-[#e8dcc8] bg-white'
             }`}>
               <input
                 type="radio"
@@ -595,7 +627,7 @@ function SwapModal({
         <button
           onClick={onClose}
           disabled={submitting}
-          className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg border border-[#e8dcc8] text-slate-700 text-sm font-medium hover:bg-parchment-100 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -662,7 +694,7 @@ function DisputeModal({
             <img
               src={photoSrc}
               alt="Damage proof"
-              className="w-full max-h-56 object-contain rounded-lg border border-slate-200 bg-slate-50"
+              className="w-full max-h-56 object-contain rounded-lg border border-[#e8dcc8] bg-parchment-100"
             />
           </a>
         </div>
@@ -676,7 +708,7 @@ function DisputeModal({
         value={notes}
         onChange={e => setNotes(e.target.value)}
         placeholder="Add any context — was the container actually fine, was it photographed at the wrong angle, did the driver misclassify it?"
-        className="w-full rounded-lg border border-slate-200 text-sm p-2 mb-3 focus:outline-none focus:ring-2 focus:ring-red-200"
+        className="w-full rounded-lg border border-[#e8dcc8] text-sm p-2 mb-3 focus:outline-none focus:ring-2 focus:ring-red-200"
       />
 
       {supportWhatsapp && (
@@ -695,7 +727,7 @@ function DisputeModal({
         <button
           onClick={onClose}
           disabled={submitting}
-          className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-lg border border-[#e8dcc8] text-slate-700 text-sm font-medium hover:bg-parchment-100 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -727,7 +759,7 @@ function ModalShell({
           <h3 className="text-base font-bold text-slate-900">{title}</h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-parchment-200"
           >
             <X className="w-4 h-4 text-slate-500" />
           </button>

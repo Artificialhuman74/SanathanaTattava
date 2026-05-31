@@ -46,7 +46,7 @@ export default function MyOrders() {
             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
               filter === s
                 ? s ? `${STATUS_COLORS[s]} border border-current/30` : 'bg-brand-600 text-white'
-                : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300'
+                : 'bg-white border border-[#e8dcc8] text-slate-500 hover:border-[#ede3d0]'
             }`}>
             {s || 'All'} ({s ? orders.filter(o => o.status === s).length : orders.length})
           </button>
@@ -68,12 +68,12 @@ export default function MyOrders() {
                   <th>Details</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="tr-stagger">
                 {filtered.map((o: any) => (
                   <tr key={o.id}>
                     <td className="font-mono text-brand-600 font-medium">{o.order_number}</td>
                     <td className="font-bold">₹{o.total_amount.toFixed(2)}</td>
-                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span></td>
+                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-parchment-200 text-slate-600'}`}>{o.status}</span></td>
                     <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                     <td>
                       <button onClick={() => viewDetail(o.id)} className="btn-ghost text-brand-600 text-xs font-semibold">
@@ -85,9 +85,14 @@ export default function MyOrders() {
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <div className="text-center py-14 text-slate-400">
-                <ShoppingCart size={36} className="mx-auto mb-2 opacity-30" />
-                <p>{filter ? `No ${filter} orders` : 'No orders yet'}</p>
+              <div className="text-center py-12 px-6">
+                <ShoppingCart size={36} className="mx-auto mb-2 text-slate-300" />
+                <p className="font-medium text-slate-700">{filter ? `No ${filter} orders` : 'No orders placed yet'}</p>
+                {!filter && (
+                  <p className="text-sm mt-1.5 text-slate-500 max-w-md mx-auto">
+                    These are the orders you've placed with the warehouse to restock your inventory. Head over to Products to place your first one.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -98,8 +103,8 @@ export default function MyOrders() {
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDetail(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-slide-up">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <div className="relative bg-[#fffbf2] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-slide-up">
+            <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
               <div>
                 <h3 className="font-bold text-slate-900">Order Details</h3>
                 <p className="text-brand-600 text-sm font-mono mt-0.5">{detail.order.order_number}</p>
@@ -119,8 +124,8 @@ export default function MyOrders() {
                       return (
                         <React.Fragment key={s}>
                           <div className={`flex flex-col items-center ${i > 0 ? 'flex-1' : ''}`}>
-                            {i > 0 && <div className={`h-0.5 w-full mb-2 ${done ? 'bg-brand-500' : 'bg-slate-200'}`} />}
-                            <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-brand-600 ring-4 ring-brand-100' : done ? 'bg-brand-500' : 'bg-slate-200'}`} />
+                            {i > 0 && <div className={`h-0.5 w-full mb-2 ${done ? 'bg-brand-500' : 'bg-parchment-300'}`} />}
+                            <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-brand-600 ring-4 ring-brand-100' : done ? 'bg-brand-500' : 'bg-parchment-300'}`} />
                             <p className={`text-xs mt-1 whitespace-nowrap ${active ? 'text-brand-600 font-bold' : done ? 'text-slate-600' : 'text-slate-300'}`}>{s}</p>
                           </div>
                         </React.Fragment>
@@ -131,7 +136,7 @@ export default function MyOrders() {
               )}
 
               {detail.order.notes && (
-                <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-600">
+                <div className="bg-parchment-100 rounded-xl p-3 text-sm text-slate-600">
                   <p className="text-xs text-slate-400 mb-1 font-medium">Notes</p>
                   {detail.order.notes}
                 </div>
@@ -141,8 +146,8 @@ export default function MyOrders() {
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Items Ordered</p>
                 <div className="space-y-2">
                   {detail.items.map((item: any) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                      <div className="w-12 h-12 rounded-lg bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                    <div key={item.id} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-xl">
+                      <div className="w-12 h-12 rounded-lg bg-white border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                           : <Package size={16} className="text-slate-300 m-auto mt-4" />
@@ -158,7 +163,7 @@ export default function MyOrders() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-4 space-y-1.5 text-sm">
+              <div className="border-t border-[#e8dcc8] pt-4 space-y-1.5 text-sm">
                 <div className="flex justify-between text-slate-500">
                   <span>Subtotal</span>
                   <span>₹{detail.order.subtotal.toFixed(2)}</span>

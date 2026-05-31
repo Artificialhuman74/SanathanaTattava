@@ -71,8 +71,8 @@ export default function VerifyPending() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-brand-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 max-w-sm w-full">
+    <div className="min-h-screen bg-gradient-to-br from-parchment-100 to-brand-50 flex items-center justify-center p-4">
+      <div className="bg-[#fffbf2] rounded-2xl shadow-sm border border-[#e8dcc8] p-8 max-w-sm w-full">
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <ShieldCheck size={28} className="text-brand-600" />
@@ -98,7 +98,7 @@ export default function VerifyPending() {
               onKeyDown={e => handleKeyDown(i, e)}
               autoFocus={i === 0}
               className={`w-11 h-14 text-center text-xl font-bold border-2 rounded-xl outline-none transition-colors
-                ${digit ? 'border-brand-500 text-brand-700 bg-brand-50' : 'border-slate-200 text-slate-900'}
+                ${digit ? 'border-brand-500 text-brand-700 bg-brand-50' : 'border-[#e8dcc8] text-slate-900'}
                 focus:border-brand-500`}
             />
           ))}
@@ -125,7 +125,7 @@ export default function VerifyPending() {
           </button>
         </div>
 
-        <div className="mt-5 pt-5 border-t border-slate-100 text-center">
+        <div className="mt-5 pt-5 border-t border-[#e8dcc8] text-center">
           <Link to="/shop/login" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600">
             <ArrowLeft size={13} /> Back to Login
           </Link>

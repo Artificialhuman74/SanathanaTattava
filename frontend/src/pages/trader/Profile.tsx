@@ -248,13 +248,13 @@ export default function TraderProfile() {
             <p className="text-sm text-slate-500 mt-1">Member since {parseDbDate(user.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'long', year: 'numeric' })}</p>
           </div>
           {/* Referral Code */}
-          <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3 border border-slate-200">
+          <div className="bg-parchment-100 rounded-xl p-3 flex items-center gap-3 border border-[#e8dcc8]">
             <QrCode size={20} className="text-brand-600" />
             <div>
               <p className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Referral Code</p>
               <p className="font-mono text-lg font-bold text-slate-900">{user.referral_code}</p>
             </div>
-            <button onClick={copyCode} className="ml-2 p-2 rounded-lg hover:bg-slate-200 transition-colors">
+            <button onClick={copyCode} className="ml-2 p-2 rounded-lg hover:bg-parchment-300 transition-colors">
               {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="text-slate-400" />}
             </button>
           </div>
@@ -333,7 +333,7 @@ export default function TraderProfile() {
                       pincode: user.pincode || '',
                     });
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-parchment-200 rounded-lg transition-colors"
                 >
                   <X size={14} />
                   Cancel
@@ -350,7 +350,7 @@ export default function TraderProfile() {
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 />
               </div>
               <div>
@@ -359,7 +359,7 @@ export default function TraderProfile() {
                   type="email"
                   value={user.email}
                   disabled
-                  className="w-full px-3 py-2.5 border border-slate-100 rounded-xl text-sm bg-slate-50 text-slate-400"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm bg-parchment-100 text-slate-400"
                 />
               </div>
               <div>
@@ -368,7 +368,7 @@ export default function TraderProfile() {
                   type="tel"
                   value={form.phone}
                   onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 />
               </div>
               <div>
@@ -377,7 +377,7 @@ export default function TraderProfile() {
                   value={form.address}
                   onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
                   rows={3}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
                   placeholder="Enter your full shop/business address"
                 />
               </div>
@@ -387,7 +387,7 @@ export default function TraderProfile() {
                   type="text"
                   value={form.pincode}
                   onChange={e => setForm(f => ({ ...f, pincode: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                   placeholder="e.g. 400001"
                   maxLength={6}
                 />
@@ -476,26 +476,26 @@ export default function TraderProfile() {
           )}
 
           {/* Delivery Status Info */}
-          <div className="space-y-2 pt-2 border-t border-slate-100">
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+          <div className="space-y-2 pt-2 border-t border-[#e8dcc8]">
+            <div className="flex items-center justify-between p-3 bg-parchment-100 rounded-xl">
               <div className="flex items-center gap-2">
                 <Truck size={16} className="text-slate-400" />
                 <span className="text-sm text-slate-700">Will Deliver</span>
               </div>
-              <span className={`badge ${user.will_deliver ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`badge ${user.will_deliver ? 'bg-emerald-100 text-emerald-700' : 'bg-parchment-200 text-slate-500'}`}>
                 {user.will_deliver ? 'Yes' : 'No'}
               </span>
             </div>
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+            <div className="flex items-center justify-between p-3 bg-parchment-100 rounded-xl">
               <div className="flex items-center gap-2">
                 <Shield size={16} className="text-slate-400" />
                 <span className="text-sm text-slate-700">Delivery Enabled</span>
               </div>
-              <span className={`badge ${user.delivery_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`badge ${user.delivery_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-parchment-200 text-slate-500'}`}>
                 {user.delivery_enabled ? 'Enabled' : 'Disabled'}
               </span>
             </div>
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+            <div className="flex items-center justify-between p-3 bg-parchment-100 rounded-xl">
               <div className="flex items-center gap-2">
                 <Navigation size={16} className="text-slate-400" />
                 <span className="text-sm text-slate-700">Availability</span>
@@ -557,7 +557,7 @@ export default function TraderProfile() {
                   type="text"
                   value={bankForm.bank_account_name}
                   onChange={e => setBankForm(f => ({ ...f, bank_account_name: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                   placeholder="As per bank records"
                 />
               </div>
@@ -568,7 +568,7 @@ export default function TraderProfile() {
                   inputMode="numeric"
                   value={bankForm.bank_account_number}
                   onChange={e => setBankForm(f => ({ ...f, bank_account_number: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono"
                   placeholder="9–18 digits"
                   maxLength={18}
                 />
@@ -584,7 +584,7 @@ export default function TraderProfile() {
                   className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 font-mono ${
                     bankForm.bank_account_number_confirm && bankForm.bank_account_number_confirm !== bankForm.bank_account_number
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-slate-200 focus:ring-brand-500 focus:border-brand-500'
+                      : 'border-[#e8dcc8] focus:ring-brand-500 focus:border-brand-500'
                   }`}
                   placeholder="Re-enter to confirm"
                   maxLength={18}
@@ -600,7 +600,7 @@ export default function TraderProfile() {
                   type="text"
                   value={bankForm.bank_ifsc}
                   onChange={e => setBankForm(f => ({ ...f, bank_ifsc: e.target.value.toUpperCase() }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
                   placeholder="e.g. HDFC0001234"
                   maxLength={11}
                 />
@@ -615,7 +615,7 @@ export default function TraderProfile() {
                   className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 font-mono uppercase ${
                     bankForm.bank_ifsc_confirm && bankForm.bank_ifsc_confirm !== bankForm.bank_ifsc
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-slate-200 focus:ring-brand-500 focus:border-brand-500'
+                      : 'border-[#e8dcc8] focus:ring-brand-500 focus:border-brand-500'
                   }`}
                   placeholder="Re-enter to confirm"
                   maxLength={11}
@@ -631,7 +631,7 @@ export default function TraderProfile() {
                   type="text"
                   value={bankForm.pan}
                   onChange={e => setBankForm(f => ({ ...f, pan: e.target.value.toUpperCase() }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
+                  className="w-full px-3 py-2.5 border border-[#e8dcc8] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono uppercase"
                   placeholder="e.g. ABCDE1234F"
                   maxLength={10}
                 />
@@ -662,7 +662,7 @@ export default function TraderProfile() {
                       pan:                         user.pan        || '',
                     });
                   }}
-                  className="px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-parchment-200 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
@@ -730,7 +730,7 @@ export default function TraderProfile() {
               </p>
               <button
                 onClick={() => setPwStep('idle')}
-                className="w-full py-2.5 text-sm text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                className="w-full py-2.5 text-sm text-slate-500 bg-parchment-200 hover:bg-parchment-300 rounded-xl transition-colors"
               >
                 Done
               </button>
@@ -759,7 +759,7 @@ export default function TraderProfile() {
       {/* GPS Disclaimer Modal */}
       {showGpsDisclaimer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md mx-4 bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in">
+          <div className="w-full max-w-md mx-4 bg-[#fffbf2] rounded-2xl shadow-xl overflow-hidden animate-fade-in">
             {/* Header */}
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 text-white">
               <div className="flex items-center gap-3">
@@ -797,7 +797,7 @@ export default function TraderProfile() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowGpsDisclaimer(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-parchment-200 hover:bg-parchment-300 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>

@@ -43,6 +43,15 @@ export default {
           400: '#e0d0b8',
           500: '#c8b898',
         },
+        // Soft elevated surfaces — read as "off-white card" against parchment-100.
+        // Numeric scale so @apply directives compile reliably across Tailwind
+        // versions (DEFAULT-keyed colors trip up some @apply paths).
+        surface: {
+          50:  '#fffbf2',  // bg-surface-50  — elevated card
+          100: '#fdfaf5',  // bg-surface-100 — alt elevated
+          200: '#f5ede0',  // bg-surface-200 — sunken / list-row
+          300: '#e8dcc8',  // border-surface-300 — hairline rim
+        },
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

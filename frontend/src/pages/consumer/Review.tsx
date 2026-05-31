@@ -192,7 +192,7 @@ export default function ReviewPage() {
 
       {/* Product card */}
       {product && (
-        <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-3">
+        <div className="flex items-center gap-3 bg-parchment-100 rounded-2xl p-3">
           {product.image_url
             ? <img src={product.image_url} alt={product.name} className="w-16 h-16 rounded-xl object-contain bg-white flex-shrink-0" />
             : <div className="w-16 h-16 rounded-xl bg-slate-200 flex-shrink-0" />
@@ -205,7 +205,7 @@ export default function ReviewPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#e8dcc8] p-5 space-y-5">
         <h2 className="font-bold text-slate-900 text-base">Write your review</h2>
 
         {/* Stars */}
@@ -222,7 +222,7 @@ export default function ReviewPage() {
             value={body}
             onChange={e => setBody(e.target.value)}
             rows={4}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-brand-300"
+            className="w-full rounded-xl border border-[#e8dcc8] px-3 py-2.5 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-brand-300"
             placeholder="What did you think? Quality, taste, packaging, anything…"
           />
         </div>
@@ -234,7 +234,7 @@ export default function ReviewPage() {
           <div className="flex gap-2 flex-wrap">
             {images.map((img, i) => (
               <div key={i} className="relative w-20 h-20">
-                <img src={img} alt="" className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                <img src={img} alt="" className="w-20 h-20 rounded-xl object-cover border border-[#e8dcc8]" />
                 <button
                   type="button"
                   onClick={() => setImages(imgs => imgs.filter((_, j) => j !== i))}
@@ -248,7 +248,7 @@ export default function ReviewPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-400 hover:bg-slate-50 transition-colors"
+                className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 text-slate-400 hover:bg-parchment-100 transition-colors"
               >
                 <Camera size={20} />
                 <span className="text-[10px]">Add photo</span>

@@ -100,9 +100,12 @@ export default function DeliveryOrders() {
         )}
 
         {filteredOrders.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-100 p-8 text-center mt-4">
+          <div className="bg-[#fffbf2] rounded-xl border border-[#e8dcc8] p-8 text-center mt-4">
             <ShoppingBag className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No orders in this category</p>
+            <p className="text-sm font-medium text-slate-700">Nothing here right now</p>
+            <p className="text-xs text-slate-500 mt-1.5 max-w-sm mx-auto">
+              Orders in this tab will appear as traders confirm them and they move through the delivery flow.
+            </p>
           </div>
         ) : (
           filteredOrders.map(order => {

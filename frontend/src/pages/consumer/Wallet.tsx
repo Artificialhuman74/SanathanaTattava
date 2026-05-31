@@ -60,7 +60,7 @@ export default function ConsumerWallet() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-parchment-100">
       {/* ── Hero / Balance Card ─────────────────────────────────────── */}
       <section className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-500 text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 pb-8">
@@ -107,7 +107,7 @@ export default function ConsumerWallet() {
 
       {/* ── How it works ─────────────────────────────────────────────── */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 -mt-4">
-        <div className="rounded-2xl bg-white shadow-sm border border-slate-200 p-4 flex items-start gap-3">
+        <div className="rounded-2xl bg-[#fffbf2] shadow-sm border border-[#e8dcc8] p-4 flex items-start gap-3">
           <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
             <Info className="w-4.5 h-4.5 text-emerald-600" />
           </div>
@@ -123,7 +123,7 @@ export default function ConsumerWallet() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-4 grid grid-cols-2 gap-3">
         <Link
           to="/shop"
-          className="rounded-xl bg-white border border-slate-200 p-3 flex items-center gap-3 active:bg-slate-50 transition"
+          className="rounded-xl bg-[#fffbf2] border border-[#e8dcc8] p-3 flex items-center gap-3 active:bg-parchment-100 transition"
         >
           <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
             <ShoppingBag className="w-4.5 h-4.5 text-amber-600" />
@@ -135,7 +135,7 @@ export default function ConsumerWallet() {
         </Link>
         <Link
           to="/shop/containers"
-          className="rounded-xl bg-white border border-slate-200 p-3 flex items-center gap-3 active:bg-slate-50 transition"
+          className="rounded-xl bg-[#fffbf2] border border-[#e8dcc8] p-3 flex items-center gap-3 active:bg-parchment-100 transition"
         >
           <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
             <Package className="w-4.5 h-4.5 text-emerald-600" />
@@ -151,7 +151,7 @@ export default function ConsumerWallet() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6 pb-12">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Transactions</h2>
-          <div className="flex bg-slate-100 rounded-full p-0.5">
+          <div className="flex bg-parchment-200 rounded-full p-0.5">
             {(['all', 'credit', 'debit'] as const).map(f => (
               <button
                 key={f}
@@ -171,8 +171,8 @@ export default function ConsumerWallet() {
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl bg-white border border-slate-200 p-8 text-center">
-            <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 flex items-center justify-center mb-3">
+          <div className="rounded-2xl bg-[#fffbf2] border border-[#e8dcc8] p-8 text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-parchment-200 flex items-center justify-center mb-3">
               <Wallet className="w-6 h-6 text-slate-400" />
             </div>
             <p className="text-sm font-semibold text-slate-800">
@@ -201,9 +201,9 @@ function TxRow({ entry }: { entry: LedgerEntry }) {
   const label = entry.reason
     || (positive ? 'Credit added' : 'Credit applied');
   return (
-    <li className="rounded-xl bg-white border border-slate-200 px-3 py-3 flex items-center gap-3">
+    <li className="rounded-xl bg-[#fffbf2] border border-[#e8dcc8] px-3 py-3 flex items-center gap-3">
       <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center ${
-        positive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+        positive ? 'bg-emerald-50 text-emerald-600' : 'bg-parchment-200 text-slate-500'
       }`}>
         {positive
           ? <ArrowDownCircle className="w-5 h-5" />

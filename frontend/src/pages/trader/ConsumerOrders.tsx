@@ -63,7 +63,7 @@ const PAYMENT_COLORS: Record<string, string> = {
   pending:  'bg-amber-100 text-amber-700',
   paid:     'bg-emerald-100 text-emerald-700',
   failed:   'bg-red-100 text-red-700',
-  refunded: 'bg-slate-100 text-slate-600',
+  refunded: 'bg-parchment-200 text-slate-600',
 };
 
 export default function TraderConsumerOrders() {
@@ -230,11 +230,11 @@ const totalOrders   = orders.length;
                   <th>Date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="tr-stagger">
                 {orders.map(o => (
                   <tr
                     key={o.id}
-                    className="cursor-pointer hover:bg-slate-50 transition-colors"
+                    className="cursor-pointer hover:bg-parchment-100 transition-colors"
                     onClick={() => setSelected(o)}
                   >
                     <td className="font-mono text-brand-600 font-medium text-xs">{o.order_number}</td>
@@ -258,7 +258,7 @@ const totalOrders   = orders.length;
                           value={o.delivery_dealer_id ?? ''}
                           onChange={e => assignDeliveryDealer(o.id, e.target.value ? Number(e.target.value) : null)}
                           disabled={updatingId === o.id}
-                          className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 min-w-28"
+                          className="text-xs border border-[#e8dcc8] rounded-lg px-2 py-1 bg-white text-slate-700 min-w-28"
                         >
                           <option value="">Unassigned</option>
                           <option value={user?.id}>Handle personally</option>
@@ -274,10 +274,10 @@ const totalOrders   = orders.length;
                       )}
                     </td>
                     <td>
-                      <span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span>
+                      <span className={`badge ${STATUS_COLORS[o.status] || 'bg-parchment-200 text-slate-600'}`}>{o.status}</span>
                     </td>
                     <td>
-                      <span className={`badge ${PAYMENT_COLORS[o.payment_status] || 'bg-slate-100 text-slate-600'}`}>{o.payment_status}</span>
+                      <span className={`badge ${PAYMENT_COLORS[o.payment_status] || 'bg-parchment-200 text-slate-600'}`}>{o.payment_status}</span>
                     </td>
                     <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                   </tr>
@@ -285,9 +285,12 @@ const totalOrders   = orders.length;
               </tbody>
             </table>
             {orders.length === 0 && (
-              <div className="text-center py-16 text-slate-400">
-                <ShoppingBag size={40} className="mx-auto mb-3 opacity-30" />
-                <p className="font-medium">No consumer orders found</p>
+              <div className="text-center py-14 px-6">
+                <ShoppingBag size={40} className="mx-auto mb-3 text-slate-300" />
+                <p className="font-medium text-slate-700">No consumer orders yet</p>
+                <p className="text-sm mt-1.5 text-slate-500 max-w-md mx-auto">
+                  When a consumer in your delivery area places an order (or one tied to your referral code), it'll show up here for you to confirm, pack, and hand to a delivery agent.
+                </p>
               </div>
             )}
           </div>
@@ -298,8 +301,8 @@ const totalOrders   = orders.length;
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <div className="relative bg-[#fffbf2] rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
               <div>
                 <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
                 <p className="text-xs text-slate-400">{formatIst(selected.created_at)}</p>
@@ -312,7 +315,7 @@ const totalOrders   = orders.length;
 
             <div className="p-5 space-y-5">
               {/* Consumer */}
-              <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+              <div className="bg-parchment-100 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-2"><User size={12} />Consumer</p>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div><p className="text-xs text-slate-400">Name</p><p className="font-semibold">{selected.consumer_name}</p></div>
@@ -330,8 +333,8 @@ const totalOrders   = orders.length;
                     <p className="text-sm text-slate-400 text-center py-4">No item details available</p>
                   )}
                   {(selected.items || []).map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-sm">
-                      <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden flex-shrink-0">
+                    <div key={i} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-xl text-sm">
+                      <div className="w-12 h-12 rounded-lg bg-white border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                           : <Package size={16} className="text-slate-300 m-auto mt-3" />
@@ -360,7 +363,7 @@ const totalOrders   = orders.length;
                       <p className="font-bold flex-shrink-0">₹{parseFloat(String(item.total)).toFixed(2)}</p>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center px-3 pt-2 border-t border-slate-200">
+                  <div className="flex justify-between items-center px-3 pt-2 border-t border-[#e8dcc8]">
                     <span className="font-bold">Total</span>
                     <span className="font-extrabold text-brand-600 text-lg">₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
                   </div>
@@ -431,7 +434,7 @@ const totalOrders   = orders.length;
       {stockWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setStockWarning(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="relative bg-[#fffbf2] rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle size={18} className="text-amber-600" />
@@ -455,7 +458,7 @@ const totalOrders   = orders.length;
             </div>
 
             {/* Admin contact */}
-            <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3">
+            <div className="bg-parchment-100 rounded-xl p-3 flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
                 <User size={14} className="text-brand-700" />
               </div>
@@ -476,7 +479,7 @@ const totalOrders   = orders.length;
 
             <button
               onClick={() => setStockWarning(null)}
-              className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="w-full py-2.5 rounded-xl border border-[#e8dcc8] text-sm font-medium text-slate-600 hover:bg-parchment-100"
             >
               Close
             </button>

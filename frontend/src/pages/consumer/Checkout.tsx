@@ -419,14 +419,37 @@ export default function Checkout() {
             </span>
           </div>
         )}
-        {!success.deliveryDealerName && !success.message && <div className="mb-8" />}
+        {!success.deliveryDealerName && !success.message && <div className="mb-6" />}
+
+        {/* ── What happens next ─────────────────────────────────────
+            First-order onboarding: explain the next two beats in
+            the journey (delivery + return-the-can) so a first-time
+            buyer knows what to expect without having to ask. */}
+        <div className="bg-[#fffbf2] border border-[#e8dcc8] rounded-2xl p-4 sm:p-5 mb-8 text-left max-w-md mx-auto">
+          <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide mb-3">What happens next</p>
+          <ol className="space-y-2.5 text-sm text-slate-700">
+            <li className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-brand-100 text-brand-700 text-[11px] font-bold flex items-center justify-center">1</span>
+              <span>We'll message you when {success.deliveryDealerName ? `${success.deliveryDealerName.split(' ')[0]} packs` : 'your dealer packs'} your order.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-brand-100 text-brand-700 text-[11px] font-bold flex items-center justify-center">2</span>
+              <span>Pay on delivery if you chose that, or by UPI now.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 mt-0.5 rounded-full bg-brand-100 text-brand-700 text-[11px] font-bold flex items-center justify-center">3</span>
+              <span>Keep the steel can clean. Hand it back on your next order to get the deposit returned or as store credit.</span>
+            </li>
+          </ol>
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {consumer && (
             <Link to="/shop/orders" className="btn-primary py-3 px-8 flex items-center gap-2 justify-center">
               <ShoppingBag size={16} /> My Orders
             </Link>
           )}
-          <Link to="/shop" className="btn-ghost border border-slate-200 py-3 px-8">
+          <Link to="/shop" className="btn-ghost border border-[#e8dcc8] py-3 px-8">
             Continue Shopping
           </Link>
         </div>
@@ -485,7 +508,7 @@ export default function Checkout() {
                     className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
                       !useNewAddress && selectedAddressId === addr.id
                         ? 'border-brand-500 bg-brand-50'
-                        : 'border-slate-200 hover:border-slate-300'
+                        : 'border-[#e8dcc8] hover:border-slate-300'
                     }`}
                   >
                     <input
@@ -500,7 +523,7 @@ export default function Checkout() {
                         <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
                           !useNewAddress && selectedAddressId === addr.id
                             ? 'bg-brand-100 text-brand-700'
-                            : 'bg-slate-100 text-slate-600'
+                            : 'bg-parchment-200 text-slate-600'
                         }`}>
                           {labelIcon(addr.label)} {addr.label}
                         </span>
@@ -549,7 +572,7 @@ export default function Checkout() {
 
                 {/* New address form */}
                 {useNewAddress && (
-                  <div className="mt-2 space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="mt-2 space-y-3 p-4 bg-parchment-100 rounded-xl border border-[#e8dcc8]">
                     {/* Label picker */}
                     <div className="flex gap-2">
                       {['Home', 'Work', 'Other'].map(l => (
@@ -559,7 +582,7 @@ export default function Checkout() {
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                             newAddr.label === l
                               ? 'border-brand-500 bg-brand-50 text-brand-700'
-                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                              : 'border-[#e8dcc8] text-slate-600 hover:border-slate-300'
                           }`}
                         >
                           {labelIcon(l)} {l}
@@ -598,7 +621,7 @@ export default function Checkout() {
                       onChange={e => setNewAddr(a => ({ ...a, pincode: e.target.value }))}
                       className="form-input text-sm" placeholder="PIN Code" maxLength={6}
                     />
-                    <div className="mt-3 p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-[#e8dcc8] space-y-2.5">
                       <label className="flex items-start gap-3 cursor-pointer select-none">
                         <input
                           type="checkbox"
@@ -612,7 +635,7 @@ export default function Checkout() {
                         </div>
                       </label>
                       {saveNewAddr && (
-                        <label className="flex items-start gap-3 cursor-pointer select-none pt-2 border-t border-slate-100">
+                        <label className="flex items-start gap-3 cursor-pointer select-none pt-2 border-t border-[#e8dcc8]">
                           <input
                             type="checkbox"
                             checked={makeDefaultAddr}
@@ -786,7 +809,7 @@ export default function Checkout() {
                 const showsDeposit = mode === 'buy' && (product.container_cost || 0) > 0;
                 return (
                   <div key={`${product.id}::${mode}`} className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-parchment-200 overflow-hidden flex-shrink-0">
                       {product.image_url
                         ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                         : <Package size={14} className="text-slate-300 m-auto mt-3" />
@@ -817,7 +840,7 @@ export default function Checkout() {
               })}
             </div>
 
-            <div className="border-t border-slate-100 pt-4 space-y-2">
+            <div className="border-t border-[#e8dcc8] pt-4 space-y-2">
               <div className="flex justify-between text-sm text-slate-600">
                 <span>Subtotal ({cart.reduce((s, i) => s + i.quantity, 0)} items, incl. GST)</span>
                 <span>₹{cartTotal.toFixed(2)}</span>
@@ -848,7 +871,7 @@ export default function Checkout() {
                   <span>−₹{discountAmt.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-baseline font-extrabold text-lg pt-2 border-t border-slate-100 mt-2">
+              <div className="flex justify-between items-baseline font-extrabold text-lg pt-2 border-t border-[#e8dcc8] mt-2">
                 <span>Total</span>
                 <span className="flex items-baseline gap-2">
                   {effectiveDiscount > 0 && (
@@ -974,7 +997,7 @@ function SwapWarningModal({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 flex-shrink-0"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-parchment-200 flex-shrink-0"
           >
             <XIcon className="w-4 h-4 text-slate-500" />
           </button>
@@ -1007,7 +1030,7 @@ function SwapWarningModal({
           ))}
         </div>
 
-        <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 mb-4">
+        <div className="rounded-lg bg-parchment-100 border border-[#e8dcc8] px-3 py-2.5 mb-4">
           <p className="text-xs text-slate-600 leading-relaxed">
             If you continue, you'll pay another container deposit and have two same-size containers at home. You can still swap or return them later.
           </p>

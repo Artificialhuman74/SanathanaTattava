@@ -158,13 +158,22 @@ export default function TraderSubDealers() {
           <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
         </div>
       ) : subDealers.length === 0 ? (
-        <div className="card p-12 text-center text-slate-400">
-          <Users size={48} className="mx-auto mb-3 opacity-20" />
-          <p className="font-medium text-lg">No sub-dealers yet</p>
-          <p className="text-sm mt-1">Share your referral code above to invite sub-dealers to join your network</p>
+        <div className="card p-10 text-center">
+          <Users size={48} className="mx-auto mb-3 text-slate-300" />
+          <p className="font-medium text-lg text-slate-700">No sub-dealers yet</p>
+          <p className="text-sm mt-1.5 text-slate-500 max-w-md mx-auto">
+            Sub-dealers are local delivery partners who register under your account using your referral code. They fulfill consumer orders in their neighbourhood and earn a share of each order; you continue earning Tier 1 commission on top.
+          </p>
+          <div className="mt-5 inline-flex items-center gap-3 text-xs text-slate-500 bg-parchment-100 rounded-xl px-4 py-3 border border-[#e8dcc8]">
+            <span><strong className="text-brand-700">They register with your code</strong></span>
+            <span className="text-slate-300">›</span>
+            <span><strong className="text-brand-700">They deliver locally</strong></span>
+            <span className="text-slate-300">›</span>
+            <span><strong className="text-brand-700">You earn Tier 1</strong></span>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 tr-stagger">
           {subDealers.map(dealer => (
             <div key={dealer.id} className="card p-5 space-y-4">
               {/* Header */}
@@ -196,7 +205,7 @@ export default function TraderSubDealers() {
               </div>
 
               {/* PAN Verification */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-parchment-100 rounded-xl">
                 <div className="flex items-center gap-2">
                   {dealer.pan_verified
                     ? <ShieldCheck size={16} className="text-emerald-600" />
@@ -223,7 +232,7 @@ export default function TraderSubDealers() {
               </div>
 
               {/* Delivery Status */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-parchment-100 rounded-xl">
                 <div className="flex items-center gap-2">
                   {dealer.will_deliver
                     ? <Truck size={16} className="text-teal-600" />
@@ -243,7 +252,7 @@ export default function TraderSubDealers() {
                     onClick={() => toggleDelivery(dealer)}
                     disabled={updatingId === dealer.id}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      dealer.delivery_enabled ? 'bg-teal-500' : 'bg-slate-300'
+                      dealer.delivery_enabled ? 'bg-teal-500' : 'bg-parchment-300'
                     }`}
                   >
                     <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
@@ -275,7 +284,7 @@ export default function TraderSubDealers() {
                     >
                       <Check size={14} />
                     </button>
-                    <button onClick={() => setEditRate(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300">
+                    <button onClick={() => setEditRate(null)} className="p-1.5 bg-parchment-300 text-slate-600 rounded-lg hover:bg-parchment-300">
                       <X size={14} />
                     </button>
                   </div>

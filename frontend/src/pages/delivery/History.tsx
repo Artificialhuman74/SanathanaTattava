@@ -77,10 +77,12 @@ export default function DeliveryHistory() {
         <h2 className="text-base font-bold text-slate-800 mb-3">Delivery History</h2>
 
         {orders.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
+          <div className="bg-[#fffbf2] rounded-xl border border-[#e8dcc8] p-8 text-center">
             <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No delivery history yet</p>
-            <p className="text-xs text-slate-400 mt-1">Completed deliveries will appear here</p>
+            <p className="text-sm font-medium text-slate-700">No delivery history yet</p>
+            <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto">
+              Every delivery you complete (and every container you collect) lands here for your records. Filter by date or status once it fills up.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">

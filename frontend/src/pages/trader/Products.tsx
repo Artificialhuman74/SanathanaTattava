@@ -123,12 +123,12 @@ export default function TraderProducts() {
       {/* Category chips */}
       {categories.length > 0 && (
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setCatFilter('')} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!catFilter ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          <button onClick={() => setCatFilter('')} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!catFilter ? 'bg-brand-600 text-white' : 'bg-parchment-200 text-slate-600 hover:bg-parchment-300'}`}>
             All
           </button>
           {categories.map(c => (
             <button key={c} onClick={() => setCatFilter(catFilter === c ? '' : c)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${catFilter === c ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${catFilter === c ? 'bg-brand-600 text-white' : 'bg-parchment-200 text-slate-600 hover:bg-parchment-300'}`}>
               {c}
             </button>
           ))}
@@ -139,13 +139,13 @@ export default function TraderProducts() {
       {loading ? (
         <div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" /></div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 tr-stagger">
           {products.map(p => {
             const inCart = cartInProduct(p.id);
             const outOfStock = p.stock === 0;
             return (
               <div key={p.id} className={`card overflow-hidden flex flex-col transition-all hover:shadow-card-hover ${outOfStock ? 'opacity-60' : ''}`}>
-                <div className="aspect-[4/3] relative overflow-hidden bg-slate-100">
+                <div className="aspect-[4/3] relative overflow-hidden bg-parchment-200">
                   {p.image_url
                     ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                     : <div className="w-full h-full flex items-center justify-center"><Package className="w-12 h-12 text-slate-300" /></div>
@@ -174,7 +174,7 @@ export default function TraderProducts() {
                       onClick={() => addToCart(p)}
                       disabled={outOfStock}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                        outOfStock ? 'bg-slate-100 text-slate-300 cursor-not-allowed' :
+                        outOfStock ? 'bg-parchment-200 text-slate-300 cursor-not-allowed' :
                         inCart > 0  ? 'bg-brand-600 text-white shadow-md' :
                         'bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white'
                       }`}
@@ -199,8 +199,8 @@ export default function TraderProducts() {
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/40" onClick={() => setCartOpen(false)} />
-          <div className="relative ml-auto w-full max-w-sm bg-white h-full flex flex-col shadow-2xl animate-slide-up">
-            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+          <div className="relative ml-auto w-full max-w-sm bg-[#fffbf2] h-full flex flex-col shadow-2xl animate-slide-up">
+            <div className="flex items-center justify-between p-4 border-b border-[#e8dcc8]">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={18} className="text-brand-600" />
                 <h3 className="font-bold text-slate-900">Cart ({cartItems} items)</h3>
@@ -215,8 +215,8 @@ export default function TraderProducts() {
                   <p>Your cart is empty</p>
                 </div>
               ) : cart.map(({ product, quantity }) => (
-                <div key={product.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                  <div className="w-12 h-12 rounded-lg bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                <div key={product.id} className="flex items-start gap-3 p-3 bg-parchment-100 rounded-xl">
+                  <div className="w-12 h-12 rounded-lg bg-white border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                     {product.image_url
                       ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                       : <Package size={16} className="text-slate-300 m-auto mt-4" />
@@ -226,11 +226,11 @@ export default function TraderProducts() {
                     <p className="font-semibold text-sm text-slate-900 truncate">{product.name}</p>
                     <p className="text-xs text-brand-600 font-semibold">₹{product.price.toFixed(2)} / {product.unit}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <button onClick={() => updateQty(product.id, quantity - 1)} className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100">
+                      <button onClick={() => updateQty(product.id, quantity - 1)} className="w-6 h-6 rounded-md bg-white border border-[#e8dcc8] flex items-center justify-center text-slate-600 hover:bg-parchment-200">
                         <Minus size={12} />
                       </button>
                       <span className="text-sm font-bold w-6 text-center">{quantity}</span>
-                      <button onClick={() => updateQty(product.id, quantity + 1)} className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100">
+                      <button onClick={() => updateQty(product.id, quantity + 1)} className="w-6 h-6 rounded-md bg-white border border-[#e8dcc8] flex items-center justify-center text-slate-600 hover:bg-parchment-200">
                         <Plus size={12} />
                       </button>
                       <span className="ml-auto text-sm font-bold text-slate-900">₹{(product.price * quantity).toFixed(2)}</span>
@@ -244,7 +244,7 @@ export default function TraderProducts() {
             </div>
 
             {cart.length > 0 && (
-              <div className="p-4 border-t border-slate-100 space-y-3">
+              <div className="p-4 border-t border-[#e8dcc8] space-y-3">
                 <textarea
                   value={notes} onChange={e => setNotes(e.target.value)}
                   className="form-input resize-none text-sm"
@@ -270,7 +270,7 @@ export default function TraderProducts() {
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                <div className="flex justify-between items-center pt-2 border-t border-[#e8dcc8]">
                   <span className="font-bold text-slate-900">Total</span>
                   <span className="text-xl font-extrabold text-brand-600">₹{finalTotal}</span>
                 </div>

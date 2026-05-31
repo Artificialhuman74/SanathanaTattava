@@ -148,7 +148,7 @@ export default function ConsumerOrders() {
       </div>
 
       {orders.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+        <div className="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-12 text-center">
           <ShoppingBag size={44} className="mx-auto mb-3 text-gray-200" />
           <p className="font-semibold text-gray-700">Nothing here yet.</p>
           <p className="text-sm text-gray-400 mt-1">Your first order will show up here once placed.</p>
@@ -162,11 +162,11 @@ export default function ConsumerOrders() {
             <div
               key={order.id}
               onClick={() => setSelected(order)}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform"
+              className="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform"
             >
               {/* Status header */}
               <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-gray-50'}`}>
+                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-parchment-100'}`}>
                   {STATUS_LABELS[order.status] || order.status}
                 </span>
                 <ChevronRight size={16} className="text-gray-300" />
@@ -188,7 +188,7 @@ export default function ConsumerOrders() {
               {order.items?.length > 0 && (
                 <div className="px-4 pb-3 flex gap-2">
                   {order.items.slice(0, 4).map((item, i) => (
-                    <div key={i} className="relative w-14 h-14 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100">
+                    <div key={i} className="relative w-14 h-14 rounded-xl bg-parchment-200 overflow-hidden flex-shrink-0 border border-[#e8dcc8]">
                       {item.image_url
                         ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                         : <Package size={20} className="text-gray-300 m-auto mt-3" />
@@ -199,7 +199,7 @@ export default function ConsumerOrders() {
                     </div>
                   ))}
                   {order.items.length > 4 && (
-                    <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-100">
+                    <div className="w-14 h-14 rounded-xl bg-parchment-200 flex items-center justify-center flex-shrink-0 border border-[#e8dcc8]">
                       <span className="text-xs font-bold text-gray-500">+{order.items.length - 4}</span>
                     </div>
                   )}
@@ -210,7 +210,7 @@ export default function ConsumerOrders() {
               <div className="px-4 pb-4">
                 <button
                   onClick={e => handleOrderAgain(order, e)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-800 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-700 text-white rounded-xl text-sm font-semibold hover:bg-brand-800 transition-colors"
                 >
                   <RotateCcw size={14} />
                   Order Again
@@ -228,10 +228,10 @@ export default function ConsumerOrders() {
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
             {/* Handle bar (mobile) */}
             <div className="flex justify-center pt-3 sm:hidden">
-              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+              <div className="w-10 h-1 bg-parchment-300 rounded-full" />
             </div>
 
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#e8dcc8]">
               <div>
                 <p className="font-bold text-gray-900">{selected.order_number}</p>
                 <p className="text-xs text-gray-400">{formatIst(selected.created_at)}</p>
@@ -240,7 +240,7 @@ export default function ConsumerOrders() {
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>
                   {STATUS_LABELS[selected.status] || selected.status}
                 </span>
-                <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <button onClick={() => setSelected(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-parchment-200">
                   <X size={16} className="text-gray-500" />
                 </button>
               </div>
@@ -257,8 +257,8 @@ export default function ConsumerOrders() {
                     const lineTotal = unitValue * item.quantity;
                     const containerCost = parseFloat(String(item.container_cost || 0));
                     return (
-                      <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl text-sm">
-                        <div className="w-12 h-12 rounded-lg bg-white border border-gray-100 overflow-hidden flex-shrink-0">
+                      <div key={i} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-xl text-sm">
+                        <div className="w-12 h-12 rounded-lg bg-white border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                           {item.image_url
                             ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                             : <Package size={16} className="text-gray-300 m-auto mt-3" />
@@ -283,7 +283,7 @@ export default function ConsumerOrders() {
                   )}
 
                   {/* Price breakdown */}
-                  <div className="mt-2 border-t border-gray-100 pt-3 space-y-1.5 text-sm px-1">
+                  <div className="mt-2 border-t border-[#e8dcc8] pt-3 space-y-1.5 text-sm px-1">
                     {(() => {
                       const cartValue = parseFloat(String(selected.subtotal || selected.total_amount));
                       const discount = parseFloat(String(selected.discount_amount || 0));
@@ -307,7 +307,7 @@ export default function ConsumerOrders() {
                               <span>+₹{containerTotal.toFixed(2)}</span>
                             </div>
                           )}
-                          <div className="flex justify-between font-extrabold text-brand-600 text-base border-t border-gray-100 pt-2 mt-1">
+                          <div className="flex justify-between font-extrabold text-brand-600 text-base border-t border-[#e8dcc8] pt-2 mt-1">
                             <span>Total Paid</span>
                             <span>₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
                           </div>
@@ -320,7 +320,7 @@ export default function ConsumerOrders() {
 
               {/* Delivery Address */}
               {(selected.delivery_address || selected.pincode) && (
-                <div className="bg-gray-50 rounded-xl p-4">
+                <div className="bg-parchment-100 rounded-xl p-4">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Delivery Address</p>
                   {selected.delivery_address && <p className="text-sm font-medium text-gray-900">{selected.delivery_address}</p>}
                   {selected.pincode && <p className="text-xs text-gray-500 mt-0.5">Pincode: {selected.pincode}</p>}
@@ -337,7 +337,7 @@ export default function ConsumerOrders() {
               </div>
 
               {/* Dealer & Delivery */}
-              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div className="bg-parchment-100 rounded-xl p-4 space-y-3">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Dealer</p>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
@@ -354,7 +354,7 @@ export default function ConsumerOrders() {
                   </span>
                 </div>
                 {selected.delivery_dealer_name && (
-                  <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-3 pt-2 border-t border-[#e8dcc8]">
                     <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                       <Truck size={14} className="text-teal-600" />
                     </div>
@@ -372,7 +372,7 @@ export default function ConsumerOrders() {
               {/* Order again */}
               <button
                 onClick={e => handleOrderAgain(selected, e)}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-brand-700 text-white rounded-xl text-sm font-semibold"
               >
                 <RotateCcw size={14} />
                 Order Again

@@ -127,19 +127,32 @@ export default function TraderInventory() {
 
       {/* Inventory List */}
       {filtered.length === 0 ? (
-        <div className="card p-12 text-center text-slate-400">
-          <Warehouse size={48} className="mx-auto mb-3 opacity-20" />
-          <p className="font-medium text-lg">{items.length === 0 ? 'No inventory allocated yet' : 'No matching products'}</p>
-          {items.length === 0 && <p className="text-sm mt-1">Contact admin to get stock distributed to your account.</p>}
+        <div className="card p-10 text-center">
+          <Warehouse size={48} className="mx-auto mb-3 text-slate-300" />
+          <p className="font-medium text-lg text-slate-700">{items.length === 0 ? 'No inventory allocated yet' : 'No matching products'}</p>
+          {items.length === 0 && (
+            <>
+              <p className="text-sm mt-1.5 text-slate-500 max-w-md mx-auto">
+                Admin allocates stock from the central warehouse to your account when you join or after each sales cycle. Drop them a line if your shelf looks empty.
+              </p>
+              <div className="mt-5 inline-flex items-center gap-3 text-xs text-slate-500 bg-parchment-100 rounded-xl px-4 py-3 border border-[#e8dcc8]">
+                <span><strong className="text-brand-700">Warehouse</strong></span>
+                <span className="text-slate-300">›</span>
+                <span><strong className="text-brand-700">Your stock</strong></span>
+                <span className="text-slate-300">›</span>
+                <span><strong className="text-brand-700">Consumer orders</strong></span>
+              </div>
+            </>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 tr-stagger">
           {filtered.map(item => {
             const st = STATUS_STYLE[item.stock_status] || STATUS_STYLE.OK;
             const isEditing = editingId === item.product_id;
             return (
               <div key={item.id} className="card overflow-hidden hover:shadow-md transition-shadow">
-                <div className="h-32 bg-slate-100 flex items-center justify-center overflow-hidden">
+                <div className="h-32 bg-parchment-200 flex items-center justify-center overflow-hidden">
                   {item.image_url
                     ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                     : <Package size={32} className="text-slate-300" />
@@ -155,7 +168,7 @@ export default function TraderInventory() {
                       {st.label}
                     </span>
                   </div>
-                  <div className="flex items-end justify-between pt-2 border-t border-slate-100">
+                  <div className="flex items-end justify-between pt-2 border-t border-[#e8dcc8]">
                     <div>
                       <p className="text-xs text-slate-400">Quantity</p>
                       <p className={`text-2xl font-extrabold ${
@@ -194,7 +207,7 @@ export default function TraderInventory() {
                           <button
                             onClick={cancelEdit}
                             disabled={saving}
-                            className="p-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                            className="p-1 rounded text-slate-400 hover:bg-parchment-200 disabled:opacity-50"
                             title="Cancel"
                           >
                             <X size={14} />

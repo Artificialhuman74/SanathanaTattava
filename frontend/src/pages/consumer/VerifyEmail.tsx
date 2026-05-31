@@ -28,8 +28,8 @@ export default function VerifyEmail() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-brand-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 max-w-md w-full text-center">
+    <div className="min-h-screen bg-gradient-to-br from-parchment-100 to-brand-50 flex items-center justify-center p-4">
+      <div className="bg-[#fffbf2] rounded-2xl shadow-sm border border-[#e8dcc8] p-8 max-w-md w-full text-center">
         {status === 'loading' && (
           <>
             <Loader2 size={48} className="mx-auto text-brand-600 animate-spin mb-4" />

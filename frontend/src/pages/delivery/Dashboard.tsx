@@ -305,18 +305,27 @@ export default function DeliveryDashboard() {
         </div>
 
         {stopCards.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
+          <div className="bg-[#fffbf2] rounded-xl border border-[#e8dcc8] p-8 text-center">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-medium text-slate-700">
               {isAdmin
                 ? 'No deliveries assigned to admin right now'
                 : 'No active visits right now'}
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto">
               {isAdmin
-                ? 'Admin is only used as last-resort fallback'
-                : 'New orders and pickups will appear here when assigned'}
+                ? 'Admin is only used as a last-resort fallback.'
+                : 'New deliveries land here when a trader confirms an order in your area. Each card tells you what to hand over and what to collect.'}
             </p>
+            {!isAdmin && (
+              <div className="mt-5 inline-flex items-center gap-3 text-xs text-slate-500 bg-parchment-100 rounded-xl px-4 py-3 border border-[#e8dcc8]">
+                <span><strong className="text-emerald-700">Trader confirms</strong></span>
+                <span className="text-slate-300">›</span>
+                <span><strong className="text-emerald-700">You deliver</strong></span>
+                <span className="text-slate-300">›</span>
+                <span><strong className="text-emerald-700">Mark done</strong></span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

@@ -216,7 +216,7 @@ export default function Addresses() {
 
       {/* Address cards */}
       {addresses.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+        <div className="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-12 text-center">
           <MapPin size={36} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-500 font-medium">Where should the cans go?</p>
           <p className="text-slate-400 text-sm mt-1 mb-5">Add an address so checkout is one tap.</p>
@@ -231,7 +231,7 @@ export default function Addresses() {
             <div
               key={addr.id}
               className={`bg-white rounded-2xl border shadow-sm p-5 transition-colors ${
-                addr.is_default ? 'border-brand-200 ring-1 ring-brand-200' : 'border-slate-100'
+                addr.is_default ? 'border-brand-200 ring-1 ring-brand-200' : 'border-[#e8dcc8]'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -240,7 +240,7 @@ export default function Addresses() {
                   <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold flex-shrink-0 ${
                     addr.is_default
                       ? 'bg-brand-100 text-brand-700'
-                      : 'bg-slate-100 text-slate-600'
+                      : 'bg-parchment-200 text-slate-600'
                   }`}>
                     {labelIcon(addr.label)}
                     {addr.label}
@@ -335,9 +335,9 @@ export default function Addresses() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
               <h2 className="font-bold text-slate-900">{editing ? 'Edit Address' : 'Add New Address'}</h2>
-              <button onClick={closeForm} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+              <button onClick={closeForm} className="p-1.5 rounded-lg hover:bg-parchment-200 text-slate-400">
                 <X size={18} />
               </button>
             </div>
@@ -354,7 +354,7 @@ export default function Addresses() {
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                         form.label === l
                           ? 'border-brand-500 bg-brand-50 text-brand-700'
-                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                          : 'border-[#e8dcc8] text-slate-600 hover:border-slate-300'
                       }`}
                     >
                       {labelIcon(l)} {l}
@@ -425,7 +425,7 @@ export default function Addresses() {
               </div>
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={closeForm} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                <button type="button" onClick={closeForm} className="flex-1 py-2.5 rounded-xl border border-[#e8dcc8] text-sm font-medium text-slate-600 hover:bg-parchment-100">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="flex-1 btn-primary py-2.5 flex items-center justify-center gap-2">
@@ -446,7 +446,7 @@ export default function Addresses() {
             <h3 className="font-bold text-slate-900 mb-1">Remove address?</h3>
             <p className="text-slate-500 text-sm mb-5">This action cannot be undone.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
+              <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 rounded-xl border border-[#e8dcc8] text-sm font-medium text-slate-600 hover:bg-parchment-100">
                 Cancel
               </button>
               <button

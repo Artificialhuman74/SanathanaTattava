@@ -66,7 +66,7 @@ export default function ConsumerAccount() {
       <h1 className="text-xl font-bold text-gray-900 mb-5">My Account</h1>
 
       {/* ── Account Details ─────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+      <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm p-5 mb-4">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Personal Details</p>
         <form onSubmit={handleSaveDetails} className="space-y-4">
           <div>
@@ -117,7 +117,7 @@ export default function ConsumerAccount() {
       </div>
 
       {/* ── Change Password ──────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm p-5">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Change Password</p>
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>

@@ -44,7 +44,7 @@ export default function TraderReferral() {
 
   if (!isTier1) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in">
-      <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-5">
+      <div className="w-20 h-20 bg-parchment-200 rounded-full flex items-center justify-center mb-5">
         <Lock className="w-8 h-8 text-slate-400" />
       </div>
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Referral Programme</h2>
@@ -159,7 +159,7 @@ export default function TraderReferral() {
 
       {/* Sub-traders list */}
       <div className="card">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-slate-600" />
             <h3 className="font-bold text-slate-900">Your Sub-Traders</h3>

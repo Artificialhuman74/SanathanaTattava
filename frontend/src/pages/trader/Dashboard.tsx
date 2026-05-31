@@ -171,7 +171,7 @@ export default function TraderDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="tr-stagger grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Consumer Orders',    value: totalOrders,                                    icon: ShoppingBag,  color: 'brand',   link: '/trader/consumer-orders' },
           { label: 'Pending Orders',     value: pendingOrders,                                  icon: Clock,        color: 'amber',   link: '/trader/consumer-orders' },
@@ -254,7 +254,7 @@ export default function TraderDashboard() {
 
       {/* Recent Consumer Orders */}
       <div className="card">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
           <h3 className="font-bold text-slate-900">Recent Consumer Orders</h3>
           <button onClick={() => navigate('/trader/consumer-orders')} className="btn-ghost text-brand-600 text-xs flex items-center gap-1">View all <ChevronRight size={14} /></button>
         </div>
@@ -270,7 +270,7 @@ export default function TraderDashboard() {
                   <th>Date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="tr-stagger">
                 {recentOrders.map((o: any) => (
                   <tr key={o.id} onClick={() => navigate('/trader/consumer-orders')} className="cursor-pointer">
                     <td className="font-mono text-brand-600 font-medium text-xs">{o.order_number}</td>
@@ -279,7 +279,7 @@ export default function TraderDashboard() {
                       {o.consumer_pincode && <p className="text-xs text-slate-400">{o.consumer_pincode}</p>}
                     </td>
                     <td className="font-bold">₹{parseFloat(String(o.total_amount)).toFixed(2)}</td>
-                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-slate-100 text-slate-600'}`}>{o.status}</span></td>
+                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'bg-parchment-200 text-slate-600'}`}>{o.status}</span></td>
                     <td className="text-slate-400 text-xs">{formatIstDate(o.created_at)}</td>
                   </tr>
                 ))}
