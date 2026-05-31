@@ -120,7 +120,7 @@ export default function ConsumerOrders() {
       order.items.map(i => ({ id: i.product_id, qty: i.quantity }))
     ));
     navigate('/shop');
-    toast.success('Select your items again!');
+    toast.success('Cart loaded from your last order.');
   };
 
   if (loading) return (
@@ -150,10 +150,10 @@ export default function ConsumerOrders() {
       {orders.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
           <ShoppingBag size={44} className="mx-auto mb-3 text-gray-200" />
-          <p className="font-semibold text-gray-700">No orders yet</p>
-          <p className="text-sm text-gray-400 mt-1">Start shopping to place your first order</p>
+          <p className="font-semibold text-gray-700">Nothing here yet.</p>
+          <p className="text-sm text-gray-400 mt-1">Your first order will show up here once placed.</p>
           <button onClick={() => navigate('/shop')} className="mt-4 px-6 py-2.5 bg-brand-600 text-white rounded-full text-sm font-semibold">
-            Browse Products
+            Shop the oils
           </button>
         </div>
       ) : (

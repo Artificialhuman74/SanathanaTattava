@@ -402,8 +402,8 @@ export default function Checkout() {
         <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <CheckCircle2 size={44} className="text-emerald-600" />
         </div>
-        <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Order Confirmed!</h1>
-        <p className="text-slate-500 mb-3">Your order has been placed successfully.</p>
+        <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Order in. Thanks.</h1>
+        <p className="text-slate-500 mb-3">Your steel cans are on the way.</p>
         <p className="text-brand-600 font-mono font-bold text-xl mb-2">{success.orderNumber}</p>
         {success.message && (
           <p className="text-slate-600 text-sm mb-4 px-4">{success.message}</p>

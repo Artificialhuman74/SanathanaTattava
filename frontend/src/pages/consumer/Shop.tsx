@@ -118,6 +118,16 @@ function getPrimaryImage(product: Product): string {
   return getProductImages(product)[0] || '';
 }
 
+/* Time-of-day greeting. Three buckets, local clock, computed once per
+ * render. Used by the logged-in H1 in the toolbar so the page opens
+ * with a tiny warm beat instead of "Hi, {name}." every time. */
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 function getBounceConstraints(rect: DOMRect) {
   const viewportPad = 8;
   const centerX = rect.left + rect.width / 2;
@@ -143,16 +153,6 @@ export default function Shop() {
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
 
-  /* Once the visitor scrolls past the original page top, the layout's
-   * persistent nav cart takes over. Hide the in-toolbar cart so there
-   * aren't two carts competing in the same view. */
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 100);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
   const [cart, setCart] = useState<CartItem[]>(() =>
     loadCart<Product>().map(i => ({ product: i.product, quantity: i.quantity, mode: (i.mode === 'refill' ? 'refill' : 'buy') as CartMode }))
   );
@@ -199,7 +199,7 @@ export default function Shop() {
           return Array.from(map.values()).filter(i => i.quantity > 0);
         });
         setCartOpen(true);
-        toast.success('Your previous items are in the cart!');
+        toast.success('Same order, back in the cart.');
       }
     } catch {
       // ignore bad session data
@@ -623,54 +623,62 @@ export default function Shop() {
           scrolling. Filter chips replace the redundant <select>.
           z-20: below the layout's sticky nav header (z-40) so its
           notification dropdown isn't clipped. ── */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-100">
-        <div className="px-4 sm:px-6 pt-5 pb-2">
-          {/* Title row: tight grouping (title + count + cart) */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              {consumer
-                ? <h1 className="text-2xl font-bold text-slate-900 leading-tight truncate">Hi, {consumer.name.split(' ')[0]}</h1>
-                : <h1 className="text-2xl font-bold text-slate-900 leading-tight">Shop</h1>
-              }
-              <p className="text-slate-500 text-xs font-medium mt-0.5">{products.length} {products.length === 1 ? 'product' : 'products'} available</p>
-            </div>
-            <button
-              ref={cartButtonRef}
-              data-cart-fly-target="shop"
-              data-cart-fly-priority="1"
-              onClick={() => setCartOpen(true)}
-              aria-label={`Open cart with ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`}
-              aria-hidden={scrolled}
-              tabIndex={scrolled ? -1 : 0}
-              className={`relative w-11 h-11 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-all flex-shrink-0 ${cartIconBounce ? 'animate-cart-land' : ''}`}
-              style={{
-                opacity:       scrolled ? 0 : 1,
-                pointerEvents: scrolled ? 'none' : 'auto',
-                transform:     scrolled ? 'scale(0.85)' : 'scale(1)',
-                transitionDuration: '200ms',
-              }}
-            >
-              <ShoppingCart size={18} />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-                  <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
-                </span>
-              )}
-            </button>
+      {/* Title row — NOT sticky. Scrolls away with the page so the
+          layout's nav above us never collides with it. The persistent
+          cart in the layout nav takes over once the in-toolbar cart
+          scrolls out of view. */}
+      <div className="px-4 sm:px-6 pt-5 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            {consumer
+              ? <h1 className="text-2xl font-bold text-slate-900 leading-tight truncate">{timeGreeting()}, {consumer.name.split(' ')[0]}</h1>
+              : <h1 className="text-2xl font-bold text-slate-900 leading-tight">Shop</h1>
+            }
+            <p className="text-slate-500 text-xs font-medium mt-0.5">{products.length} {products.length === 1 ? 'product' : 'products'} available</p>
           </div>
+          <button
+            ref={cartButtonRef}
+            data-cart-fly-target="shop"
+            data-cart-fly-priority="1"
+            onClick={() => setCartOpen(true)}
+            aria-label={`Open cart with ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`}
+            className={`relative w-11 h-11 flex items-center justify-center rounded-full bg-brand-600 text-white shadow-sm hover:bg-brand-700 transition-all flex-shrink-0 ${cartIconBounce ? 'animate-cart-land' : ''}`}
+          >
+            <ShoppingCart size={18} />
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-[1.25rem] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                <RollingNumber value={cartCount > 9 ? '9+' : cartCount} className="text-[10px] leading-none" />
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
 
-          {/* Search row */}
-          <div className="mt-3">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="form-input pl-9"
-                placeholder="Search products"
-                aria-label="Search products"
-              />
-            </div>
+      {/* Sticky search + category chips — these stay pinned at the top
+          of the viewport once the title scrolls past. Frosted glass:
+          translucent fill + strong backdrop-blur + a saturation lift
+          so the products behind the bar read through with their own
+          warmth. z-20 keeps us below the layout nav (z-40) so its
+          notification dropdown isn't clipped. */}
+      <div
+        className="sticky top-0 z-20 rounded-bl-[24px] rounded-br-[24px] border-b border-white/50"
+        style={{
+          background: 'rgba(253, 248, 240, 0.55)',
+          backdropFilter: 'blur(22px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(22px) saturate(160%)',
+          boxShadow: '0 8px 24px -16px rgba(60, 40, 10, 0.18)',
+        }}
+      >
+        <div className="px-4 sm:px-6 pt-3 pb-2">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="form-input pl-9"
+              placeholder="Search products"
+              aria-label="Search products"
+            />
           </div>
         </div>
 
@@ -841,9 +849,11 @@ export default function Shop() {
           {products.length === 0 && (
             <div className="col-span-full text-center py-16 text-slate-500">
               <Package size={40} className="mx-auto mb-3 text-slate-300" />
-              <p className="font-medium">No products found</p>
+              <p className="font-medium">
+                {(search || catFilter) ? 'Nothing matches that.' : 'No oils available right now.'}
+              </p>
               {(search || catFilter) && (
-                <p className="text-xs text-slate-500 mt-1">Try a different search or category.</p>
+                <p className="text-xs text-slate-500 mt-1">Try a different search, or clear the filters.</p>
               )}
             </div>
           )}
@@ -1084,8 +1094,8 @@ export default function Shop() {
             {cart.length === 0 ? (
               <div className="text-center py-16">
                 <ShoppingCart size={40} className="mx-auto mb-3 text-slate-300" />
-                <p className="font-medium text-slate-700">Your cart is empty</p>
-                <p className="text-xs mt-1 text-slate-500">Add a can or two to get started.</p>
+                <p className="font-medium text-slate-700">Nothing in here yet.</p>
+                <p className="text-xs mt-1 text-slate-500">Add a can to get going.</p>
               </div>
             ) : cart.map(({ product, quantity, mode }) => {
               const isBuy = mode === 'buy';

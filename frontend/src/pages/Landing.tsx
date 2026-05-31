@@ -274,6 +274,129 @@ const PAGE_STYLES = `
     transform: translateY(28px);
   }
 
+  /* ── Chapter 3 layout ────────────────────────────────────────────
+   * Mobile: a two-row grid — bottle and headline sit side-by-side at
+   * the top; cards span the full width below, pulled close so both
+   * rows read on one phone screen during the pin. Desktop: the
+   * bottle fills the left column across both rows, headline and
+   * card slot stack on the right. The bottle is constrained on
+   * mobile so the headline can read at a comfortable size beside
+   * it. */
+  .st-ch3-grid {
+    column-gap: 16px;
+    row-gap: 28px;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "bottle head"
+      "cards  cards";
+  }
+  .st-ch3-bottle  { width: 40vw; max-width: 172px; }
+  .st-ch3-head    { align-self: center; }
+  .st-ch3-head h2 {
+    font-size: clamp(1.4rem, 5.8vw, 1.85rem) !important;
+    max-width: 13ch;
+  }
+  @media (min-width: 768px) {
+    .st-ch3-grid {
+      column-gap: 32px;
+      row-gap: 0;
+      grid-template-columns: 0.9fr 1.1fr;
+      grid-template-areas:
+        "bottle head"
+        "bottle cards";
+    }
+    .st-ch3-bottle    { width: auto; max-width: none; }
+    .st-ch3-head      { align-self: start; }
+    .st-ch3-head h2   {
+      font-size: clamp(1.6rem, 3.4vw, 2.4rem) !important;
+      max-width: 20ch;
+    }
+    .st-ch3-cards {
+      margin-top: clamp(40px, 14vh, 240px);
+    }
+  }
+  @media (min-width: 1024px) {
+    .st-ch3-grid { column-gap: 56px; }
+  }
+
+  /* ── Selection ──────────────────────────────────────────────────
+   * When the reader copies a line, the highlight stays on-brand: gold
+   * background, deep-oil text. Readable against both the oil-green
+   * and cream surfaces because the inverted contrast carries it. */
+  ::selection {
+    background: ${C.gold};
+    color: ${C.oilDeep};
+  }
+  ::-moz-selection {
+    background: ${C.gold};
+    color: ${C.oilDeep};
+  }
+
+  /* ── Footer link arrow trail ────────────────────────────────────
+   * Hover reveals a small italic arrow that slides in from the
+   * label. Purely typographic — the cue is the motion, not a colour
+   * change competing with the brand palette. Touch devices skip the
+   * trail since there's no hover (the :active opacity dip above
+   * carries the feedback there). */
+  .st-footer-link {
+    color: ${C.lightBody};
+    transition: color 200ms var(--ease-out-quart);
+  }
+  .st-footer-link:hover { color: ${C.light}; }
+  .st-footer-link-arrow {
+    display: inline-block;
+    width: 0;
+    margin-left: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+    font-family: var(--st-display);
+    font-style: italic;
+    color: ${C.gold};
+    transition:
+      width 260ms var(--ease-out-quart),
+      margin-left 260ms var(--ease-out-quart),
+      opacity 260ms var(--ease-out-quart),
+      transform 260ms var(--ease-out-quart);
+  }
+  .st-footer-link:hover .st-footer-link-arrow {
+    width: 1ch;
+    margin-left: 6px;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* ── Footer wordmark reveal ─────────────────────────────────────
+   * Clicking the brand wordmark in the footer fades in one italic
+   * line — a quiet note the reader earns by tapping the mark. Once
+   * shown it stays for the session. */
+  .st-footer-wordmark {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    transition: color 220ms var(--ease-out-quart);
+  }
+  .st-footer-wordmark:hover { color: ${C.gold}; }
+  @keyframes st-wordmark-reveal {
+    0%   { opacity: 0; transform: translateY(-4px); filter: blur(2px); }
+    100% { opacity: 1; transform: translateY(0);    filter: blur(0); }
+  }
+  .st-footer-wordmark-reveal {
+    animation: st-wordmark-reveal 520ms var(--ease-out-quart) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .st-footer-link-arrow {
+      transition: none !important;
+    }
+    .st-footer-wordmark-reveal { animation: none !important; }
+  }
+
   /* ── Chapter 4 (Process compared) ─────────────────────────────────
    * When the section enters view, the strike-through on each refined-
    * process item draws across left → right, staggered. The text itself
@@ -462,8 +585,11 @@ function oilLabelOpacity(progress: number, oil: OilType): number {
 }
 
 /** Card transform + opacity at a given pin progress.
- *  Cards 0-2 enter from below, pass through center, exit upward. Card 3
- *  (shelf life) enters and stays until the section releases. */
+ *  Each card rises into view from TRAVEL px below its settled
+ *  position, then leaves by drifting TRAVEL px above and fading.
+ *  Every card takes the same trajectory (in from below, out toward
+ *  the top) so the gesture reads the same each phase. Card 3 (shelf
+ *  life) enters and stays until the section releases. */
 function chapter3CardState(progress: number, index: number): { ty: number; opacity: number } {
   const PHASES = [
     { IN: 0.00, PEAK: 0.125, OUT: 0.27 },
@@ -471,7 +597,7 @@ function chapter3CardState(progress: number, index: number): { ty: number; opaci
     { IN: 0.47, PEAK: 0.625, OUT: 0.77 },
     { IN: 0.72, PEAK: 0.875, OUT: 1.10 },   // never exits within pin range
   ];
-  const TRAVEL = 70;                                  // px each side of centre
+  const TRAVEL = 28;                                    // px each side of settled
   const p = PHASES[index];
   if (progress < p.IN)   return { ty: TRAVEL, opacity: 0 };
   if (progress < p.PEAK) {
@@ -650,6 +776,24 @@ export default function Landing() {
   const [pressRef,   pressSeen]   = useSeen<HTMLDivElement>();
   const [familyRef,  familySeen]  = useSeen<HTMLDivElement>();
   const [partnerRef, partnerSeen] = useSeen<HTMLDivElement>();
+
+  /* Footer wordmark: tap the brand to reveal one quiet italic line.
+   * Once shown, it stays for the session. A small earned discovery. */
+  const [wordmarkOpen, setWordmarkOpen] = useState(false);
+
+  /* A note in the console for anyone curious enough to open devtools.
+   * Styled in the brand's display serif so the greeting reads as the
+   * page, not as a debug line. Fires once per mount. */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      console.log(
+        '%cSanathana Tattva%c\nFrom the wooden ghani in Tumkur. The page is hand-built. Hello.\n',
+        `font-family: 'EB Garamond', Georgia, serif; font-weight: 500; font-size: 26px; color: ${C.gold}; line-height: 1.4; letter-spacing: -0.01em;`,
+        `font-family: 'EB Garamond', Georgia, serif; font-style: italic; font-size: 14px; color: ${C.lightBody};`,
+      );
+    } catch { /* console may be missing in odd embeds */ }
+  }, []);
 
   const sparks = useMemo(
     () => Array.from({ length: 12 }).map(() => ({
@@ -999,7 +1143,7 @@ export default function Landing() {
                 textWrap: 'balance' as any,
               }}
             >
-              The press is wooden. The cow is real.
+              The press is wooden. The taste is real.
             </h2>
             <div
               className="mt-6 space-y-5 st-body"
@@ -1051,27 +1195,30 @@ export default function Landing() {
         }}
       >
         <div
-          className="sticky flex items-center"
+          className="sticky flex items-start md:items-center"
           style={{
             top: 'var(--nav-h)',
             height: 'calc(100vh - var(--nav-h))',
           }}
         >
-          {/* Grid is items-start so the right column (heading + cards)
-              anchors near the top of the pane instead of being vertically
-              centred against the tall bottle. A small top pad keeps it
-              from sitting flush against the nav. */}
+          {/* Three-area grid (see .st-ch3-grid in PAGE_STYLES).
+              Mobile: bottle and headline sit side-by-side at the top;
+              cards take the full width below. Desktop: bottle fills the
+              left column across both rows; heading and card slot stack
+              on the right. Mobile anchors to top of the pane (above) so
+              the bottle + headline + cards all read on one screen. */}
           <div
-            className="max-w-6xl w-full mx-auto px-6 sm:px-10 grid gap-6 sm:gap-8 lg:gap-14 md:grid-cols-[0.9fr_1.1fr] items-start"
-            style={{ paddingTop: 'clamp(24px, 6vh, 96px)' }}
+            className="st-ch3-grid max-w-6xl w-full mx-auto px-6 sm:px-10 grid items-start"
+            style={{ paddingTop: 'clamp(12px, 2.5vh, 96px)' }}
           >
 
-            {/* LEFT — Bottle. WebGL liquid: real-time shader with ripples,
-                caustics, meniscus highlight, and a mouse-down ripple. Color
-                and label shift per phase; liquid fills with scroll. Falls
-                back to a static SVG bottle when WebGL is unavailable or the
-                user prefers reduced motion. */}
-            <div className="flex justify-center md:justify-start">
+            {/* BOTTLE. WebGL liquid: real-time shader. Color and label
+                shift per phase; liquid fills with scroll. Constrained
+                on mobile so the headline beside it stays readable. */}
+            <div
+              className="st-ch3-bottle flex justify-center md:justify-start"
+              style={{ gridArea: 'bottle' }}
+            >
               <LiquidBottle
                 fill={bottleFill}
                 topColor={currentOilColor(pinProgress, 'top')}
@@ -1084,30 +1231,43 @@ export default function Landing() {
               />
             </div>
 
-            {/* RIGHT — Heading sits above a fixed-height slot in which the
-                four cards swap, one at a time. */}
-            <div className="relative">
+            {/* HEADING. Mobile: centres vertically next to the bottle.
+                Desktop: anchors top of the right column. Font size also
+                steps down on mobile so the line breaks land naturally
+                inside the narrower column. */}
+            <div
+              className="st-ch3-head min-w-0"
+              style={{ gridArea: 'head' }}
+            >
               <h2
                 className="st-h2"
                 style={{
                   color: C.light,
                   textWrap: 'balance' as any,
-                  maxWidth: '20ch',
-                  fontSize: 'clamp(1.6rem, 3.4vw, 2.4rem)',
                 }}
               >
                 An oil that still smells like the seed it came from.
               </h2>
+            </div>
 
-              {/* Card slot: heading stays anchored near the top of the
-                  pane; the slot lives in the middle band so cards land
-                  at mid-viewport. Lower min on mobile so the slot
-                  doesn't overflow on a 360×640 phone. */}
+            {/* CARDS slot. Mobile: full-width row below, fed by the
+                grid's row-gap. Desktop: lives in the bottom-right cell
+                with a top offset that drops cards to mid-viewport. */}
+            <div
+              className="st-ch3-cards relative"
+              style={{ gridArea: 'cards' }}
+            >
               <div
                 className="relative"
                 style={{
-                  marginTop: 'clamp(40px, 14vh, 240px)',
-                  height: 'clamp(180px, 24vh, 220px)',
+                  /* Tall enough to fit the longest card body (the
+                     highlight "the can comes back" runs ~7 lines plus
+                     eyebrow + card padding on a narrow phone, ~290px). */
+                  height: 'clamp(310px, 46vh, 380px)',
+                  /* Clip the entry/exit slide so the moving card
+                     doesn't peek past the slot's edges into the
+                     bottle row above or whatever sits below. */
+                  overflow: 'hidden',
                 }}
               >
                 {CHAPTER3_CARDS.map((card, i) => {
@@ -1185,7 +1345,7 @@ export default function Landing() {
                   marginBottom: 'var(--st-5)',
                 }}
               >
-                refined sunflower oil
+                typical refined oil
               </p>
               <ol
                 style={{
@@ -1352,17 +1512,36 @@ export default function Landing() {
       >
         <div className="max-w-6xl mx-auto grid gap-10 md:grid-cols-[1.6fr_0.85fr_0.85fr] items-start">
           <div>
-            <p
-              className="st-h2"
+            <button
+              type="button"
+              onClick={() => setWordmarkOpen(v => !v)}
+              className="st-h2 st-footer-wordmark"
               style={{
                 color: C.light,
                 /* Footer brand sits smaller than chapter headlines. */
                 fontSize: '1.6rem',
                 letterSpacing: 'var(--ls-tight)',
               }}
+              aria-expanded={wordmarkOpen}
+              aria-label="Sanathana Tattva. Tap for a short note."
             >
               Sanathana Tattva
-            </p>
+            </button>
+            {wordmarkOpen && (
+              <p
+                key={wordmarkOpen ? 'on' : 'off'}
+                className="st-footer-wordmark-reveal mt-2"
+                style={{
+                  fontFamily: 'var(--st-display)',
+                  fontStyle: 'italic',
+                  fontSize: 'var(--type-meta)',
+                  color: C.goldBright,
+                  margin: '8px 0 0 0',
+                }}
+              >
+                Started one ghani at a time. Same press, same family.
+              </p>
+            )}
             <p className="mt-2 max-w-sm st-body-sm st-body-sm-on-dark" style={{ color: C.lightBody }}>
               A family-run cold-pressed oil business out of Bengaluru. We
               press coconut, groundnut, and sunflower the same way: slowly,
@@ -1395,7 +1574,7 @@ export default function Landing() {
           <span>FSSAI Reg. · 21226159000012</span>
           <span>GSTIN · 29AIGPB6124Q2ZW</span>
           <span className="ml-auto st-lede" style={{ color: C.lightBody, fontSize: 'var(--type-xs)' }}>
-            Purity of tradition in every drop.
+            From the wooden ghani in Tumkur.
           </span>
         </div>
       </footer>
@@ -1433,16 +1612,16 @@ function FooterLink({ onClick, label }: { onClick: () => void; label: string }) 
       <button
         type="button"
         onClick={onClick}
-        className="transition-colors text-left inline-flex items-center"
+        className="st-footer-link text-left inline-flex items-center"
         style={{
-          color: C.lightBody,
           minHeight: 32,  /* footer links are dense; full 44 would force ugly gaps */
           padding: '4px 0',  /* expanded hit area without visible inflation */
         }}
-        onMouseEnter={e => (e.currentTarget.style.color = C.light)}
-        onMouseLeave={e => (e.currentTarget.style.color = C.lightBody)}
       >
         {label}
+        {/* Italic gold arrow that slides in on hover. Pure CSS — see
+            .st-footer-link in PAGE_STYLES. */}
+        <span aria-hidden="true" className="st-footer-link-arrow">→</span>
       </button>
     </li>
   );

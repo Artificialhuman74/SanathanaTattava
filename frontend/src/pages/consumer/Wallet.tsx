@@ -176,12 +176,12 @@ export default function ConsumerWallet() {
               <Wallet className="w-6 h-6 text-slate-400" />
             </div>
             <p className="text-sm font-semibold text-slate-800">
-              {ledger.length === 0 ? 'No transactions yet' : 'No matching transactions'}
+              {ledger.length === 0 ? 'Wallet is empty.' : 'Nothing matches that filter.'}
             </p>
             <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
               {ledger.length === 0
-                ? 'Return a container and choose "Store credit" to start your wallet.'
-                : 'Try a different filter.'}
+                ? 'Return a steel can and pick "Store credit" to start your wallet.'
+                : 'Try a different one.'}
             </p>
           </div>
         ) : (

@@ -162,7 +162,7 @@ export default function Support() {
           ) : orders.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
               <ShoppingBag size={36} className="mx-auto mb-2 text-gray-200" />
-              <p className="text-sm text-gray-400">No orders yet</p>
+              <p className="text-sm text-gray-400">Nothing to ask about yet — place an order first.</p>
             </div>
           ) : (
             <div className="space-y-3">

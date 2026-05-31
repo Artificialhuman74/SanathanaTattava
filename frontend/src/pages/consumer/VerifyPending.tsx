@@ -44,7 +44,7 @@ export default function VerifyPending() {
     try {
       const { data } = await api.post('/auth/consumer/verify-otp', { email, otp: code });
       consumerLoginWithToken(data.token, data.consumer);
-      toast.success('Email verified! Welcome aboard.');
+      toast.success('You\'re in. Welcome.');
       navigate('/shop', { replace: true });
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Invalid code. Please try again.');
@@ -60,7 +60,7 @@ export default function VerifyPending() {
     setResending(true);
     try {
       await api.post('/auth/consumer/resend-verification', { email });
-      toast.success('New code sent! Check your inbox.');
+      toast.success('Sent. Check your inbox.');
       setOtp(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
     } catch (err: any) {

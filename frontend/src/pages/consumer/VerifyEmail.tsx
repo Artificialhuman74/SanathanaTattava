@@ -39,8 +39,8 @@ export default function VerifyEmail() {
         {status === 'success' && (
           <>
             <CheckCircle2 size={48} className="mx-auto text-emerald-500 mb-4" />
-            <h2 className="text-xl font-bold text-slate-900">Email Verified!</h2>
-            <p className="text-slate-500 mt-2">Redirecting you to the shop…</p>
+            <h2 className="text-xl font-bold text-slate-900">You're in.</h2>
+            <p className="text-slate-500 mt-2">Taking you to the shop…</p>
           </>
         )}
         {status === 'error' && (

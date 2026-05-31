@@ -87,17 +87,17 @@ export default function Addresses() {
       if (editing) {
         const { data } = await consumerApi.put(`/consumer/addresses/${editing.id}`, form);
         if (data.geocoded) {
-          toast.success('Address updated & location mapped');
+          toast.success('Address updated. We know where to find you.');
         } else {
-          toast.success('Address updated (location could not be determined)');
+          toast.success('Address updated. Couldn\'t map it on our side — we\'ll keep trying.');
         }
       } else {
         const makeDefault = addresses.length === 0;
         const { data } = await consumerApi.post('/consumer/addresses', { ...form, is_default: makeDefault });
         if (data.geocoded) {
-          toast.success('Address added & location mapped');
+          toast.success('Saved. We know where to bring the cans.');
         } else {
-          toast.success('Address added (location will be mapped when possible)');
+          toast.success('Saved. We\'ll map it on our side shortly.');
         }
       }
       await fetchAddresses();
@@ -136,7 +136,7 @@ export default function Addresses() {
     try {
       const { data } = await consumerApi.post(`/consumer/addresses/${id}/geocode`);
       if (data.geocoded) {
-        toast.success('Location mapped successfully!');
+        toast.success('Located. We know where to bring the cans.');
         await fetchAddresses();
       }
     } catch (err: any) {
@@ -165,7 +165,7 @@ export default function Addresses() {
               longitude: position.coords.longitude,
             });
             if (data.geocoded) {
-              toast.success('Location mapped using your GPS!');
+              toast.success('Located via GPS. We know where to bring the cans.');
               await fetchAddresses();
             }
           } catch (e: any) {
@@ -218,8 +218,8 @@ export default function Addresses() {
       {addresses.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
           <MapPin size={36} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">No saved addresses yet</p>
-          <p className="text-slate-400 text-sm mt-1 mb-5">Add an address to speed up checkout</p>
+          <p className="text-slate-500 font-medium">Where should the cans go?</p>
+          <p className="text-slate-400 text-sm mt-1 mb-5">Add an address so checkout is one tap.</p>
           <button onClick={openNew} className="btn-primary px-6 py-2">
             <Plus size={16} className="inline mr-1.5" />
             Add your first address

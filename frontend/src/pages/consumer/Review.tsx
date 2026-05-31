@@ -140,8 +140,8 @@ export default function ReviewPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-6 text-center">
         <CheckCircle2 size={52} className="text-brand-500" />
-        <h2 className="text-xl font-bold text-slate-900">Thank you!</h2>
-        <p className="text-slate-500 text-sm">Your review has been submitted successfully.</p>
+        <h2 className="text-xl font-bold text-slate-900">Got it. Thank you.</h2>
+        <p className="text-slate-500 text-sm">Your review helps the next family choose.</p>
         <button onClick={() => navigate('/shop')} className="mt-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl font-semibold text-sm hover:bg-brand-700 transition-colors">
           Back to Shop
         </button>
