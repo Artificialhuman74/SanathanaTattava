@@ -61,7 +61,7 @@ export default function Register() {
         referralCode:  form.referralCode.trim() || undefined,
         willDeliver,
       });
-      toast.success('Account created! Welcome to Sanathana Tattva!');
+      toast.success('You\'re in. Welcome to the family.');
       navigate('/trader', { replace: true });
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Registration failed');
@@ -83,18 +83,51 @@ export default function Register() {
             <img src="/logo.webp" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
             <span className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
           </div>
-          <p className="text-white/60 mt-2 text-sm">Create your partner account</p>
+          <p className="text-white/70 mt-2 text-sm" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontStyle: 'italic' }}>
+            Join the family that delivers our oils.
+          </p>
         </div>
 
-        {/* Referral info box */}
-        <div className="mb-5 p-4 rounded-2xl bg-white/5 border border-white/10 text-white/70 text-sm">
-          <div className="flex items-start gap-2">
-            <Info size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+        {/* What you'll get — the activation lever moment.
+            Three concrete promises so a kirana owner reading this on
+            their phone knows what they're signing up for in 30 seconds. */}
+        <div className="mb-5 p-4 rounded-2xl bg-white/5 border border-white/10">
+          <div className="grid grid-cols-3 gap-3 text-center">
             <div>
-              <p className="font-semibold text-white/90 mb-1">How registration works:</p>
-              <p className="text-xs leading-relaxed">
-                <strong className="text-indigo-300">Leave blank</strong> = Register as a <strong>Tier 1 Partner</strong> — you get your own referral code to appoint sub-partners.<br />
-                <strong className="text-purple-300">Enter a code</strong> = Register as a <strong>Sub-Partner</strong> under that parent partner.
+              <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-1.5">
+                <Hash size={14} className="text-indigo-300" />
+              </div>
+              <p className="text-[11px] text-white/90 font-semibold leading-tight">Your referral code</p>
+              <p className="text-[10px] text-white/50 mt-0.5 leading-tight">Earn on every order you bring in</p>
+            </div>
+            <div>
+              <div className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-1.5">
+                <Truck size={14} className="text-emerald-300" />
+              </div>
+              <p className="text-[11px] text-white/90 font-semibold leading-tight">Local delivery</p>
+              <p className="text-[10px] text-white/50 mt-0.5 leading-tight">Orders routed to your area</p>
+            </div>
+            <div>
+              <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-1.5">
+                <Star size={14} className="text-amber-300" />
+              </div>
+              <p className="text-[11px] text-white/90 font-semibold leading-tight">Weekly payouts</p>
+              <p className="text-[10px] text-white/50 mt-0.5 leading-tight">Direct to your bank, every Sunday</p>
+            </div>
+          </div>
+        </div>
+
+        {/* How it works — concise, family-voice explainer of the two
+            tiers. Replaces the dev-explainerly original. */}
+        <div className="mb-5 p-4 rounded-2xl bg-white/5 border border-white/10 text-sm">
+          <div className="flex items-start gap-2.5">
+            <Info size={16} className="text-blue-300 mt-0.5 flex-shrink-0" />
+            <div className="text-white/80 text-xs leading-relaxed">
+              <p className="font-semibold text-white/95 mb-1">Two ways to join:</p>
+              <p>
+                <strong className="text-indigo-300">No code?</strong> You become a Tier 1 Partner and get a code of your own to bring in sub-partners.
+                <br />
+                <strong className="text-purple-300">Got a code from another partner?</strong> Enter it below to join under them as a Sub-Partner.
               </p>
             </div>
           </div>
@@ -109,12 +142,12 @@ export default function Register() {
           </div>
           <div>
             <p className={`font-bold text-sm ${isSubDealer ? 'text-purple-300' : 'text-indigo-300'}`}>
-              {isSubDealer ? `Sub-Partner under ${refStatus?.name}` : 'Tier 1 Partner'}
+              {isSubDealer ? `Joining under ${refStatus?.name}` : 'You\'ll be a Tier 1 Partner'}
             </p>
-            <p className="text-white/50 text-xs mt-0.5">
+            <p className="text-white/60 text-xs mt-0.5 leading-relaxed">
               {isSubDealer
-                ? 'You will be a sub-partner. You get your own referral code and earn commissions.'
-                : 'No referral code — you\'ll receive your own referral code to recruit sub-partners.'
+                ? `${refStatus?.name?.split(' ')[0]} brought you in. You'll still get your own code and earn on every order you bring in.`
+                : 'You get your own referral code to bring in sub-partners. You earn on their orders too.'
               }
             </p>
           </div>
@@ -212,13 +245,16 @@ export default function Register() {
                   {!refChecking && refStatus?.valid === false && <XCircle      size={16} className="text-red-500" />}
                 </div>
               </div>
-              {refStatus?.valid === true  && <p className="text-emerald-600 text-xs mt-1.5">Valid — Sub-Partner under {refStatus.name}</p>}
-              {refStatus?.valid === false && <p className="text-red-500 text-xs mt-1.5">Referral code not found</p>}
+              {refStatus?.valid === true  && <p className="text-emerald-600 text-xs mt-1.5">Got it. {refStatus.name?.split(' ')[0]} brought you in.</p>}
+              {refStatus?.valid === false && <p className="text-red-500 text-xs mt-1.5">That code isn't one of ours. Double-check with whoever shared it.</p>}
             </div>
 
-            {/* Delivery commitment */}
+            {/* Delivery commitment — softened tone, same legal weight.
+                The dealer needs to know they're saying yes to handling
+                last-mile deliveries; we just don't have to sound like a
+                contract about it. */}
             <div className={`p-4 rounded-xl border-2 transition-all ${
-              willDeliver ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-slate-50'
+              willDeliver ? 'border-emerald-400 bg-emerald-50' : 'border-[#e8dcc8] bg-parchment-100'
             }`}>
               <label className="flex items-start gap-3 cursor-pointer select-none">
                 <input
@@ -229,17 +265,17 @@ export default function Register() {
                 />
                 <div>
                   <p className={`font-semibold text-sm ${willDeliver ? 'text-emerald-800' : 'text-slate-700'}`}>
-                    I commit to fulfilling last-mile deliveries to consumers in my service area
+                    Yes, I'll deliver to consumers in my area.
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    By checking this box, you confirm you will handle delivery of consumer orders placed through your referral network. Your parent dealer may also assign delivery orders to you.
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Orders from your referral network come to you to pack and hand over. If you're a sub-partner, your parent partner may also route orders your way.
                   </p>
                 </div>
               </label>
               {!willDeliver && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 ml-7 flex items-center gap-1.5">
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 ml-7 flex items-center gap-1.5">
                   <Truck size={12} className="flex-shrink-0" />
-                  You must confirm delivery capability to complete registration.
+                  Tick the box above to finish signing up.
                 </p>
               )}
             </div>
@@ -250,7 +286,7 @@ export default function Register() {
               className="btn-primary w-full py-3 text-base mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}
-              {loading ? 'Creating account...' : `Register as Tier ${tier} ${tier === 1 ? 'Partner' : 'Sub-Partner'}`}
+              {loading ? 'Creating your account…' : (tier === 1 ? 'Join as a Tier 1 Partner' : `Join as a Sub-Partner`)}
             </button>
           </form>
 

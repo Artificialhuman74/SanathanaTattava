@@ -126,7 +126,6 @@ export default function TraderLayout() {
               Welcome back, <span className="font-semibold text-slate-800">{user?.name}</span>
             </span>
           </div>
-          <NotificationBell />
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5">
               {user?.tier === 1
@@ -141,6 +140,9 @@ export default function TraderLayout() {
               <p className="text-sm font-medium text-slate-700">{user?.name}</p>
             </div>
           </div>
+          {/* Bell sits last so its right-0 dropdown anchors to the viewport edge
+              instead of mid-header, otherwise the panel overflows off-screen left. */}
+          <NotificationBell />
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
