@@ -146,7 +146,8 @@ router.get('/consumer-orders', (req, res) => {
   let sql = `
     SELECT co.*, c.name as consumer_name, c.phone as consumer_phone,
            u.name as dealer_name, u.tier as dealer_tier,
-           d2.name as delivery_dealer_name, d2.phone as delivery_dealer_phone
+           d2.name as delivery_dealer_name, d2.phone as delivery_dealer_phone,
+           d2.role as delivery_dealer_role
     FROM consumer_orders co
     JOIN consumers c  ON co.consumer_id = c.id
     JOIN users u      ON co.linked_dealer_id = u.id
@@ -186,6 +187,7 @@ router.get('/consumer-orders/:id', (req, res) => {
     SELECT co.*, c.name as consumer_name, c.phone as consumer_phone,
            u.name as dealer_name, u.phone as dealer_phone, u.tier as dealer_tier,
            d2.name as delivery_dealer_name, d2.phone as delivery_dealer_phone,
+           d2.role as delivery_dealer_role,
            p.name as parent_dealer_name, p.phone as parent_dealer_phone
     FROM consumer_orders co
     JOIN consumers c  ON co.consumer_id = c.id

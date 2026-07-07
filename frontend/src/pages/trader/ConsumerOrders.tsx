@@ -22,6 +22,8 @@ interface ConsumerOrder {
   dealer_tier: number;
   delivery_dealer_id: number | null;
   delivery_dealer_name: string | null;
+  delivery_dealer_role: 'admin' | 'trader' | 'delivery' | null;
+  admin_taken_over_at: string | null;
   total_amount: number;
   status: string;
   payment_status: string;
@@ -272,6 +274,18 @@ const totalOrders   = orders.length;
                           }
                         </span>
                       )}
+                      {/* When admin ends up delivering an order (direct or
+                          takeover), the trader loses commission on it —
+                          surface that here so it's not a silent surprise. */}
+                      {(o.delivery_dealer_role === 'admin' || o.admin_taken_over_at) && (
+                        <span
+                          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-semibold"
+                          title="Admin took the delivery. You won't earn commission on this order."
+                        >
+                          <AlertTriangle size={10} />
+                          Admin delivering · no commission
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${STATUS_COLORS[o.status] || 'bg-parchment-200 text-slate-600'}`}>{o.status}</span>
@@ -314,6 +328,21 @@ const totalOrders   = orders.length;
             </div>
 
             <div className="p-5 space-y-5">
+              {/* Admin-delivery notice: this is the trader's own detail
+                  view — surface up-top that they won't earn on this one
+                  since admin took over the delivery. */}
+              {(selected.delivery_dealer_role === 'admin' || selected.admin_taken_over_at) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle size={18} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-amber-900">
+                    <p className="font-semibold">You won't earn commission on this one.</p>
+                    <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                      Admin is handling the delivery for this order, so the commission goes to the founder account. Any pending commission you may have seen on it has been rerouted.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Consumer */}
               <div className="bg-parchment-100 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-2"><User size={12} />Consumer</p>
