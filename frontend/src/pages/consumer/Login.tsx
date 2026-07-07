@@ -22,7 +22,7 @@ export default function ConsumerLogin() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const exchangeIdTokenAndLogin = async (idToken: string) => {
-    const { data } = await consumerApi.post('/auth/consumer/google', { id_token: idToken });
+    const { data } = await consumerApi.post('/auth/consumer/google', { id_token: idToken }, { skipAuthRedirect: true });
     consumerLoginWithToken(data.token, data.consumer);
     navigate('/shop', { replace: true });
   };

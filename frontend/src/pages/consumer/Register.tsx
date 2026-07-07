@@ -43,12 +43,16 @@ export default function ConsumerRegister() {
   }, [refCode]);
 
   const exchangeIdTokenAndLogin = async (idToken: string) => {
-    const { data } = await consumerApi.post('/auth/consumer/google', {
-      id_token: idToken,
-      /* If the visitor typed a dealer code before tapping Google, link
-       * the account on signup. The backend treats this as optional. */
-      referral_code: refCode.trim() || undefined,
-    });
+    const { data } = await consumerApi.post(
+      '/auth/consumer/google',
+      {
+        id_token: idToken,
+        /* If the visitor typed a dealer code before tapping Google, link
+         * the account on signup. The backend treats this as optional. */
+        referral_code: refCode.trim() || undefined,
+      },
+      { skipAuthRedirect: true }
+    );
     consumerLoginWithToken(data.token, data.consumer);
     navigate('/shop', { replace: true });
   };

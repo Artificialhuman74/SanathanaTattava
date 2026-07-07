@@ -96,10 +96,13 @@ consumerApi.interceptors.response.use(
       cfg.baseURL = getApiHttpBaseUrl();
       return consumerApi.request(cfg);
     }
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !cfg.skipAuthRedirect) {
       localStorage.removeItem('consumer_token');
       localStorage.removeItem('consumer');
-      window.location.href = '/consumer/login';
+      /* Real consumer login route is /shop/login, not /consumer/login —
+       * the old (wrong) path here never matched any route and fell
+       * through the SPA's catch-all straight to the Landing page. */
+      window.location.href = '/shop/login';
     }
     return Promise.reject(err);
   }
@@ -143,12 +146,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /* ── Trader / Admin ──────────────────────────────────────────────────── */
   const login = useCallback(async (email: string, password: string) => {
-    const { data } = await api.post('/auth/login', { email, password });
+    const { data } = await api.post('/auth/login', { email, password }, { skipAuthRedirect: true });
     persistUser(data.token, data.user);
   }, []);
 
   const register = useCallback(async (formData: RegisterData) => {
-    const { data } = await api.post('/auth/register', formData);
+    const { data } = await api.post('/auth/register', formData, { skipAuthRedirect: true });
     persistUser(data.token, data.user);
   }, []);
 
@@ -171,12 +174,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /* ── Consumer Email+Password Auth ───────────────────────────────────── */
 
   const consumerLogin = useCallback(async (email: string, password: string) => {
-    const { data } = await consumerApi.post('/auth/consumer/login', { email, password });
+    const { data } = await consumerApi.post('/auth/consumer/login', { email, password }, { skipAuthRedirect: true });
     persistConsumer(data.token, data.consumer);
   }, []);
 
   const consumerRegister = useCallback(async (name: string, email: string, password: string, referralCode?: string, phone?: string) => {
-    await consumerApi.post('/auth/consumer/register', { name, email, password, referral_code: referralCode || undefined, phone: phone || undefined });
+    await consumerApi.post(
+      '/auth/consumer/register',
+      { name, email, password, referral_code: referralCode || undefined, phone: phone || undefined },
+      { skipAuthRedirect: true }
+    );
     // Account created but not yet verified — do NOT log in yet
   }, []);
 

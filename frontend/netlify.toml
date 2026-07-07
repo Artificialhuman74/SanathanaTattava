@@ -15,6 +15,14 @@
     X-Frame-Options        = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy        = "strict-origin-when-cross-origin"
+    # Without this, some browsers' default Cross-Origin-Opener-Policy blocks
+    # the Google sign-in popup from messaging back to this window once auth
+    # completes — the popup finishes, but signInWithPopup()'s promise on
+    # this side just hangs (no error, no result), so the first click looks
+    # like it did nothing. same-origin-allow-popups keeps this page isolated
+    # from other origins while explicitly permitting popups it opens (Google
+    # OAuth, Razorpay checkout) to communicate back.
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
 
 # Cache built assets forever (they have hashed filenames)
 [[headers]]
