@@ -17,9 +17,24 @@ import {
   type User,
 } from 'firebase/auth';
 
+/* On the production domain, the auth helper pages (/__/auth/*) are
+ * proxied to Firebase by netlify.toml, so the sign-in window finishes
+ * on OUR origin and can hand its result back to the app directly.
+ * Using the default *.firebaseapp.com authDomain breaks that hand-off
+ * on browsers that partition third-party storage (Safari, newer
+ * Chrome): the popup completes Google auth but the app never hears
+ * about it, which is why sign-in used to need two attempts.
+ * Local dev (localhost / LAN IP) keeps the env-configured default —
+ * the Vite server doesn't serve /__/auth. */
+const SAME_ORIGIN_AUTH_HOSTS = ['sanathanatattva.shop', 'www.sanathanatattva.shop'];
+const authDomain =
+  typeof window !== 'undefined' && SAME_ORIGIN_AUTH_HOSTS.includes(window.location.hostname)
+    ? window.location.hostname
+    : import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  authDomain,
   projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
@@ -84,7 +99,14 @@ export async function signInWithGoogleAndGetIdToken(): Promise<string | null> {
   const a = ensureFirebase();
   const provider = new GoogleAuthProvider();
 
-  const POPUP_HANG_TIMEOUT_MS = 12000;
+  /* A previous attempt may have completed Google auth without managing
+   * to hand the result to the app (blocked popup channel). Firebase
+   * keeps that session locally — reuse it instead of making the user
+   * run the whole popup dance again. This is what used to require the
+   * "second try": now the second try happens automatically, in-place. */
+  if (a.currentUser) return a.currentUser.getIdToken();
+
+  const POPUP_HANG_TIMEOUT_MS = 8000;
 
   const fallbackToRedirect = async (): Promise<null> => {
     sessionStorage.setItem('google_redirect_pending', '1');
@@ -94,25 +116,30 @@ export async function signInWithGoogleAndGetIdToken(): Promise<string | null> {
 
   // `.then(onFulfilled, onRejected)` maps BOTH outcomes onto a resolved
   // value, so this derived promise itself never rejects — safe to race
-  // against a timeout without risking an unhandled rejection on whichever
-  // side loses.
+  // without risking an unhandled rejection on whichever side loses.
   const popupOutcome = signInWithPopup(a, provider).then(
     (res) => ({ status: 'resolved' as const, user: res.user }),
     (err) => ({ status: 'rejected' as const, err }),
   );
+  /* Listen for the session appearing locally from the moment the popup
+   * opens (not only after a timeout): if the popup finishes sign-in but
+   * its message back to us is dropped, the auth-state write is often
+   * still synced — whoever fires first wins. currentUser was null above,
+   * so any user this reports is fresh from this popup. */
+  const authStateOutcome = waitForLocalAuthUser(a, POPUP_HANG_TIMEOUT_MS + 3000).then(
+    (user) => (user ? { status: 'authstate' as const, user } : { status: 'timeout' as const }),
+  );
   const timeoutOutcome = sleep(POPUP_HANG_TIMEOUT_MS).then(() => ({ status: 'timeout' as const }));
 
-  const outcome = await Promise.race([popupOutcome, timeoutOutcome]);
+  const outcome = await Promise.race([popupOutcome, authStateOutcome, timeoutOutcome]);
 
-  if (outcome.status === 'resolved') return outcome.user.getIdToken();
+  if (outcome.status === 'resolved' || outcome.status === 'authstate') {
+    return outcome.user.getIdToken();
+  }
 
   if (outcome.status === 'timeout') {
-    // Popup call hasn't resolved or rejected yet. Some browsers' default
-    // Cross-Origin-Opener-Policy blocks the popup from messaging back to
-    // us even after it finishes Google auth successfully — Firebase still
-    // persists the resulting session locally, it just can't tell this
-    // promise about it. Give local persistence a moment to catch up
-    // before concluding it's truly stuck.
+    // Popup hasn't resolved, rejected, or synced a session. Give local
+    // persistence one last short window before concluding it's stuck.
     const recoveredUser = await waitForLocalAuthUser(a, 3000);
     if (recoveredUser) return recoveredUser.getIdToken();
     return fallbackToRedirect();
@@ -139,8 +166,15 @@ export async function consumeGoogleRedirectResult(): Promise<string | null> {
   sessionStorage.removeItem('google_redirect_pending');
   const a = ensureFirebase();
   const result = await getRedirectResult(a);
-  if (!result) return null;
-  return result.user.getIdToken();
+  if (result) return result.user.getIdToken();
+  /* getRedirectResult can come back null even after a successful
+   * sign-in when the browser partitions the helper's storage — but the
+   * session itself often still lands in local persistence. Since we
+   * only get here when WE initiated a redirect, give auth state a
+   * moment before giving up. */
+  const recoveredUser = a.currentUser || (await waitForLocalAuthUser(a, 2500));
+  if (recoveredUser) return recoveredUser.getIdToken();
+  return null;
 }
 
 export const isFirebaseConfigured = () => !!firebaseConfig.apiKey;

@@ -2,6 +2,21 @@
   command   = "npm run build"
   publish   = "dist"
 
+# Firebase auth helper proxy — MUST come before the SPA fallback.
+# Serves /__/auth/* (and the helper's /__/firebase/* assets) from OUR
+# domain by proxying to the Firebase-hosted originals. This makes the
+# Google sign-in window finish on a same-origin page, so it can message
+# the result back to the app. With the default *.firebaseapp.com
+# authDomain, browsers that partition third-party storage (Safari,
+# newer Chrome) silently drop that message — which is why sign-in used
+# to need two attempts. Pairs with the authDomain override in
+# src/lib/firebase.ts.
+[[redirects]]
+  from   = "/__/*"
+  to     = "https://sanathanatattva.firebaseapp.com/__/:splat"
+  status = 200
+  force  = true
+
 # SPA fallback — all routes serve index.html
 [[redirects]]
   from   = "/*"
