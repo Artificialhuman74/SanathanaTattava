@@ -4,6 +4,7 @@ const db = require('../database/db');
 const { authenticate, requireTrader } = require('../middleware/auth');
 const { deductOrderInventory, returnOrderInventory, getDealerInventory, updateThreshold, checkLowStockAlerts } = require('../services/inventoryService');
 const { emitOrderUpdate } = require('../websocket/socketServer');
+const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 
 const router = express.Router();
 router.use(authenticate, requireTrader);
@@ -259,6 +260,11 @@ router.put('/consumer-orders/:id/status', [
   }
 
   db.prepare(`UPDATE consumer_orders SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(status, order.id);
+
+  /* If this order's delivery is in admin hands, its pending commission
+   * belongs to the founder — keep it in sync on every status change. */
+  try { syncAdminDeliveryCommission(order.id); }
+  catch (cErr) { console.error('[trader status] commission sync failed:', cErr.message); }
 
   emitOrderUpdate({
     orderId: order.id, orderNumber: order.order_number,

@@ -15,83 +15,9 @@ const {
 } = require('../services/containerHoldingsService');
 const { uploadProof } = require('../middleware/uploadProof');
 const { sendAdminDamageReportEmail } = require('../services/emailService');
+const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 
 const router = express.Router();
-
-/* ═════════════════════════════════════════════════════════════════════
- * Admin-delivery commission routing.
- *
- * Business rule: when a consumer order is delivered by a user with
- * role='admin' (which happens for direct orders and for admin
- * takeovers), the commission for that order belongs to the founder
- * account (barathichiru@gmail.com, referral A0000). The linked dealer
- * did not do the delivery work; the founder / admin did.
- *
- * Behaviour:
- *   - Only touches commissions that are still `pending` (never
- *     `transferred` / `confirmed` — those are already paid out).
- *   - If a pending commission exists on the order, its trader_id is
- *     reassigned to the founder.
- *   - If the order is a direct order (no linked dealer, no commission
- *     was ever created), a fresh 'direct' pending commission is created
- *     at the founder's own commission_rate.
- *
- * Keyed strictly on email — there are multiple users named "Chiranth";
- * only the founder account (referral A0000) should catch this routing.
- * ═════════════════════════════════════════════════════════════════════ */
-const ADMIN_DELIVERY_COMMISSION_EMAIL = 'barathichiru@gmail.com';
-
-function rerouteAdminDeliveryCommission(order, deliveringUser) {
-  if (!deliveringUser || deliveringUser.role !== 'admin') return;
-
-  const founder = db.prepare(
-    `SELECT id, commission_rate FROM users WHERE email = ?`
-  ).get(ADMIN_DELIVERY_COMMISSION_EMAIL);
-
-  if (!founder) {
-    console.error(
-      `[commission] admin-delivery reroute: founder account ${ADMIN_DELIVERY_COMMISSION_EMAIL} not found; skipping`
-    );
-    return;
-  }
-
-  const result = db.prepare(`
-    UPDATE commissions
-       SET trader_id = ?
-     WHERE consumer_order_id = ?
-       AND status = 'pending'
-  `).run(founder.id, order.id);
-
-  const anyExisting = db.prepare(
-    `SELECT COUNT(*) AS n FROM commissions WHERE consumer_order_id = ?`
-  ).get(order.id);
-
-  if (anyExisting.n === 0) {
-    /* Direct order that admin delivered: no commission ever created.
-     * Insert one for the founder at their own rate. */
-    const now = new Date();
-    const ws  = new Date(now); ws.setDate(now.getDate() - now.getDay() + 1);
-    const we  = new Date(ws);  we.setDate(ws.getDate() + 6);
-    const weekStart = ws.toISOString().slice(0, 10);
-    const weekEnd   = we.toISOString().slice(0, 10);
-    const commAmt = parseFloat(
-      (order.total_amount * founder.commission_rate / 100).toFixed(2)
-    );
-    db.prepare(`
-      INSERT INTO commissions
-        (trader_id, consumer_order_id, amount, rate, type, status, week_start, week_end)
-      VALUES (?, ?, ?, ?, 'direct', 'pending', ?, ?)
-    `).run(founder.id, order.id, commAmt, founder.commission_rate, weekStart, weekEnd);
-
-    console.log(
-      `[commission] admin-delivery: created direct commission for order ${order.id} (₹${commAmt} to founder)`
-    );
-  } else if (result.changes > 0) {
-    console.log(
-      `[commission] admin-delivery: rerouted ${result.changes} pending commission(s) on order ${order.id} to founder`
-    );
-  }
-}
 
 /* ── All routes require authenticated trader or admin ───────────────── */
 router.use(authenticate, requireTraderOrAdmin);
@@ -287,6 +213,11 @@ router.post('/orders/:id/takeover', (req, res) => {
     `).run(originalToPreserve, req.user.id, now, now, order.id);
 
     const updated = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(order.id);
+
+    /* Admin now owns this delivery — move the pending commission to the
+     * founder immediately, before any payout run can pick it up. */
+    try { syncAdminDeliveryCommission(updated.id); }
+    catch (err) { console.error(`[commission] admin-delivery sync failed for order ${updated.id}:`, err.message); }
 
     emitOrderUpdate({
       orderId: updated.id,
@@ -636,11 +567,11 @@ router.post(
       try { markHoldingsDelivered(order.id); }
       catch (err) { console.error(`[delivery] markHoldingsDelivered failed for order ${order.id}:`, err.message); }
 
-      /* Reroute the commission to the founder account when admin
-       * delivered this order. Non-fatal on error — we don't want a
+      /* Reroute the commission to the founder account when admin is
+       * delivering this order. Non-fatal on error — we don't want a
        * commission bookkeeping issue to block delivery confirmation. */
-      try { rerouteAdminDeliveryCommission(order, req.user); }
-      catch (err) { console.error(`[commission] admin-delivery reroute failed for order ${order.id}:`, err.message); }
+      try { syncAdminDeliveryCommission(order.id); }
+      catch (err) { console.error(`[commission] admin-delivery sync failed for order ${order.id}:`, err.message); }
 
       if (order.consumer_id) {
         notifyConsumer(

@@ -14,6 +14,7 @@ const {
 } = require('../services/inventoryService');
 const { markHoldingsDelivered } = require('../services/containerHoldingsService');
 const { notifyDealerDeliveryAssigned, notifyConsumerDeliveryAssigned } = require('../services/notificationService');
+const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -326,6 +327,12 @@ router.put('/consumer-orders/:id/status', (req, res) => {
 
       try { markHoldingsDelivered(order.id); }
       catch (hErr) { console.error('[admin override] markHoldingsDelivered failed:', hErr.message); }
+
+      /* Admin completed this delivery directly (admin_overridden_at just
+       * stamped above) — the commission belongs to the founder, not the
+       * linked dealer. Sync before the payouts page can pick it up. */
+      try { syncAdminDeliveryCommission(order.id); }
+      catch (cErr) { console.error('[admin override] commission sync failed:', cErr.message); }
     } else if (status === 'cancelled') {
       db.prepare(`
         UPDATE consumer_orders

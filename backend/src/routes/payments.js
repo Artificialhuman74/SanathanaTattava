@@ -16,6 +16,7 @@ const { auditLog } = require('../middleware/auditLog');
 const { sendOrderConfirmedEmail } = require('../services/emailService');
 const { generateInvoiceForOrder } = require('../services/invoiceService');
 const { applyStoreCredit } = require('../services/storeCreditService');
+const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 const fs = require('fs');
 
 const router = express.Router();
@@ -161,6 +162,16 @@ router.post('/verify', authConsumer, async (req, res) => {
       }
     }
   })();
+
+  /* Commission just landed with the linked dealer — but if this order's
+   * delivery is already in admin hands (direct order routed to admin, or
+   * a takeover that happened before payment), move it to the founder NOW
+   * so the payouts page never shows it under the wrong trader. For paid
+   * direct orders with no commission at all, this also records the
+   * founder's commission. Outside the payment transaction on purpose:
+   * a bookkeeping failure must never roll back a confirmed payment. */
+  try { syncAdminDeliveryCommission(order.id); }
+  catch (err) { console.error(`[commission] admin-delivery sync failed for order ${order.id}:`, err.message); }
 
   /* Notify linked dealer — show only their commission, not the customer's payment amount */
   if (order.linked_dealer_id) {
