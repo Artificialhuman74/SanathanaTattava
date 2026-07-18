@@ -447,26 +447,9 @@ router.get('/commissions/summary', (req, res) => {
 });
 
 router.post('/commissions/process-week', (req, res) => {
-  const pending = db.prepare(`
-    SELECT trader_id, week_start, week_end, COUNT(*) as count, SUM(amount) as total
-    FROM commissions WHERE status = 'pending'
-    GROUP BY trader_id, week_start, week_end
-  `).all();
-
-  const processed = db.transaction(() => {
-    let count = 0;
-    for (const row of pending) {
-      db.prepare(`
-        INSERT INTO weekly_payouts (trader_id,amount,week_start,week_end,commission_count,status,processed_at)
-        VALUES (?,?,?,?,?,'pending',CURRENT_TIMESTAMP)
-      `).run(row.trader_id, row.total, row.week_start, row.week_end, row.count);
-      db.prepare(`UPDATE commissions SET status='paid', paid_at=CURRENT_TIMESTAMP WHERE trader_id=? AND week_start=? AND week_end=? AND status='pending'`).run(row.trader_id, row.week_start, row.week_end);
-      count++;
-    }
-    return count;
-  })();
-
-  res.json({ success: true, payoutsCreated: processed });
+  const { processWeeklyPayouts } = require('../services/payoutService');
+  const result = processWeeklyPayouts('manual');
+  res.json({ success: true, payoutsCreated: result.payoutsCreated, totalAmount: result.totalAmount });
 });
 
 router.get('/commissions/payouts', (req, res) => {
@@ -563,16 +546,53 @@ router.get('/settings', (_req, res) => {
 });
 
 router.put('/settings', (req, res) => {
-  const { referral_discount_percent } = req.body;
+  const { referral_discount_percent, auto_payout_enabled, auto_payout_day, auto_payout_time } = req.body;
+  const upsert = db.prepare(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,CURRENT_TIMESTAMP)
+                             ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`);
+
   if (referral_discount_percent !== undefined) {
     const val = parseFloat(referral_discount_percent);
     if (isNaN(val) || val < 0 || val > 100) return res.status(400).json({ error: 'Discount must be 0–100' });
-    db.prepare(`INSERT INTO settings (key,value,updated_at) VALUES ('referral_discount_percent',?,CURRENT_TIMESTAMP)
-                ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
-      .run(String(val));
+    upsert.run('referral_discount_percent', String(val));
   }
+
+  if (auto_payout_enabled !== undefined) {
+    if (!['0', '1', 0, 1, true, false].includes(auto_payout_enabled)) {
+      return res.status(400).json({ error: 'auto_payout_enabled must be 0 or 1' });
+    }
+    upsert.run('auto_payout_enabled', (auto_payout_enabled === true || String(auto_payout_enabled) === '1') ? '1' : '0');
+  }
+
+  if (auto_payout_day !== undefined) {
+    const day = parseInt(auto_payout_day, 10);
+    if (isNaN(day) || day < 0 || day > 6) return res.status(400).json({ error: 'auto_payout_day must be 0 (Sunday) to 6 (Saturday)' });
+    upsert.run('auto_payout_day', String(day));
+  }
+
+  if (auto_payout_time !== undefined) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(auto_payout_time))) {
+      return res.status(400).json({ error: 'auto_payout_time must be HH:MM (24-hour)' });
+    }
+    upsert.run('auto_payout_time', String(auto_payout_time));
+  }
+
   const rows = db.prepare(`SELECT key, value FROM settings`).all();
   res.json({ settings: Object.fromEntries(rows.map(r => [r.key, r.value])) });
+});
+
+/* ── Bulk commission rate ──────────────────────────────────────────────
+ * Sets EVERY trader's commission_rate in one shot. The per-trader rate
+ * on the Partners page keeps working — this is just a mass overwrite,
+ * after which individual rates can still be edited freely. Only affects
+ * rates used for FUTURE commissions; existing commission rows keep the
+ * rate they were computed with. */
+router.put('/bulk/commission-rate', (req, res) => {
+  const rate = parseFloat(req.body.rate);
+  if (isNaN(rate) || rate < 0 || rate > 100) {
+    return res.status(400).json({ error: 'Rate must be between 0 and 100' });
+  }
+  const result = db.prepare(`UPDATE users SET commission_rate = ? WHERE role = 'trader'`).run(rate);
+  res.json({ success: true, tradersUpdated: result.changes, rate });
 });
 
 /* ── Admin Consumer Orders (direct orders) stats ─────────────────────── */

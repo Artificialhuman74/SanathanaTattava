@@ -320,6 +320,10 @@ function scheduleReviewEmails() {
 setTimeout(scheduleReviewEmails, 60_000);
 setInterval(scheduleReviewEmails, 60 * 60 * 1000);
 
+/* ── Automated weekly payouts (admin-configurable day/time, IST) ─────────── */
+const { startPayoutScheduler } = require('./services/payoutScheduler');
+startPayoutScheduler();
+
 /* ── Abandoned-order sweeper ──────────────────────────────────────────────── */
 const { sweepAbandonedOrders } = require('./services/orderSweeperService');
 function runSweeper() {

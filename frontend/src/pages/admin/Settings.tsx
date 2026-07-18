@@ -3,8 +3,10 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import {
   Settings, Percent, Save, Info, MapPin, Navigation,
-  RefreshCw, Loader2, AlertTriangle,
+  RefreshCw, Loader2, AlertTriangle, Users, Clock, Zap,
 } from 'lucide-react';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface LocationData {
   id: number;
@@ -21,6 +23,18 @@ export default function AdminSettings() {
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
 
+  // Automated payouts
+  const [autoPayoutEnabled, setAutoPayoutEnabled] = useState(true);
+  const [autoPayoutDay,     setAutoPayoutDay]     = useState('5');
+  const [autoPayoutTime,    setAutoPayoutTime]    = useState('18:00');
+  const [autoPayoutLastRun, setAutoPayoutLastRun] = useState<string | null>(null);
+  const [payoutSaving,      setPayoutSaving]      = useState(false);
+
+  // Bulk trader commission
+  const [bulkRate,       setBulkRate]       = useState('');
+  const [bulkSaving,     setBulkSaving]     = useState(false);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
+
   // Delivery location state
   const [location,          setLocation]          = useState<LocationData | null>(null);
   const [gpsUpdating,       setGpsUpdating]       = useState(false);
@@ -36,7 +50,17 @@ export default function AdminSettings() {
 
   useEffect(() => {
     api.get('/admin/settings')
-      .then(r => setDiscountPct(String(r.data.referral_discount_percent ?? 10)))
+      .then(r => {
+        /* The API wraps values in { settings: {...} }. Reading the flat
+         * shape here was the bug that kept the discount stuck at "10"
+         * on screen while the real setting applied correctly. */
+        const s = r.data.settings || {};
+        setDiscountPct(String(s.referral_discount_percent ?? 10));
+        setAutoPayoutEnabled(String(s.auto_payout_enabled ?? '1') === '1');
+        setAutoPayoutDay(String(s.auto_payout_day ?? '5'));
+        setAutoPayoutTime(String(s.auto_payout_time ?? '18:00'));
+        setAutoPayoutLastRun(s.auto_payout_last_run ?? null);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     fetchLocation();
@@ -107,6 +131,45 @@ export default function AdminSettings() {
       toast.error(err.response?.data?.error || 'Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePayoutSchedule = async () => {
+    setPayoutSaving(true);
+    try {
+      await api.put('/admin/settings', {
+        auto_payout_enabled: autoPayoutEnabled ? '1' : '0',
+        auto_payout_day:     autoPayoutDay,
+        auto_payout_time:    autoPayoutTime,
+      });
+      toast.success(
+        autoPayoutEnabled
+          ? `Automated payouts on: every ${DAY_NAMES[Number(autoPayoutDay)]} at ${autoPayoutTime} IST.`
+          : 'Automated payouts turned off.'
+      );
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to save payout schedule');
+    } finally {
+      setPayoutSaving(false);
+    }
+  };
+
+  const handleBulkCommission = async () => {
+    const rate = parseFloat(bulkRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      toast.error('Rate must be between 0 and 100');
+      return;
+    }
+    setBulkSaving(true);
+    try {
+      const { data } = await api.put('/admin/bulk/commission-rate', { rate });
+      toast.success(`Commission set to ${rate}% for ${data.tradersUpdated} trader${data.tradersUpdated === 1 ? '' : 's'}.`);
+      setBulkConfirming(false);
+      setBulkRate('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update commission rates');
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -197,6 +260,165 @@ export default function AdminSettings() {
           </div>
         )}
       </div>
+      {/* ── Automated Payouts ─────────────────────────────────────────── */}
+      <div className="card p-6 space-y-5">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+          <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+            <Zap className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-900">Automated Payouts</h2>
+            <p className="text-xs text-slate-400">Process pending commissions into weekly payouts on a schedule</p>
+          </div>
+        </div>
+
+        {/* Enable toggle */}
+        <label className="flex items-center justify-between cursor-pointer select-none">
+          <div>
+            <p className="font-semibold text-sm text-slate-800">Run payouts automatically</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Does exactly what the "Process Week" button does, on schedule. You'll get a notification each time it runs.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoPayoutEnabled}
+            onClick={() => setAutoPayoutEnabled(v => !v)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              autoPayoutEnabled ? 'bg-brand-600' : 'bg-slate-300'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
+              autoPayoutEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </label>
+
+        {autoPayoutEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label flex items-center gap-1.5">
+                <Clock size={14} /> Day of the week
+              </label>
+              <select
+                value={autoPayoutDay}
+                onChange={e => setAutoPayoutDay(e.target.value)}
+                className="form-input"
+              >
+                {DAY_NAMES.map((name, i) => (
+                  <option key={i} value={String(i)}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label flex items-center gap-1.5">
+                <Clock size={14} /> Time (IST)
+              </label>
+              <input
+                type="time"
+                value={autoPayoutTime}
+                onChange={e => setAutoPayoutTime(e.target.value)}
+                className="form-input"
+              />
+            </div>
+          </div>
+        )}
+
+        {autoPayoutEnabled && (
+          <p className="text-xs text-slate-500 bg-parchment-100 border border-[#e8dcc8] rounded-lg px-3 py-2">
+            If the server is offline (or this is enabled) after the scheduled time on the scheduled day, the run catches up the same day instead of skipping a week. At most one automatic run per day.
+          </p>
+        )}
+
+        {autoPayoutLastRun && (
+          <p className="text-xs text-slate-400">
+            Last automatic run: {new Date(autoPayoutLastRun).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+          </p>
+        )}
+
+        <button
+          onClick={handleSavePayoutSchedule}
+          disabled={payoutSaving}
+          className="btn-primary flex items-center gap-2 px-6"
+        >
+          {payoutSaving
+            ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />
+            : <Save size={16} />}
+          {payoutSaving ? 'Saving…' : 'Save Schedule'}
+        </button>
+      </div>
+
+      {/* ── Bulk Trader Commission ────────────────────────────────────── */}
+      <div className="card p-6 space-y-5">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+            <Users className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-900">Trader Commissions</h2>
+            <p className="text-xs text-slate-400">Set every trader's commission rate in one go</p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <Info size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800 leading-relaxed">
+            This overwrites the rate for <strong>all traders at once</strong>. Individual rates can still be adjusted per trader on the Partners page afterwards. Already-recorded commissions keep the rate they were computed with; only future orders use the new rate.
+          </p>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div className="relative max-w-[10rem]">
+            <label className="form-label flex items-center gap-1.5">
+              <Percent size={14} /> Rate for all traders
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={bulkRate}
+              onChange={e => { setBulkRate(e.target.value); setBulkConfirming(false); }}
+              placeholder="e.g. 10"
+              className="form-input pr-9 text-lg font-bold text-slate-900"
+            />
+            <span className="absolute right-3 bottom-3 text-slate-400 font-bold">%</span>
+          </div>
+
+          {!bulkConfirming ? (
+            <button
+              onClick={() => {
+                const rate = parseFloat(bulkRate);
+                if (isNaN(rate) || rate < 0 || rate > 100) { toast.error('Rate must be between 0 and 100'); return; }
+                setBulkConfirming(true);
+              }}
+              className="btn-secondary px-5"
+            >
+              Apply to all traders
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBulkCommission}
+                disabled={bulkSaving}
+                className="px-5 py-2.5 rounded-[18px] bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 flex items-center gap-2"
+              >
+                {bulkSaving && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+                {bulkSaving ? 'Applying…' : `Yes, set every trader to ${bulkRate}%`}
+              </button>
+              <button
+                onClick={() => setBulkConfirming(false)}
+                disabled={bulkSaving}
+                className="btn-ghost px-4"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── Delivery Location ─────────────────────────────────────────── */}
       <div className="card p-6 space-y-5">
         <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
