@@ -2,15 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import {
-  Users, Package, ShoppingBag, DollarSign, TrendingUp,
-  AlertTriangle, ChevronRight, BarChart3, ArrowUpRight, Wallet,
+  Users, Package, ShoppingBag, TrendingUp, Wallet,
+  AlertTriangle, ChevronRight, ArrowUpRight, ShieldAlert,
+  RotateCcw, PackageX, ClipboardList, CheckCircle2, BarChart3,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Legend, Line, ComposedChart,
 } from 'recharts';
 import { formatIstDate } from '../../utils/dateTime';
 
+/* Field names match the /admin/stats response exactly. The previous
+ * dashboard read consumerOrders / pendingCommissions / recentConsumerOrders,
+ * which the API never sends — so those cards and the orders table always
+ * rendered blank. The real keys are totalCOrders / pendingComm / recentCOrders. */
 interface AdminStats {
   totalTraders: number;
   tier1Traders: number;
@@ -18,13 +23,29 @@ interface AdminStats {
   totalConsumers: number;
   totalProducts: number;
   lowStock: number;
-  totalOrders: number;
-  consumerOrders: number;
+  totalCOrders: number;
   revenue: number;
-  pendingCommissions: number;
-  pendingOrders: number;
-  recentConsumerOrders: any[];
-  categoryStats: any[];
+  pendingComm: number;
+  recentCOrders: any[];
+}
+
+interface MonthlyPoint {
+  month: string;
+  income: number;
+  expense: number;
+  net: number;
+}
+
+interface AlertItem { label: string; value: string }
+interface Alert {
+  key: string;
+  severity: 'critical' | 'warning' | 'info';
+  icon: 'dispute' | 'container' | 'stock' | 'order';
+  title: string;
+  detail: string;
+  count: number;
+  link: string;
+  items: AlertItem[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -36,15 +57,48 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled:  'bg-red-100 text-red-700',
 };
 
-const PIE_COLORS = ['#2563eb','#0d9488','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+/* Severity → the full visual treatment for an alert row. Semantic colour is
+ * reserved for exactly this: red = conflict, amber = owed action, blue =
+ * routine queue. Nothing else on the page competes for these hues. */
+const SEVERITY_STYLE: Record<Alert['severity'], { ring: string; iconWrap: string }> = {
+  critical: { ring: 'border-red-200 hover:border-red-300',     iconWrap: 'bg-red-50 text-red-600' },
+  warning:  { ring: 'border-amber-200 hover:border-amber-300', iconWrap: 'bg-amber-50 text-amber-600' },
+  info:     { ring: 'border-blue-200 hover:border-blue-300',   iconWrap: 'bg-blue-50 text-blue-600' },
+};
+
+const ALERT_ICON: Record<Alert['icon'], React.ElementType> = {
+  dispute:   ShieldAlert,
+  container: RotateCcw,
+  stock:     PackageX,
+  order:     ClipboardList,
+};
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+const monthLabel = (m: string) => {
+  const [y, mo] = m.split('-');
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-IN', { month: 'short' });
+};
 
 export default function AdminDashboard() {
   const [stats,   setStats]   = useState<AdminStats | null>(null);
+  const [monthly, setMonthly] = useState<MonthlyPoint[]>([]);
+  const [alerts,  setAlerts]  = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alertsLoading, setAlertsLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('/admin/stats').then(r => setStats(r.data)).finally(() => setLoading(false));
+    Promise.all([
+      api.get('/admin/stats'),
+      api.get('/admin/finance/monthly', { params: { months: 12 } }),
+    ])
+      .then(([s, m]) => { setStats(s.data); setMonthly(m.data.series || m.data || []); })
+      .finally(() => setLoading(false));
+
+    api.get('/admin/action-center')
+      .then(r => setAlerts(r.data.alerts || []))
+      .catch(() => {})
+      .finally(() => setAlertsLoading(false));
   }, []);
 
   if (loading) return (
@@ -55,39 +109,31 @@ export default function AdminDashboard() {
   if (!stats) return null;
 
   const statCards = [
-    { label: 'Total Traders',       value: stats.totalTraders,  sub: `${stats.tier1Traders} Tier 1 · ${stats.tier2Traders} Sub-Dealers`, icon: Users,        color: 'brand',   link: '/admin/traders' },
-    { label: 'Consumers',           value: stats.totalConsumers, sub: 'Registered consumers',                                            icon: Users,        color: 'teal',    link: '/admin/consumer-orders' },
-    { label: 'Products',            value: stats.totalProducts, sub: `${stats.lowStock} low stock`,                                      icon: Package,      color: 'emerald', link: '/admin/inventory' },
-    { label: 'Consumer Orders',     value: stats.consumerOrders, sub: 'Total placed',                                                    icon: ShoppingBag,  color: 'pink',    link: '/admin/consumer-orders' },
-    { label: 'Total Revenue',       value: `₹${stats.revenue?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'From delivered orders', icon: TrendingUp, color: 'gold', link: null },
-    { label: 'Pending Commissions', value: `₹${stats.pendingCommissions?.toLocaleString('en-IN', { minimumFractionDigits: 2 }) ?? '0.00'}`, sub: 'To be paid out', icon: Wallet, color: 'amber', link: '/admin/payouts' },
+    { label: 'Total Revenue',       value: inr(stats.revenue || 0),          sub: 'From delivered orders',   icon: TrendingUp,  color: 'emerald', link: '/admin/finance' },
+    { label: 'Pending Commissions', value: inr(stats.pendingComm || 0), sub: 'To be paid out',        icon: Wallet,      color: 'amber',   link: '/admin/payouts' },
+    { label: 'Consumer Orders',     value: stats.totalCOrders,             sub: 'Total placed',            icon: ShoppingBag, color: 'brand',   link: '/admin/consumer-orders' },
+    { label: 'Partners',            value: stats.totalTraders,               sub: `${stats.tier1Traders} Tier 1 · ${stats.tier2Traders} Sub`, icon: Users, color: 'teal', link: '/admin/traders' },
   ];
 
   const colorMap: Record<string, string> = {
     brand:   'bg-brand-50 text-brand-600',
     teal:    'bg-teal-50 text-teal-600',
     emerald: 'bg-emerald-50 text-emerald-600',
-    violet:  'bg-violet-50 text-violet-600',
-    pink:    'bg-pink-50 text-pink-600',
-    gold:    'bg-yellow-50 text-yellow-600',
     amber:   'bg-amber-50 text-amber-600',
   };
 
-  // Build bar chart data from category stats
-  const barData = (stats.categoryStats || []).map((c: any) => ({
-    category: c.category?.length > 10 ? c.category.substring(0, 10) + '...' : c.category,
-    count: c.count,
-  }));
+  const chartData = monthly.map(m => ({ ...m, label: monthLabel(m.month) }));
+  const thisMonth = monthly.length ? monthly[monthly.length - 1] : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
-        <p className="text-slate-500 text-sm mt-1">Overview of your TradeHub platform activity</p>
+        <p className="text-slate-500 text-sm mt-1">Your books, and anything that needs attention</p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* ── Stat cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {statCards.map(({ label, value, sub, icon: Icon, color, link }) => (
           <div
             key={label}
@@ -99,90 +145,161 @@ export default function AdminDashboard() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-slate-500 text-xs font-medium">{label}</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-0.5">{value}</p>
+              <p className="text-xl font-extrabold text-slate-900 mt-0.5 truncate">{value}</p>
               <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>
             </div>
-            {link && <ChevronRight size={16} className="text-slate-300 flex-shrink-0 mt-1" />}
           </div>
         ))}
       </div>
 
-      {/* Alerts */}
-      {stats.lowStock > 0 && (
-        <div className="flex flex-wrap gap-3">
-          <div
-            className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm cursor-pointer hover:bg-amber-100 transition-colors"
-            onClick={() => navigate('/admin/inventory')}
-          >
-            <AlertTriangle size={15} />
-            <span className="font-medium">{stats.lowStock} products running low on stock</span>
-            <ArrowUpRight size={13} />
-          </div>
-        </div>
-      )}
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Category Bar Chart */}
-        <div className="card p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        {/* ── Finance & Books ──────────────────────────────────────────── */}
+        <div className="card p-5 lg:col-span-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Inventory by Category</h3>
-              <p className="text-slate-400 text-xs mt-0.5">Products per category</p>
+              <h3 className="font-bold text-slate-900 text-base">Finance &amp; Books</h3>
+              <p className="text-slate-400 text-xs mt-0.5">Income vs expense, and net, over 12 months</p>
             </div>
-            <button onClick={() => navigate('/admin/inventory')} className="btn-ghost text-brand-600 text-xs">View all <ChevronRight size={14} /></button>
+            <button
+              onClick={() => navigate('/admin/finance')}
+              className="btn-ghost text-brand-600 text-xs flex items-center gap-1 flex-shrink-0"
+            >
+              Open Finance <ChevronRight size={14} />
+            </button>
           </div>
-          {barData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={barData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="category" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+
+          {thisMonth && (
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">This month net</p>
+                <p className={`text-lg font-extrabold ${thisMonth.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {thisMonth.net >= 0 ? '+' : '−'}{inr(Math.abs(thisMonth.net))}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Income</p>
+                <p className="text-lg font-bold text-slate-700">{inr(thisMonth.income)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Expense</p>
+                <p className="text-lg font-bold text-slate-700">{inr(thisMonth.expense)}</p>
+              </div>
+            </div>
+          )}
+
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={chartData} margin={{ top: 5, right: 6, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee6d6" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}
+                       tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} width={38} />
                 <Tooltip
-                  formatter={(v: any) => [v, 'Products']}
-                  contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '13px' }}
+                  formatter={(v: number, name: string) => [inr(v), name]}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e8dcc8', fontSize: '13px', background: '#fffbf2' }}
+                  cursor={{ fill: 'rgba(180,160,120,0.08)' }}
                 />
-                <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Legend iconSize={9} wrapperStyle={{ fontSize: '11px', paddingTop: 4 }} />
+                <Bar dataKey="income"  name="Income"  fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="expense" name="Expense" fill="#e08a3c" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                <Line type="monotone" dataKey="net" name="Net" stroke="#1a6b2e" strokeWidth={2.5} dot={{ r: 2.5 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+            <div className="flex flex-col items-center justify-center h-52 text-slate-400">
               <BarChart3 size={32} className="mb-2 opacity-30" />
-              <p className="text-sm">No category data yet</p>
+              <p className="text-sm">No financial activity yet</p>
             </div>
           )}
         </div>
 
-        {/* Category Pie */}
-        <div className="card p-5">
-          <div className="mb-4">
-            <h3 className="font-bold text-slate-900 text-base">Category Distribution</h3>
-            <p className="text-slate-400 text-xs mt-0.5">Product breakdown</p>
+        {/* ── Action Center ────────────────────────────────────────────── */}
+        <div className="card p-5 lg:col-span-2 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-slate-900 text-base">Action Center</h3>
+              <p className="text-slate-400 text-xs mt-0.5">Everything that needs you, most urgent first</p>
+            </div>
+            {alerts.length > 0 && (
+              <span className="flex-shrink-0 min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                {alerts.length}
+              </span>
+            )}
           </div>
-          {(stats.categoryStats || []).length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={stats.categoryStats} dataKey="count" nameKey="category" cx="50%" cy="50%" outerRadius={65} stroke="none">
-                  {(stats.categoryStats || []).map((_: any, i: number) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: '10px', fontSize: '12px' }} />
-                <Legend iconSize={8} wrapperStyle={{ fontSize: '10px' }} />
-              </PieChart>
-            </ResponsiveContainer>
+
+          {alertsLoading ? (
+            <div className="flex-1 flex items-center justify-center py-10">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-10 px-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+                <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+              </div>
+              <p className="font-semibold text-slate-700 text-sm">All clear</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-[15rem]">
+                No disputes, no low stock, no refunds waiting. Nothing needs your attention right now.
+              </p>
+            </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-              <BarChart3 size={32} className="mb-2 opacity-30" />
-              <p className="text-sm">No data yet</p>
+            <div className="space-y-3">
+              {alerts.map(a => {
+                const s = SEVERITY_STYLE[a.severity];
+                const Icon = ALERT_ICON[a.icon];
+                return (
+                  <button
+                    key={a.key}
+                    onClick={() => navigate(a.link)}
+                    className={`w-full text-left rounded-xl border bg-white p-3.5 transition-all hover:shadow-sm ${s.ring}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${s.iconWrap}`}>
+                        <Icon size={17} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900 text-sm leading-tight">{a.title}</p>
+                          <ArrowUpRight size={13} className="text-slate-300 flex-shrink-0 ml-auto" />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-snug">{a.detail}</p>
+                        {a.items.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {a.items.map((it, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-parchment-100 border border-[#e8dcc8] rounded-md px-1.5 py-0.5 text-slate-600">
+                                <span className="truncate max-w-[8rem]">{it.label}</span>
+                                <span className="font-semibold text-slate-800">{it.value}</span>
+                              </span>
+                            ))}
+                            {a.count > a.items.length && (
+                              <span className="text-[11px] text-slate-400 px-1 py-0.5">+{a.count - a.items.length} more</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* Recent Consumer Orders */}
+      {/* ── Low-stock quick banner (kept: one-tap jump when stock is short) ── */}
+      {stats.lowStock > 0 && (
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm cursor-pointer hover:bg-amber-100 transition-colors w-fit"
+          onClick={() => navigate('/admin/inventory')}
+        >
+          <AlertTriangle size={15} />
+          <span className="font-medium">{stats.lowStock} {stats.lowStock === 1 ? 'product is' : 'products are'} running low on stock</span>
+          <ArrowUpRight size={13} />
+        </div>
+      )}
+
+      {/* ── Recent Consumer Orders ───────────────────────────────────────── */}
       <div className="card">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
           <div>
             <h3 className="font-bold text-slate-900 text-base">Recent Consumer Orders</h3>
             <p className="text-slate-400 text-xs mt-0.5">Latest orders from consumers</p>
@@ -204,7 +321,7 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {(stats.recentConsumerOrders || []).map((o: any) => (
+              {(stats.recentCOrders || []).map((o: any) => (
                 <tr key={o.id}>
                   <td className="font-mono text-brand-600 font-medium text-xs">{o.order_number}</td>
                   <td>
@@ -212,10 +329,12 @@ export default function AdminDashboard() {
                     <p className="text-xs text-slate-400">{o.consumer_phone}</p>
                   </td>
                   <td>
-                    <p className="text-sm text-slate-700">{o.dealer_name}</p>
-                    <span className={`badge text-xs ${o.dealer_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {o.dealer_tier === 1 ? 'Tier 1' : 'Sub-Dealer'}
-                    </span>
+                    <p className="text-sm text-slate-700">{o.dealer_name || '—'}</p>
+                    {o.dealer_name && (
+                      <span className={`badge text-xs ${o.dealer_tier === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                        {o.dealer_tier === 1 ? 'Tier 1' : 'Sub-Dealer'}
+                      </span>
+                    )}
                   </td>
                   <td className="font-semibold">₹{parseFloat(o.total_amount).toFixed(2)}</td>
                   <td>
@@ -228,7 +347,7 @@ export default function AdminDashboard() {
               ))}
             </tbody>
           </table>
-          {(stats.recentConsumerOrders || []).length === 0 && (
+          {(stats.recentCOrders || []).length === 0 && (
             <div className="text-center py-10 text-slate-400">
               <ShoppingBag size={32} className="mx-auto mb-2 opacity-30" />
               <p>No consumer orders yet</p>
@@ -237,15 +356,17 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Quick Links */}
+      {/* ── Quick Links ──────────────────────────────────────────────────── */}
       <div>
         <h3 className="font-bold text-slate-900 mb-3">Quick Links</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: 'Inventory',        icon: Package,      path: '/admin/inventory',       color: 'bg-emerald-50 text-emerald-600' },
-            { label: 'Partners',         icon: Users,        path: '/admin/traders',         color: 'bg-brand-50 text-brand-600' },
-            { label: 'Consumer Orders',  icon: ShoppingBag,  path: '/admin/consumer-orders', color: 'bg-pink-50 text-pink-600' },
-            { label: 'Payouts',          icon: DollarSign,   path: '/admin/payouts',         color: 'bg-amber-50 text-amber-600' },
+            { label: 'Inventory',        icon: Package,      path: '/admin/inventory',         color: 'bg-emerald-50 text-emerald-600' },
+            { label: 'Partners',         icon: Users,        path: '/admin/traders',           color: 'bg-brand-50 text-brand-600' },
+            { label: 'Consumer Orders',  icon: ShoppingBag,  path: '/admin/consumer-orders',   color: 'bg-pink-50 text-pink-600' },
+            { label: 'Payouts',          icon: Wallet,       path: '/admin/payouts',           color: 'bg-amber-50 text-amber-600' },
+            { label: 'Finance',          icon: TrendingUp,   path: '/admin/finance',           color: 'bg-teal-50 text-teal-600' },
+            { label: 'Containers',       icon: RotateCcw,    path: '/admin/container-finance',  color: 'bg-blue-50 text-blue-600' },
           ].map(({ label, icon: Icon, path, color }) => (
             <button
               key={label}

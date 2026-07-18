@@ -76,6 +76,129 @@ router.get('/stats', (req, res) => {
              recentCOrders, categoryStats });
 });
 
+/* ── Action Center ────────────────────────────────────────────────────────
+ * One consolidated feed of things that need the admin's attention, assembled
+ * server-side and returned already prioritised. The dashboard just renders
+ * whatever comes back, so the section is fully dynamic: quiet when the
+ * business is healthy, loud only when something is actually wrong.
+ *
+ * Severity drives ordering + colour on the client:
+ *   critical  — money/customer conflict that can escalate (open disputes)
+ *   warning   — owed action with a clock (refunds to pay, stock to restock)
+ *   info      — routine queue (orders awaiting confirmation)
+ * ───────────────────────────────────────────────────────────────────────── */
+router.get('/action-center', (_req, res) => {
+  try {
+    const alerts = [];
+
+    /* 1) Open container damage disputes — a consumer is contesting a
+     *    forfeited deposit. Highest priority: it's a live disagreement. */
+    const disputes = db.prepare(`
+      SELECT h.id, h.deposit_amount, h.dispute_deadline, c.name AS consumer_name
+        FROM container_holdings h
+        JOIN consumers c ON c.id = h.consumer_id
+       WHERE h.status = 'forfeited' AND h.damage_dispute_status = 'open'
+       ORDER BY h.dispute_opened_at ASC
+    `).all();
+    if (disputes.length) {
+      alerts.push({
+        key: 'disputes',
+        severity: 'critical',
+        icon: 'dispute',
+        title: `${disputes.length} open ${disputes.length === 1 ? 'dispute' : 'disputes'}`,
+        detail: 'Consumers are contesting a forfeited deposit. Resolve before the deadline.',
+        count: disputes.length,
+        link: '/admin/holdings',
+        items: disputes.slice(0, 4).map(d => ({
+          label: d.consumer_name,
+          value: `₹${Number(d.deposit_amount).toFixed(0)}`,
+        })),
+      });
+    }
+
+    /* 2) Pending container refunds — consumer asked for their deposit back;
+     *    a pickup + settlement is owed. */
+    const refunds = db.prepare(`
+      SELECT h.id, h.deposit_amount, h.refund_destination, c.name AS consumer_name
+        FROM container_holdings h
+        JOIN consumers c ON c.id = h.consumer_id
+       WHERE h.status = 'refund_requested'
+       ORDER BY h.requested_at ASC
+    `).all();
+    if (refunds.length) {
+      const owed = refunds.reduce((s, r) => s + Number(r.deposit_amount || 0), 0);
+      alerts.push({
+        key: 'refunds',
+        severity: 'warning',
+        icon: 'container',
+        title: `${refunds.length} container ${refunds.length === 1 ? 'refund' : 'refunds'} to settle`,
+        detail: `₹${owed.toFixed(0)} in deposits waiting to be collected and refunded.`,
+        count: refunds.length,
+        link: '/admin/container-finance',
+        items: refunds.slice(0, 4).map(r => ({
+          label: r.consumer_name,
+          value: `₹${Number(r.deposit_amount).toFixed(0)}`,
+        })),
+      });
+    }
+
+    /* 3) Low-stock products — at or below their reorder threshold. */
+    const lowStock = db.prepare(`
+      SELECT name, stock, min_stock, unit
+        FROM products
+       WHERE status = 'active' AND stock <= min_stock
+       ORDER BY (stock - min_stock) ASC, name ASC
+    `).all();
+    if (lowStock.length) {
+      alerts.push({
+        key: 'low-stock',
+        severity: 'warning',
+        icon: 'stock',
+        title: `${lowStock.length} ${lowStock.length === 1 ? 'product' : 'products'} low on stock`,
+        detail: 'At or below the reorder threshold. Restock before they run out.',
+        count: lowStock.length,
+        link: '/admin/inventory',
+        items: lowStock.slice(0, 4).map(p => ({
+          label: p.name,
+          value: `${p.stock} ${p.unit || 'left'}`,
+        })),
+      });
+    }
+
+    /* 4) Orders awaiting confirmation — routine queue, lowest urgency. */
+    const pendingOrders = db.prepare(`
+      SELECT co.order_number, c.name AS consumer_name, co.total_amount
+        FROM consumer_orders co
+        JOIN consumers c ON c.id = co.consumer_id
+       WHERE co.status = 'pending'
+       ORDER BY co.created_at ASC
+    `).all();
+    if (pendingOrders.length) {
+      alerts.push({
+        key: 'pending-orders',
+        severity: 'info',
+        icon: 'order',
+        title: `${pendingOrders.length} ${pendingOrders.length === 1 ? 'order' : 'orders'} awaiting confirmation`,
+        detail: 'New consumer orders that have not been confirmed yet.',
+        count: pendingOrders.length,
+        link: '/admin/consumer-orders',
+        items: pendingOrders.slice(0, 4).map(o => ({
+          label: o.consumer_name,
+          value: `₹${Number(o.total_amount).toFixed(0)}`,
+        })),
+      });
+    }
+
+    const order = { critical: 0, warning: 1, info: 2 };
+    alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+
+    res.json({ alerts, totalCount: alerts.reduce((s, a) => s + a.count, 0) });
+  } catch (err) {
+    console.error('GET /admin/action-center error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /* ── Products ─────────────────────────────────────────────────────────── */
 router.get('/products', (req, res) => {
   const { search, category, status } = req.query;
