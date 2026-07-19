@@ -1,27 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
   <!-- Homepage -->
   <url>
     <loc>https://sanathanatattva.shop/</loc>
-    <lastmod>2026-04-10</lastmod>
+    <lastmod>2026-07-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://sanathanatattva.shop/og-image.jpg</image:loc>
+      <image:title>Sanathana Tattva — cold-pressed oils</image:title>
+    </image:image>
   </url>
 
   <!-- Shop -->
   <url>
     <loc>https://sanathanatattva.shop/shop</loc>
-    <lastmod>2026-04-10</lastmod>
+    <lastmod>2026-07-18</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
+  </url>
+
+  <!-- Legal / policies (Terms, Privacy, Refunds, Shipping, Grievance) -->
+  <url>
+    <loc>https://sanathanatattva.shop/shop/legal</loc>
+    <lastmod>2026-07-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
   </url>
 
   <!-- Support -->
   <url>
     <loc>https://sanathanatattva.shop/shop/support</loc>
-    <lastmod>2026-04-10</lastmod>
+    <lastmod>2026-07-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

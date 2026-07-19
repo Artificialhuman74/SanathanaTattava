@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
+import { useSeo } from '../../hooks/useSeo';
 import toast from 'react-hot-toast';
 import {
   Phone, Mail, MessageCircle, Package, Truck,
@@ -63,6 +64,11 @@ const PAYMENT_LABELS: Record<string, string> = {
 export default function Support() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
+  useSeo({
+    title: 'Help & Support | Sanathana Tattva',
+    description: 'Get help with your Sanathana Tattva order, delivery, container returns or refunds. Reach our support team by phone, email or WhatsApp.',
+    path: '/shop/support',
+  });
   const [orders,  setOrders]  = useState<ConsumerOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<ConsumerOrder | null>(null);

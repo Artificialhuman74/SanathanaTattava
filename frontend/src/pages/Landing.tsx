@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PARTNER_SITE_URL } from '../appMode';
 import LiquidBottle from '../components/LiquidBottle';
+import { useSeo } from '../hooks/useSeo';
 
 /* ════════════════════════════════════════════════════════════════════════
  *  Sanathana Tattva — Landing
@@ -737,6 +738,15 @@ function StaggeredPhrase({ text, className, style }: { text: string; className?:
 export default function Landing() {
   const navigate = useNavigate();
   const reducedMotion = usePrefersReducedMotion();
+
+  /* Homepage keeps the index.html defaults; declaring them here restores
+   * the title/description/canonical when the visitor navigates back from
+   * /shop or /shop/legal. */
+  useSeo({
+    title: 'Sanathana Tattva — Authentic Cold Pressed Oils | Pure & Natural',
+    description: 'Sanathana Tattva offers authentic cold pressed oils — coconut, sesame, groundnut and more — made with traditional wooden churners. 100% pure, chemical-free, delivered to your door.',
+    path: '/',
+  });
 
   const [scrollY, setScrollY] = useState(0);
   useEffect(() => {

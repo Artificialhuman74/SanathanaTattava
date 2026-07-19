@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useSeo } from '../../hooks/useSeo';
 import {
   ScrollText, Lock, RotateCcw, Truck, ShieldCheck,
   ArrowLeft, ChevronRight, Mail, Phone, MapPin, Printer,
@@ -35,6 +36,11 @@ type SectionId = typeof SECTIONS[number]['id'];
 
 export default function Legal() {
   const location = useLocation();
+  useSeo({
+    title: 'Policies — Terms, Privacy, Refunds & Grievance | Sanathana Tattva',
+    description: 'Terms of use, privacy policy, refund and cancellation policy, shipping policy, and grievance officer contact for Sanathana Tattva (Gravity Traders).',
+    path: '/shop/legal',
+  });
   const [active, setActive] = useState<SectionId>('terms');
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
     terms: null, privacy: null, refunds: null, shipping: null, grievance: null,

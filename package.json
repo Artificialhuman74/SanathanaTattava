@@ -25,5 +25,8 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.59.1"
+  },
+  "dependencies": {
+    "netlify": "^26.2.0"
   }
 }

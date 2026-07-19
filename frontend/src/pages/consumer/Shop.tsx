@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSeo } from '../../hooks/useSeo';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import RollingNumber from '../../components/RollingNumber';
@@ -152,6 +153,12 @@ const SHOP_INTRO_KEY = 'st_shop_intro_seen';
 export default function Shop() {
   const { consumer } = useAuth();
   const navigate = useNavigate();
+
+  useSeo({
+    title: 'Shop Cold-Pressed Oils — Coconut, Groundnut, Sunflower | Sanathana Tattva',
+    description: 'Buy cold-pressed coconut, groundnut and sunflower oil online. Pressed in a wooden ghani without heat, delivered in a reusable steel can across South India.',
+    path: '/shop',
+  });
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);

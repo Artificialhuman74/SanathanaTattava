@@ -38,55 +38,125 @@
     <!-- ── Robots ────────────────────────────────────────────────────────── -->
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
+    <!-- ── OG image type + secure url (better previews) ──────────────────── -->
+    <meta property="og:image:type"       content="image/jpeg" />
+    <meta property="og:image:secure_url" content="https://sanathanatattva.shop/og-image.jpg" />
+
     <!-- ── Favicon & PWA ─────────────────────────────────────────────────── -->
     <link rel="icon"             type="image/png" href="/logo-192.png" />
     <link rel="apple-touch-icon" href="/logo-192.png" />
+    <link rel="manifest"         href="/site.webmanifest" />
     <meta name="theme-color" content="#14532d" />
+    <meta name="apple-mobile-web-app-title" content="Sanathana Tattva" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="preconnect" href="https://checkout.razorpay.com" />
 
-    <!-- ── Structured Data — Organization ───────────────────────────────── -->
+    <!-- ── Structured Data — linked @graph (Organization + WebSite + Store) ──
+         One graph so Google connects the entities via @id. All values are
+         real: address + FSSAI from the registration certificate, states
+         served from the business's actual delivery area. No fabricated
+         ratings. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "Sanathana Tattva",
-      "url": "https://sanathanatattva.shop",
-      "logo": "https://sanathanatattva.shop/logo-192.png",
-      "description": "Authentic cold pressed oils made with traditional wooden churners. 100% pure, chemical-free.",
-      "sameAs": []
-    }
-    </script>
-
-    <!-- ── Structured Data — WebSite (enables Sitelinks search box) ──────── -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Sanathana Tattva",
-      "url": "https://sanathanatattva.shop",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": {
-          "@type": "EntryPoint",
-          "urlTemplate": "https://sanathanatattva.shop/shop?search={search_term_string}"
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://sanathanatattva.shop/#organization",
+          "name": "Sanathana Tattva",
+          "legalName": "Gravity Traders",
+          "url": "https://sanathanatattva.shop",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://sanathanatattva.shop/logo-192.png",
+            "width": 192,
+            "height": 192
+          },
+          "image": "https://sanathanatattva.shop/og-image.jpg",
+          "description": "A family-run business pressing cold-pressed coconut, groundnut and sunflower oil in a traditional wooden ghani, without heat, delivered in a reusable steel can.",
+          "email": "support@sanathanatattva.shop",
+          "telephone": "+91-99729-22415",
+          "foundingLocation": "Tumkur, Karnataka, India",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "164/1A, Halekatte, Kachihalli Village, Mayasandra, Turuvekere Taluk",
+            "addressLocality": "Tumkur",
+            "addressRegion": "Karnataka",
+            "postalCode": "572227",
+            "addressCountry": "IN"
+          },
+          "identifier": {
+            "@type": "PropertyValue",
+            "propertyID": "FSSAI",
+            "value": "21226159000012"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "telephone": "+91-99729-22415",
+            "email": "support@sanathanatattva.shop",
+            "areaServed": "IN",
+            "availableLanguage": ["en", "kn"]
+          },
+          "sameAs": []
         },
-        "query-input": "required name=search_term_string"
-      }
-    }
-    </script>
-
-    <!-- ── Structured Data — Store ───────────────────────────────────────── -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Store",
-      "name": "Sanathana Tattva",
-      "url": "https://sanathanatattva.shop/shop",
-      "image": "https://sanathanatattva.shop/og-image.jpg",
-      "description": "Pure cold pressed oils — coconut, sesame, groundnut and more. Made with traditional wooden churners, chemical-free.",
-      "priceRange": "₹₹",
-      "currenciesAccepted": "INR",
-      "paymentAccepted": "Credit Card, Debit Card, UPI, Net Banking",
-      "areaServed": "IN"
+        {
+          "@type": "WebSite",
+          "@id": "https://sanathanatattva.shop/#website",
+          "name": "Sanathana Tattva",
+          "url": "https://sanathanatattva.shop",
+          "inLanguage": "en-IN",
+          "publisher": { "@id": "https://sanathanatattva.shop/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://sanathanatattva.shop/shop?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": ["Store", "LocalBusiness"],
+          "@id": "https://sanathanatattva.shop/#store",
+          "name": "Sanathana Tattva",
+          "url": "https://sanathanatattva.shop/shop",
+          "image": "https://sanathanatattva.shop/og-image.jpg",
+          "logo": "https://sanathanatattva.shop/logo-192.png",
+          "description": "Cold-pressed coconut, groundnut and sunflower oil, pressed slowly in a wooden ghani without heat and delivered in a reusable steel can.",
+          "parentOrganization": { "@id": "https://sanathanatattva.shop/#organization" },
+          "telephone": "+91-99729-22415",
+          "email": "support@sanathanatattva.shop",
+          "priceRange": "₹₹",
+          "currenciesAccepted": "INR",
+          "paymentAccepted": "UPI, Credit Card, Debit Card, Net Banking, Cash on Delivery",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "164/1A, Halekatte, Kachihalli Village, Mayasandra, Turuvekere Taluk",
+            "addressLocality": "Tumkur",
+            "addressRegion": "Karnataka",
+            "postalCode": "572227",
+            "addressCountry": "IN"
+          },
+          "areaServed": [
+            { "@type": "State", "name": "Karnataka" },
+            { "@type": "State", "name": "Tamil Nadu" },
+            { "@type": "State", "name": "Andhra Pradesh" },
+            { "@type": "State", "name": "Telangana" },
+            { "@type": "State", "name": "Kerala" }
+          ],
+          "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Cold-pressed oils",
+            "itemListElement": [
+              { "@type": "OfferCatalog", "name": "Cold-pressed coconut oil" },
+              { "@type": "OfferCatalog", "name": "Cold-pressed groundnut oil" },
+              { "@type": "OfferCatalog", "name": "Cold-pressed sunflower oil" }
+            ]
+          }
+        }
+      ]
     }
     </script>
 
