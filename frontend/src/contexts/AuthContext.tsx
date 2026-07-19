@@ -56,6 +56,7 @@ interface AuthContextType {
   /* Trader/Admin auth */
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
+  loginWithToken: (token: string, user: User) => void;
   logout: () => void;
   updateUser: (patch: Partial<User>) => void;
   /* Consumer email+password auth */
@@ -155,6 +156,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     persistUser(data.token, data.user);
   }, []);
 
+  /* Persist a partner/admin session from a token the caller already has
+   * (e.g. the Google sign-in exchange). */
+  const loginWithToken = useCallback((tok: string, u: User) => {
+    persistUser(tok, u);
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -214,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       user, token, consumer, consumerToken, loading,
-      login, register, logout, updateUser,
+      login, register, loginWithToken, logout, updateUser,
       consumerLogin, consumerRegister, consumerLoginWithToken, consumerLogout, refreshConsumer,
       isAdmin:    user?.role === 'admin',
       isTrader:   user?.role === 'trader',

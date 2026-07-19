@@ -26,7 +26,12 @@ import {
  * about it, which is why sign-in used to need two attempts.
  * Local dev (localhost / LAN IP) keeps the env-configured default —
  * the Vite server doesn't serve /__/auth. */
-const SAME_ORIGIN_AUTH_HOSTS = ['sanathanatattva.shop', 'www.sanathanatattva.shop'];
+const SAME_ORIGIN_AUTH_HOSTS = [
+  'sanathanatattva.shop',
+  'www.sanathanatattva.shop',
+  'partner.sanathanatattva.shop',
+  'delivery.sanathanatattva.shop',
+];
 const authDomain =
   typeof window !== 'undefined' && SAME_ORIGIN_AUTH_HOSTS.includes(window.location.hostname)
     ? window.location.hostname
@@ -175,6 +180,20 @@ export async function consumeGoogleRedirectResult(): Promise<string | null> {
   const recoveredUser = a.currentUser || (await waitForLocalAuthUser(a, 2500));
   if (recoveredUser) return recoveredUser.getIdToken();
   return null;
+}
+
+/**
+ * Fresh ID token for whoever is currently signed in with Firebase, or null.
+ * Used by the partner signup flow: the person authenticates with Google on
+ * the sign-in page, gets routed to signup, then at submit we mint a fresh
+ * token from the still-live Firebase session (avoids passing a token that
+ * could expire while they fill the form).
+ */
+export async function getCurrentGoogleIdToken(): Promise<string | null> {
+  if (!isFirebaseConfigured()) return null;
+  const a = ensureFirebase();
+  const user = a.currentUser || (await waitForLocalAuthUser(a, 2000));
+  return user ? user.getIdToken() : null;
 }
 
 export const isFirebaseConfigured = () => !!firebaseConfig.apiKey;

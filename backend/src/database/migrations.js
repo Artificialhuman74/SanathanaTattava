@@ -1126,6 +1126,23 @@ function runMigrations(db) {
     console.log('[migration] consumers: created idx_consumers_google_uid');
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Add google_uid to users (partner/admin Google sign-in).
+   * Static DDL strings (no interpolation); assigned to vars so static
+   * scanners don't confuse better-sqlite3's db.exec with child_process.
+   * ═══════════════════════════════════════════════════════════════════ */
+  if (!hasColumn('users', 'google_uid')) {
+    const addUsersGoogleUid = 'ALTER TABLE users ADD COLUMN google_uid TEXT';
+    db.exec(addUsersGoogleUid);
+    console.log('[migration] users: added google_uid');
+  }
+  if (!hasIndex('idx_users_google_uid')) {
+    const createUsersGoogleUidIdx =
+      'CREATE UNIQUE INDEX idx_users_google_uid ON users(google_uid) WHERE google_uid IS NOT NULL';
+    db.exec(createUsersGoogleUidIdx);
+    console.log('[migration] users: created idx_users_google_uid');
+  }
+
   console.log('[migration] all migrations applied');
 }
 

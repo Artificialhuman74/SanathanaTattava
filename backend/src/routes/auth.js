@@ -13,6 +13,12 @@ const router = express.Router();
 const signToken = (id, role) =>
   jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+/* Sentinel stored in users.password (which is NOT NULL) for accounts that
+ * sign in with Google only. Password login refuses these with a helpful
+ * message; "forgot password" can still set a real password later, turning
+ * the account into a Google-or-password hybrid. */
+const GOOGLE_ONLY_PASSWORD = 'GOOGLE_SIGNIN_NO_PASSWORD';
+
 /* ── Referral Code Generation ─────────────────────────────────────────
  *  Tier 1: A0000 … Z0000 (single letter), then AA0000 … ZZ0000 (two-letter
  *          fallback once all 26 single letters are used). 26 + 676 = 702 slots.
@@ -70,10 +76,40 @@ function generateTier2Code(parentId) {
   return `${prefix}${String(next).padStart(4, '0')}`;
 }
 
+/* ── Partner tier + referral-code resolution ──────────────────────────────
+ * Shared by the password register and the Google register so both apply
+ * identical rules. Returns { tier, referredById, code } on success, or
+ * { error, status } to surface to the client. */
+function computePartnerTierAndCode(referralCode) {
+  const ref = (referralCode || '').trim();
+  if (ref) {
+    const referrer = db.prepare(
+      `SELECT * FROM users WHERE referral_code = ? AND role='trader' AND tier=1 AND status='active'`
+    ).get(ref);
+    if (!referrer) return { error: 'Invalid referral code. Only Tier 1 (e.g. A0000) codes are accepted.', status: 400 };
+    let code = generateTier2Code(referrer.id);
+    if (!code) return { error: 'Could not generate sub-dealer code', status: 500 };
+    while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
+      const parsed = splitReferralCode(code);
+      if (!parsed) return { error: 'Sub-dealer code generation failed', status: 500 };
+      const nextNum = parseInt(parsed.num, 10) + 1;
+      code = `${parsed.prefix}${String(nextNum).padStart(4, '0')}`;
+    }
+    return { tier: 2, referredById: referrer.id, code };
+  }
+  let code = generateTier1Code();
+  if (!code) return { error: 'Tier-1 partner slots are full. Please contact admin.', status: 503 };
+  while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
+    code = generateTier1Code();
+    if (!code) return { error: 'Tier-1 partner slots are full. Please contact admin.', status: 503 };
+  }
+  return { tier: 1, referredById: null, code };
+}
+
 /* ── Trader / Admin Login ─────────────────────────────────────────────── */
 router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty(),
+  body('email').trim().isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+  body('password').notEmpty().withMessage('Enter your password'),
 ], async (req, res) => {
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
@@ -82,6 +118,9 @@ router.post('/login', [
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
   if (user.status !== 'active') return res.status(403).json({ error: 'Account is suspended' });
+  if (user.password === GOOGLE_ONLY_PASSWORD) {
+    return res.status(401).json({ error: 'This account uses Google sign-in. Tap "Continue with Google" instead.' });
+  }
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
@@ -93,7 +132,7 @@ router.post('/login', [
 /* ── Trader Register ──────────────────────────────────────────────────── */
 router.post('/register', [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  body('email').trim().isEmail().withMessage('Enter a valid email address').normalizeEmail(),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('phone').optional().trim(),
   body('address').optional().trim(),
@@ -108,38 +147,11 @@ router.post('/register', [
 
   const { name, email, password, phone, address, pincode, referralCode, willDeliver, latitude, longitude } = req.body;
   if (db.prepare('SELECT id FROM users WHERE email = ?').get(email))
-    return res.status(409).json({ error: 'Email already registered' });
+    return res.status(409).json({ error: 'This email is already registered. Try signing in instead.' });
 
-  let tier = 1, referredById = null, code = null;
-
-  if (referralCode && referralCode.trim()) {
-    const referrer = db.prepare(`SELECT * FROM users WHERE referral_code = ? AND role='trader' AND tier=1 AND status='active'`).get(referralCode.trim());
-    if (!referrer) return res.status(400).json({ error: 'Invalid referral code. Only Tier 1 (e.g. A0000) codes are accepted.' });
-    tier = 2;
-    referredById = referrer.id;
-    code = generateTier2Code(referrer.id);
-    if (!code) return res.status(500).json({ error: 'Could not generate sub-dealer code' });
-    while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
-      // increment until unique (collision safety) — preserves the parent's prefix
-      const parsed = splitReferralCode(code);
-      if (!parsed) return res.status(500).json({ error: 'Sub-dealer code generation failed' });
-      const nextNum = parseInt(parsed.num, 10) + 1;
-      code = `${parsed.prefix}${String(nextNum).padStart(4, '0')}`;
-    }
-  } else {
-    code = generateTier1Code();
-    if (!code) {
-      // 26 single-letter + 676 two-letter prefixes all taken (702 Tier-1 dealers).
-      return res.status(503).json({ error: 'Tier-1 partner slots are full. Please contact admin.' });
-    }
-    // generateTier1Code already returns an unused prefix, so a collision here would
-    // only happen if two registrations race. Re-pick a fresh code rather than
-    // blindly incrementing into another prefix's namespace.
-    while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
-      code = generateTier1Code();
-      if (!code) return res.status(503).json({ error: 'Tier-1 partner slots are full. Please contact admin.' });
-    }
-  }
+  const resolved = computePartnerTierAndCode(referralCode);
+  if (resolved.error) return res.status(resolved.status).json({ error: resolved.error });
+  const { tier, referredById, code } = resolved;
 
   const hashed  = await bcrypt.hash(password, 12);
   const deliver = willDeliver ? 1 : 0;
@@ -158,6 +170,109 @@ router.post('/register', [
     VALUES (?,?,?,'trader',?,?,?,?,?,?,?,?,10.0,?,?,?,'available','active')
   `).run(name, email, hashed, tier, code, referredById, phone||null, address||null, pincode||null, deliver, deliver,
          !isNaN(lat) ? lat : null, !isNaN(lng) ? lng : null, h3Index);
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+  delete user.password;
+  res.status(201).json({ token: signToken(user.id, user.role), user });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   PARTNER GOOGLE SIGN-IN
+   POST /partner/google
+     Verify a Firebase Google token, then:
+       - existing partner/admin (matched by google_uid or email) → sign in
+       - no account yet → { exists:false, email, name } so the client can
+         route to signup with the details prefilled (we do NOT auto-create;
+         partner signup needs a delivery commitment + tier choice).
+   ══════════════════════════════════════════════════════════════ */
+router.post('/partner/google', [
+  body('id_token').notEmpty().withMessage('id_token is required'),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  let decoded;
+  try {
+    decoded = await verifyFirebaseToken(req.body.id_token);
+  } catch (err) {
+    console.error('[partner/google] token verify failed:', err.message);
+    return res.status(401).json({ error: 'Invalid Google token' });
+  }
+
+  const googleUid = decoded.uid;
+  const email     = decoded.email ? String(decoded.email).toLowerCase().trim() : null;
+  const name      = decoded.name || (email ? email.split('@')[0] : 'Partner');
+  if (!email) return res.status(400).json({ error: 'Google account has no email' });
+
+  // Match by google_uid first (returning), then by email (auto-link).
+  let user = db.prepare(`SELECT * FROM users WHERE google_uid = ? AND role IN ('trader','admin')`).get(googleUid);
+  if (!user) {
+    user = db.prepare(`SELECT * FROM users WHERE email = ? AND role IN ('trader','admin')`).get(email);
+    if (user && !user.google_uid) {
+      db.prepare(`UPDATE users SET google_uid = ? WHERE id = ?`).run(googleUid, user.id);
+      user.google_uid = googleUid;
+    }
+  }
+
+  if (!user) {
+    // No partner account yet — let the client route to signup, prefilled.
+    return res.json({ exists: false, email, name });
+  }
+  if (user.status !== 'active') return res.status(403).json({ error: 'Account is suspended' });
+
+  delete user.password;
+  res.json({ exists: true, token: signToken(user.id, user.role), user });
+});
+
+/* POST /partner/google/register
+     Create a partner account from a verified Google identity (no password).
+     Applies the same tier / referral rules as password signup. Called from
+     the signup page after the person ticks the delivery commitment. */
+router.post('/partner/google/register', [
+  body('id_token').notEmpty().withMessage('id_token is required'),
+  body('name').optional().trim(),
+  body('phone').optional().trim(),
+  body('address').optional().trim(),
+  body('pincode').optional().trim(),
+  body('referralCode').optional().trim(),
+  body('willDeliver').optional(),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  let decoded;
+  try {
+    decoded = await verifyFirebaseToken(req.body.id_token);
+  } catch (err) {
+    console.error('[partner/google/register] token verify failed:', err.message);
+    return res.status(401).json({ error: 'Invalid Google token' });
+  }
+
+  const googleUid = decoded.uid;
+  const email     = decoded.email ? String(decoded.email).toLowerCase().trim() : null;
+  const name      = (req.body.name && req.body.name.trim()) || decoded.name || (email ? email.split('@')[0] : 'Partner');
+  if (!email) return res.status(400).json({ error: 'Google account has no email' });
+
+  // Already a partner? Sign them in instead of erroring (idempotent).
+  let existing = db.prepare(`SELECT * FROM users WHERE (google_uid = ? OR email = ?) AND role IN ('trader','admin')`).get(googleUid, email);
+  if (existing) {
+    if (existing.status !== 'active') return res.status(403).json({ error: 'Account is suspended' });
+    if (!existing.google_uid) db.prepare(`UPDATE users SET google_uid = ? WHERE id = ?`).run(googleUid, existing.id);
+    delete existing.password;
+    return res.json({ token: signToken(existing.id, existing.role), user: existing });
+  }
+
+  const { phone, address, pincode, referralCode, willDeliver } = req.body;
+  const resolved = computePartnerTierAndCode(referralCode);
+  if (resolved.error) return res.status(resolved.status).json({ error: resolved.error });
+  const { tier, referredById, code } = resolved;
+
+  const deliver = willDeliver ? 1 : 0;
+  const result = db.prepare(`
+    INSERT INTO users (name,email,password,google_uid,role,tier,referral_code,referred_by_id,phone,address,pincode,will_deliver,delivery_enabled,commission_rate,availability_status,status)
+    VALUES (?,?,?,?,'trader',?,?,?,?,?,?,?,?,10.0,'available','active')
+  `).run(name, email, GOOGLE_ONLY_PASSWORD, googleUid, tier, code, referredById,
+         phone || null, address || null, pincode || null, deliver, deliver);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
   delete user.password;
