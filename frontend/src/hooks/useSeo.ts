@@ -13,8 +13,8 @@ import { useEffect } from 'react';
  * (the homepage).
  */
 const SITE = 'https://sanathanatattva.shop';
-const DEFAULT_TITLE = 'Sanathana Tattva — Authentic Cold Pressed Oils | Pure & Natural';
-const DEFAULT_DESC = 'Sanathana Tattva offers authentic cold pressed oils — coconut, sesame, groundnut and more — made with traditional wooden churners. 100% pure, chemical-free, delivered to your door.';
+const DEFAULT_TITLE = 'Sanathana Tattva — Authentic Cold Pressed Oil | Pure & Natural';
+const DEFAULT_DESC = 'Sanathana Tattva offers authentic cold pressed oil — coconut, sesame, groundnut and more — made with traditional wooden churners. 100% pure, chemical-free, delivered to your door.';
 
 function upsertMetaByName(name: string, content: string) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);

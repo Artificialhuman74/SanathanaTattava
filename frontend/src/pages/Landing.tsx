@@ -743,8 +743,8 @@ export default function Landing() {
    * the title/description/canonical when the visitor navigates back from
    * /shop or /shop/legal. */
   useSeo({
-    title: 'Sanathana Tattva — Authentic Cold Pressed Oils | Pure & Natural',
-    description: 'Sanathana Tattva offers authentic cold pressed oils — coconut, sesame, groundnut and more — made with traditional wooden churners. 100% pure, chemical-free, delivered to your door.',
+    title: 'Sanathana Tattva — Authentic Cold Pressed Oil | Pure & Natural',
+    description: 'Sanathana Tattva offers authentic cold pressed oil — coconut, sesame, groundnut and more — made with traditional wooden churners. 100% pure, chemical-free, delivered to your door.',
     path: '/',
   });
 
