@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useSeo } from '../../hooks/useSeo';
+import AccountDeletion from './AccountDeletion';
 import {
   ScrollText, Lock, RotateCcw, Truck, ShieldCheck,
   ArrowLeft, ChevronRight, Mail, Phone, MapPin, Printer,
@@ -77,6 +78,18 @@ export default function Legal() {
     history.replaceState(null, '', `#${id}`);
     setActive(id);
   };
+
+  /* Account deletion (Google Play data-deletion requirement) lives at
+   * /shop/legal#delete-account — deliberately not in SECTIONS above, so
+   * it never appears in the sidebar TOC or the mobile chip nav. The
+   * only way here is the direct URL. All the hooks above still run
+   * unconditionally (React rules of hooks); only the returned JSX
+   * branches, replacing the whole legal-centre layout with the
+   * self-contained deletion flow. */
+  if (location.hash === '#delete-account') {
+    const token = new URLSearchParams(location.search).get('deletion_token');
+    return <AccountDeletion token={token} />;
+  }
 
   return (
     <div className="min-h-screen bg-parchment-100">

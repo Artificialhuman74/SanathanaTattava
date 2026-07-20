@@ -9,7 +9,7 @@ export default function ConsumerProfile() {
   const [discountPct, setDiscountPct] = useState(0);
 
   useEffect(() => {
-    consumerApi.get('/admin/settings')
+    consumerApi.get('/consumer/settings')
       .then(r => setDiscountPct(parseFloat(r.data.referral_discount_percent) || 0))
       .catch(() => {});
   }, []);

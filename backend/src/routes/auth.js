@@ -7,6 +7,7 @@ const db = require('../database/db');
 const { authenticate } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 const { verifyIdToken: verifyFirebaseToken } = require('../services/firebaseAdmin');
+const accountDeletion = require('../services/accountDeletionService');
 
 const router = express.Router();
 
@@ -513,6 +514,65 @@ router.post('/reset-password', [
   db.prepare('UPDATE consumers SET password = ? WHERE email = ?').run(newHash, record.email);
 
   res.json({ success: true });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   CONSUMER ACCOUNT DELETION
+   Google Play "Data deletion" requirement + DPDP Act right to erasure.
+   Email-token flow, deliberately login-free (a consumer without an
+   active session must still be able to request this). Three steps:
+
+     1. POST /consumer/account-deletion/request  { email }
+        Always returns a generic success — never reveals whether the
+        email exists. Emails a confirmation link if it does.
+
+     2. GET  /consumer/account-deletion/verify?token=xxx
+        Read-only. Resolves the token to a masked email for display.
+        Safe even if an email client's link-scanner prefetches it —
+        it never mutates anything.
+
+     3. POST /consumer/account-deletion/confirm  { token }
+        The actual destructive step. Only called when the person
+        clicks an explicit "Yes, delete my account" button on the
+        confirmation screen. Anonymises the account (see
+        accountDeletionService.js for why this isn't a hard delete).
+   ══════════════════════════════════════════════════════════════ */
+router.post('/consumer/account-deletion/request', [
+  body('email').trim().isEmail().withMessage('Enter a valid email address').normalizeEmail(),
+], async (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  try {
+    await accountDeletion.requestDeletion(req.body.email);
+  } catch (err) {
+    console.error('[account-deletion/request] error:', err.message);
+    // Fall through to the generic response — don't leak internal errors
+    // to a public, login-free endpoint.
+  }
+  res.json({ success: true, message: 'If an account exists with that email, we\'ve sent a confirmation link.' });
+});
+
+router.get('/consumer/account-deletion/verify', (req, res) => {
+  const result = accountDeletion.verifyToken(req.query.token);
+  if (!result.valid) return res.status(400).json({ valid: false, error: 'This link is invalid or has expired. Please request a new one.' });
+  res.json(result);
+});
+
+router.post('/consumer/account-deletion/confirm', [
+  body('token').notEmpty().withMessage('Missing deletion token'),
+], (req, res) => {
+  const errs = validationResult(req);
+  if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
+
+  try {
+    const result = accountDeletion.confirmDeletion(req.body.token);
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'INVALID_TOKEN') return res.status(400).json({ error: err.message });
+    console.error('[account-deletion/confirm] error:', err.message);
+    res.status(500).json({ error: 'Something went wrong deleting your account. Please try again or contact support.' });
+  }
 });
 
 /* ══════════════════════════════════════════════════════════════
