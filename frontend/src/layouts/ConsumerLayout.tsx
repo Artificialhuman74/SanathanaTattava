@@ -232,7 +232,7 @@ export default function ConsumerLayout() {
         <footer className="bg-parchment-200 border-t border-[#e8dcc8] py-4 mt-auto">
           <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
             <span className="font-semibold text-brand-800 text-sm" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>Sanathana Tattva</span>
-            <p className="text-gray-600 text-xs">© {new Date().getFullYear()} From the wooden ghani in Tumkur.</p>
+            <p className="text-gray-600 text-xs">© {new Date().getFullYear()} From the traditions of Karnataka.</p>
             <div className="flex items-center gap-4 text-xs text-gray-600">
               {consumer && (
                 <>
@@ -241,7 +241,7 @@ export default function ConsumerLayout() {
                 </>
               )}
               <NavLink to="/shop/legal" className="hover:text-brand-700">Legal</NavLink>
-              <Link to="/login" className="hover:text-brand-700">Partner Login</Link>
+              
             </div>
           </div>
         </footer>

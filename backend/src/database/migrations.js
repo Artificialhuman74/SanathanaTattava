@@ -1143,6 +1143,24 @@ function runMigrations(db) {
     console.log('[migration] users: created idx_users_google_uid');
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: consumer_deletion_requests (Play Store account-deletion
+   * flow). Email-token pattern, same shape as password_resets: a raw
+   * token is emailed, only its SHA-256 hash is stored, single use,
+   * short expiry. CREATE TABLE IF NOT EXISTS is already idempotent, so
+   * no existence guard is needed here.
+   * ═══════════════════════════════════════════════════════════════════ */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS consumer_deletion_requests (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      consumer_id INTEGER NOT NULL REFERENCES consumers(id) ON DELETE CASCADE,
+      token_hash  TEXT    NOT NULL,
+      expires_at  DATETIME NOT NULL,
+      used        INTEGER NOT NULL DEFAULT 0,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   console.log('[migration] all migrations applied');
 }
 

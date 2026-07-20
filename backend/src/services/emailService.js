@@ -103,6 +103,62 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
   return sendMail({ to: toEmail, subject, text, html });
 }
 
+/* ── Account deletion (Play Store / DPDP Act deletion request) ────────── */
+async function sendAccountDeletionConfirmEmail(toEmail, confirmUrl) {
+  const subject = 'Confirm account deletion — Sanathana Tattva';
+  const text    = `Confirm deleting your Sanathana Tattva account: ${confirmUrl}\n\nThis link expires in 30 minutes. If you didn't request this, ignore this email — your account is safe.`;
+  const html    = buildEmailHtml({
+    title:    'Confirm Account Deletion',
+    preheader: 'Action required to delete your account',
+    body: `
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        We received a request to delete your Sanathana Tattva account. This will
+        anonymise your personal details and sign you out everywhere. Click below
+        to confirm — this cannot be undone.
+      </p>
+      <div style="text-align:center;margin:0 0 24px;">
+        <a href="${confirmUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#dc2626,#991b1b);color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 32px;border-radius:12px;">
+          Review &amp; Confirm Deletion
+        </a>
+      </div>
+      <p style="margin:0 0 8px;color:#64748b;font-size:13px;text-align:center;">
+        ⏱ This link expires in <strong>30 minutes</strong>.
+      </p>
+      <p style="margin:0;color:#64748b;font-size:12px;text-align:center;word-break:break-all;">
+        Or copy this link: <a href="${confirmUrl}" style="color:#dc2626;">${confirmUrl}</a>
+      </p>
+    `,
+    footer: "If you didn't request this, ignore this email — no changes have been made to your account.",
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
+async function sendAccountDeletedEmail(toEmail, name) {
+  const subject = 'Your Sanathana Tattva account has been deleted';
+  const text    = `Hi ${name || 'there'}, your Sanathana Tattva account and personal details have been deleted as requested. Order and tax records required by law are retained in an anonymised form. Write to privacy@sanathanatattva.shop with any questions.`;
+  const html    = buildEmailHtml({
+    title:    'Account Deleted',
+    preheader: 'Your account has been deleted',
+    body: `
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Hi ${name || 'there'}, this confirms your Sanathana Tattva account and personal
+        details (name, email, phone, saved addresses) have been deleted.
+      </p>
+      <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+        Order and invoice records are retained in an anonymised form for
+        8 years, as required under Indian tax law — they no longer identify
+        you personally.
+      </p>
+      <p style="margin:0;color:#64748b;font-size:13px;line-height:1.6;">
+        Questions? Write to <a href="mailto:privacy@sanathanatattva.shop" style="color:#4f46e5;">privacy@sanathanatattva.shop</a>.
+      </p>
+    `,
+    footer: 'This is a confirmation of a deletion you requested. If this wasn\'t you, contact us immediately.',
+  });
+  return sendMail({ to: toEmail, subject, text, html });
+}
+
 /* ── Shared HTML template ─────────────────────────────────────────────── */
 function buildEmailHtml({ title, preheader, body, footer }) {
   return `<!DOCTYPE html>
@@ -711,5 +767,6 @@ module.exports = {
   sendContainerRefundRequestEmail,
   sendAdminDamageReportEmail, sendAdminDisputeOpenedEmail,
   sendDeliveryAssignmentEmail,
+  sendAccountDeletionConfirmEmail, sendAccountDeletedEmail,
   DEV_MODE,
 };
