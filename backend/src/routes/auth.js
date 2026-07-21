@@ -8,6 +8,7 @@ const { authenticate } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 const { verifyIdToken: verifyFirebaseToken } = require('../services/firebaseAdmin');
 const accountDeletion = require('../services/accountDeletionService');
+const { safeConsumer } = require('../utils/safeConsumer');
 
 const router = express.Router();
 
@@ -301,12 +302,6 @@ router.get('/me', authenticate, (req, res) => res.json({ user: req.user }));
 
 function signConsumerToken(id) {
   return jwt.sign({ id, role: 'consumer' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-}
-
-function safeConsumer(c) {
-  const obj = { ...c };
-  delete obj.password;
-  return obj;
 }
 
 /** Generate a 6-digit OTP and store its SHA-256 hash in email_verifications */

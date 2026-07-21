@@ -18,6 +18,7 @@ const { sendAdminDisputeOpenedEmail } = require('../services/emailService');
 const { emitOrderUpdate, emitContainerHoldingUpdate } = require('../websocket/socketServer');
 const containerHoldings = require('../services/containerHoldingsService');
 const storeCredit       = require('../services/storeCreditService');
+const { safeConsumer }  = require('../utils/safeConsumer');
 
 const router = express.Router();
 
@@ -296,7 +297,7 @@ router.get('/store-credit', authConsumer, (req, res) => {
 
 /* ── Auth: Consumer Me ────────────────────────────────────────────────── */
 router.get('/me', authConsumer, (req, res) => {
-  const consumer = { ...req.consumer };
+  const consumer = safeConsumer(req.consumer);
   if (consumer.linked_dealer_id) {
     const dealer = db.prepare(`SELECT id,name,phone,tier,referral_code FROM users WHERE id=?`).get(consumer.linked_dealer_id);
     consumer.dealer = dealer;
@@ -338,7 +339,7 @@ router.patch('/me', authConsumer, (req, res) => {
   params.push(req.consumer.id);
   db.prepare(`UPDATE consumers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   const updated = db.prepare('SELECT * FROM consumers WHERE id = ?').get(req.consumer.id);
-  res.json({ consumer: updated });
+  res.json({ consumer: safeConsumer(updated) });
 });
 
 /* ── POST /change-password ────────────────────────────────────────────── */
