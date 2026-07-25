@@ -628,6 +628,10 @@ export default function Shop() {
   const goToCheckout = () => {
     if (cart.length === 0) { toast.error('Your cart is empty'); return; }
     setCartOpen(false);
+    if (!consumer) {
+      navigate('/shop/login', { state: { from: '/shop/checkout' } });
+      return;
+    }
     navigate('/shop/checkout', { state: { cart } });
   };
 
@@ -1257,7 +1261,7 @@ export default function Shop() {
                 </p>
               )}
               <button onClick={goToCheckout} className="btn-primary w-full py-3.5 text-base font-semibold rounded-2xl active:scale-[0.98] transition-transform">
-                Proceed to Checkout →
+                {consumer ? 'Proceed to Checkout →' : 'Sign in to Checkout →'}
               </button>
             </div>
             );

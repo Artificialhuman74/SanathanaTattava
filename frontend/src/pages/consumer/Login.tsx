@@ -21,10 +21,15 @@ export default function ConsumerLogin() {
   const [loading,  setLoading]  = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const redirectAfterLogin = () => {
+    const from = (location.state as any)?.from;
+    navigate(from || '/shop', { replace: true });
+  };
+
   const exchangeIdTokenAndLogin = async (idToken: string) => {
     const { data } = await consumerApi.post('/auth/consumer/google', { id_token: idToken }, { skipAuthRedirect: true });
     consumerLoginWithToken(data.token, data.consumer);
-    navigate('/shop', { replace: true });
+    redirectAfterLogin();
   };
 
   const handleGoogleSignIn = async () => {
@@ -65,7 +70,7 @@ export default function ConsumerLogin() {
     setLoading(true);
     try {
       await consumerLogin(email, password);
-      navigate('/shop', { replace: true });
+      redirectAfterLogin();
     } catch (err: any) {
       const code = err.response?.data?.code;
       if (code === 'EMAIL_NOT_FOUND') {

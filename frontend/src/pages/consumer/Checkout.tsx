@@ -60,7 +60,7 @@ const LABEL_ICONS: Record<string, React.ReactNode> = {
 const labelIcon = (l: string) => LABEL_ICONS[l] ?? <MapPin size={13} />;
 
 export default function Checkout() {
-  const { consumer, refreshConsumer } = useAuth();
+  const { consumer, refreshConsumer, loading: authLoading } = useAuth();
   const navigate     = useNavigate();
   const location     = useLocation();
 
@@ -116,6 +116,13 @@ export default function Checkout() {
   useEffect(() => {
     if (cart.length === 0) navigate('/shop', { replace: true });
   }, [cart.length, navigate]);
+
+  /* Guard: orders require a signed-in consumer (server rejects guest orders),
+   * so anyone landing here directly (bookmark, back button) is sent to sign in
+   * rather than filling out a form that will fail on submit. */
+  useEffect(() => {
+    if (!authLoading && !consumer) navigate('/shop/login', { replace: true, state: { from: '/shop/checkout' } });
+  }, [authLoading, consumer, navigate]);
 
   // Keep checkout cart in persistent storage as source of truth.
   useEffect(() => {
