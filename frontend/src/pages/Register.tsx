@@ -7,12 +7,7 @@ import {
   User, Mail, Lock, Eye, EyeOff, Phone, MapPin, Hash,
   CheckCircle2, XCircle, ArrowLeft, Star, Users, Truck, Info, AlertCircle,
 } from 'lucide-react';
-import {
-  signInWithGoogleAndGetIdToken,
-  consumeGoogleRedirectResult,
-  getCurrentGoogleIdToken,
-  isFirebaseConfigured,
-} from '../lib/firebase';
+import { getCurrentGoogleIdToken } from '../lib/firebase';
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 /* Forgiving phone: strip spaces / dashes / parens / leading +91, then a
@@ -38,9 +33,11 @@ export default function Register() {
   const [willDeliver,   setWillDeliver]   = useState<boolean>(false);
   const [showPw,        setShowPw]        = useState(false);
   const [loading,       setLoading]       = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  /* Google mode: identity confirmed by Google, so no password is set. */
-  const [googleMode,    setGoogleMode]    = useState<boolean>(!!navState.googleMode);
+  /* Google mode: identity confirmed by Google, so no password is set.
+   * Entered only via the redirect from /login when a Google sign-in there
+   * turns out to belong to no existing account — this page has no Google
+   * button of its own (signup requires the email/password or Login's flow). */
+  const [googleMode] = useState<boolean>(!!navState.googleMode);
   const [refStatus,     setRefStatus]     = useState<null | { valid: boolean; name?: string }>(null);
   const [refChecking,   setRefChecking]   = useState(false);
   const [errors,        setErrors]        = useState<FieldErrors>({});
@@ -67,53 +64,6 @@ export default function Register() {
 
   const isSubDealer = refStatus?.valid === true;
   const tier = isSubDealer ? 2 : 1;
-
-  /* ── Google ──────────────────────────────────────────────────────────── */
-  const exchangeGoogle = async (idToken: string) => {
-    const { data } = await api.post('/auth/partner/google', { id_token: idToken }, { skipAuthRedirect: true });
-    if (data.exists) {
-      loginWithToken(data.token, data.user);
-      navigate(data.user.role === 'admin' ? '/admin' : '/trader', { replace: true });
-    } else {
-      // New person: switch into Google mode, prefill, let them finish.
-      setForm(f => ({ ...f, name: data.name || f.name, email: data.email || f.email }));
-      setGoogleMode(true);
-      setErrors({});
-      toast('Almost there — just confirm the details below.', { icon: '👋' });
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    setErrors({});
-    try {
-      const idToken = await signInWithGoogleAndGetIdToken();
-      if (idToken === null) return; // mid-redirect
-      await exchangeGoogle(idToken);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || err?.message || 'Google sign-in failed');
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const idToken = await consumeGoogleRedirectResult();
-        if (!idToken || cancelled) return;
-        setGoogleLoading(true);
-        await exchangeGoogle(idToken);
-      } catch (err: any) {
-        if (!cancelled) toast.error(err.response?.data?.error || err?.message || 'Google sign-in failed');
-      } finally {
-        if (!cancelled) setGoogleLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   /* ── Validate + submit ───────────────────────────────────────────────── */
   const validate = (): FieldErrors => {
@@ -154,8 +104,8 @@ export default function Register() {
       if (googleMode) {
         const idToken = await getCurrentGoogleIdToken();
         if (!idToken) {
-          setErrors({ form: 'Your Google session expired. Tap "Continue with Google" again.' });
-          setGoogleMode(false);
+          toast.error('Your Google session expired. Please sign in with Google again.');
+          navigate('/login');
           return;
         }
         const { data } = await api.post('/auth/partner/google/register',
@@ -254,35 +204,6 @@ export default function Register() {
         </div>
 
         <div className="card p-6 sm:p-8">
-          {/* Google fast-path (hidden once already in Google mode) */}
-          {isFirebaseConfigured() && !googleMode && (
-            <>
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading || loading}
-                className="w-full min-h-[48px] px-4 rounded-xl border border-[#e8dcc8] bg-white hover:bg-parchment-100 flex items-center justify-center gap-3 text-slate-800 font-semibold text-sm transition-colors disabled:opacity-60"
-              >
-                {googleLoading ? (
-                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-500" />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" />
-                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" />
-                    <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" />
-                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z" />
-                  </svg>
-                )}
-                {googleLoading ? 'Please wait…' : 'Continue with Google'}
-              </button>
-              <div className="flex items-center gap-3 my-5">
-                <div className="flex-1 h-px bg-[#e8dcc8]" />
-                <span className="text-xs text-slate-500 font-medium">or with email</span>
-                <div className="flex-1 h-px bg-[#e8dcc8]" />
-              </div>
-            </>
-          )}
-
           {/* Google-mode banner */}
           {googleMode && (
             <div className="mb-5 flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
@@ -444,7 +365,7 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={loading || googleLoading || !willDeliver || (!!form.referralCode && refStatus?.valid === false)}
+              disabled={loading || !willDeliver || (!!form.referralCode && refStatus?.valid === false)}
               className="btn-primary w-full py-3 text-base mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white flex-shrink-0" />}

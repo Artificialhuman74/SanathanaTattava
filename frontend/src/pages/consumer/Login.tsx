@@ -7,6 +7,7 @@ import {
   signInWithGoogleAndGetIdToken,
   consumeGoogleRedirectResult,
   isFirebaseConfigured,
+  isGoogleRedirectPending,
 } from '../../lib/firebase';
 import { AuthVisual } from './AuthVisual';
 
@@ -19,7 +20,7 @@ export default function ConsumerLogin() {
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [loading,  setLoading]  = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(isGoogleRedirectPending);
 
   const redirectAfterLogin = () => {
     const from = (location.state as any)?.from;

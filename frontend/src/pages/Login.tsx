@@ -8,6 +8,7 @@ import {
   signInWithGoogleAndGetIdToken,
   consumeGoogleRedirectResult,
   isFirebaseConfigured,
+  isGoogleRedirectPending,
 } from '../lib/firebase';
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -20,7 +21,7 @@ export default function Login() {
   const [password,    setPassword]    = useState('');
   const [showPw,      setShowPw]      = useState(false);
   const [loading,     setLoading]     = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(isGoogleRedirectPending);
   const [showForgot,  setShowForgot]  = useState(false);
   const [errors,      setErrors]      = useState<{ email?: string; password?: string; form?: string }>({});
 

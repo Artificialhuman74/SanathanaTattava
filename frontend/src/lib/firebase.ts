@@ -197,3 +197,15 @@ export async function getCurrentGoogleIdToken(): Promise<string | null> {
 }
 
 export const isFirebaseConfigured = () => !!firebaseConfig.apiKey;
+
+/**
+ * True if a redirect-based Google sign-in is in flight (kicked off by
+ * `fallbackToRedirect` before the page navigated away). Callers use this to
+ * seed their loading state synchronously on mount — otherwise the button
+ * renders in its idle state for as long as `consumeGoogleRedirectResult()`
+ * takes to resolve, even though sign-in is still actively running. That gap
+ * is what makes the redirect path look hung/unresponsive.
+ */
+export function isGoogleRedirectPending(): boolean {
+  return typeof window !== 'undefined' && !!sessionStorage.getItem('google_redirect_pending');
+}

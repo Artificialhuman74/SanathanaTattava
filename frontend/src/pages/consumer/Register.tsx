@@ -10,6 +10,7 @@ import {
   signInWithGoogleAndGetIdToken,
   consumeGoogleRedirectResult,
   isFirebaseConfigured,
+  isGoogleRedirectPending,
 } from '../../lib/firebase';
 import { AuthVisual } from './AuthVisual';
 
@@ -26,7 +27,7 @@ export default function ConsumerRegister() {
   const [refCode,  setRefCode]  = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [loading,  setLoading]  = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(isGoogleRedirectPending);
 
   const [codeValid,  setCodeValid]  = useState<boolean | null>(null);
   const [dealerName, setDealerName] = useState('');
