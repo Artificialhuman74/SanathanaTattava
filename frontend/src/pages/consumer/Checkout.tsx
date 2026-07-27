@@ -4,6 +4,7 @@ import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { clearCart, loadCart, saveCart } from '../../services/cartStorage';
+import { isBengaluruPincode, OUTSIDE_DELIVERY_AREA_ERROR } from '../../utils/deliveryArea';
 import {
   ArrowLeft, MapPin, Tag, CheckCircle2, Package, Home, Briefcase,
   PlusCircle, User, Phone, Star, Hash, ShoppingBag, Wallet,
@@ -289,6 +290,9 @@ export default function Checkout() {
         if (!newAddr.phone.trim()) {
           toast.error('Phone number is required for delivery'); return;
         }
+        if (!isBengaluruPincode(newAddr.pincode)) {
+          toast.error(OUTSIDE_DELIVERY_AREA_ERROR); return;
+        }
         payload = {
           ...payload,
           delivery_address:     newAddr.address.trim(),
@@ -301,6 +305,10 @@ export default function Checkout() {
         };
       } else {
         if (!selectedAddressId) { toast.error('Please select a delivery address'); return; }
+        const selectedAddr = savedAddresses.find(a => a.id === selectedAddressId);
+        if (!selectedAddr || !isBengaluruPincode(selectedAddr.pincode)) {
+          toast.error(OUTSIDE_DELIVERY_AREA_ERROR); return;
+        }
         payload = { ...payload, address_id: selectedAddressId };
       }
     } else {
@@ -509,19 +517,24 @@ export default function Checkout() {
             {/* Logged-in: saved address picker */}
             {consumer && (
               <div className="space-y-2">
-                {savedAddresses.map(addr => (
+                {savedAddresses.map(addr => {
+                  const outOfArea = !isBengaluruPincode(addr.pincode);
+                  return (
                   <label
                     key={addr.id}
-                    className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      !useNewAddress && selectedAddressId === addr.id
-                        ? 'border-brand-500 bg-brand-50'
-                        : 'border-[#e8dcc8] hover:border-slate-300'
+                    className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all ${
+                      outOfArea
+                        ? 'border-red-100 bg-red-50/40 cursor-not-allowed opacity-70'
+                        : 'cursor-pointer ' + (!useNewAddress && selectedAddressId === addr.id
+                            ? 'border-brand-500 bg-brand-50'
+                            : 'border-[#e8dcc8] hover:border-slate-300')
                     }`}
                   >
                     <input
                       type="radio"
                       name="address"
                       checked={!useNewAddress && selectedAddressId === addr.id}
+                      disabled={outOfArea}
                       onChange={() => { setSelectedAddressId(addr.id); setUseNewAddress(false); }}
                       className="mt-0.5 accent-brand-600"
                     />
@@ -542,9 +555,13 @@ export default function Checkout() {
                       </div>
                       <p className="text-sm font-semibold text-slate-900">{addr.name} · {addr.phone}</p>
                       <p className="text-sm text-slate-600 leading-snug">{addr.address}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p className="text-xs text-slate-400">PIN: {addr.pincode}</p>
-                        {addr.latitude && addr.longitude ? (
+                        {outOfArea ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-red-600 font-medium">
+                            <MapPin size={9} /> Outside Bengaluru — not deliverable
+                          </span>
+                        ) : addr.latitude && addr.longitude ? (
                           <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
                             <MapPin size={9} /> Mapped
                           </span>
@@ -556,7 +573,8 @@ export default function Checkout() {
                       </div>
                     </div>
                   </label>
-                ))}
+                  );
+                })}
 
                 {/* Use new/different address */}
                 <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
@@ -623,11 +641,19 @@ export default function Checkout() {
                         placeholder="House/Flat, Street, Area, City"
                       />
                     </div>
-                    <input
-                      value={newAddr.pincode}
-                      onChange={e => setNewAddr(a => ({ ...a, pincode: e.target.value }))}
-                      className="form-input text-sm" placeholder="PIN Code" maxLength={6}
-                    />
+                    <div>
+                      <input
+                        value={newAddr.pincode}
+                        onChange={e => setNewAddr(a => ({ ...a, pincode: e.target.value }))}
+                        className={`form-input text-sm ${newAddr.pincode.trim() && !isBengaluruPincode(newAddr.pincode) ? 'border-red-300 focus:border-red-400' : ''}`}
+                        placeholder="560001" maxLength={6}
+                      />
+                      {newAddr.pincode.trim() && !isBengaluruPincode(newAddr.pincode) ? (
+                        <p className="text-xs text-red-600 mt-1">{OUTSIDE_DELIVERY_AREA_ERROR}</p>
+                      ) : (
+                        <p className="text-xs text-slate-400 mt-1">We currently deliver only within Bengaluru (PIN codes starting with 560).</p>
+                      )}
+                    </div>
                     <div className="mt-3 p-3 bg-white rounded-lg border border-[#e8dcc8] space-y-2.5">
                       <label className="flex items-start gap-3 cursor-pointer select-none">
                         <input

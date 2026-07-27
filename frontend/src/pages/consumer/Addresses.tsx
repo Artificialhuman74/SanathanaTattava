@@ -7,6 +7,7 @@ import {
   MapPin, Plus, Pencil, Trash2, Star, Home, Briefcase,
   X, Check, AlertCircle, Navigation, Loader2, RefreshCw,
 } from 'lucide-react';
+import { isBengaluruPincode, OUTSIDE_DELIVERY_AREA_ERROR } from '../../utils/deliveryArea';
 
 interface Address {
   id: number;
@@ -80,6 +81,10 @@ export default function Addresses() {
     e.preventDefault();
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim() || !form.pincode.trim()) {
       toast.error('Please fill all fields');
+      return;
+    }
+    if (!isBengaluruPincode(form.pincode)) {
+      toast.error(OUTSIDE_DELIVERY_AREA_ERROR);
       return;
     }
     setSaving(true);
@@ -251,6 +256,12 @@ export default function Addresses() {
                     <p className="text-slate-500 text-sm">{addr.phone}</p>
                     <p className="text-slate-700 text-sm mt-1 leading-snug">{addr.address}</p>
                     <p className="text-slate-500 text-xs mt-0.5">PIN: {addr.pincode}</p>
+                    {!isBengaluruPincode(addr.pincode) && (
+                      <div className="flex items-center gap-1 px-2 py-0.5 mt-1.5 rounded-full bg-red-50 border border-red-100 w-fit">
+                        <AlertCircle size={10} className="text-red-500" />
+                        <span className="text-[10px] font-medium text-red-700">Outside Bengaluru — can't be used for delivery</span>
+                      </div>
+                    )}
 
                     {/* Geocoding status */}
                     {addr.latitude && addr.longitude ? (
@@ -410,10 +421,11 @@ export default function Addresses() {
                   value={form.pincode}
                   onChange={e => setForm(f => ({ ...f, pincode: e.target.value }))}
                   className="form-input"
-                  placeholder="400001"
+                  placeholder="560001"
                   maxLength={6}
                   required
                 />
+                <p className="text-xs text-slate-400 mt-1">We currently deliver only within Bengaluru (PIN codes starting with 560).</p>
               </div>
 
               {/* Geocoding info */}

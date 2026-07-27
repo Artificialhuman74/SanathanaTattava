@@ -19,6 +19,7 @@ const { emitOrderUpdate, emitContainerHoldingUpdate } = require('../websocket/so
 const containerHoldings = require('../services/containerHoldingsService');
 const storeCredit       = require('../services/storeCreditService');
 const { safeConsumer }  = require('../utils/safeConsumer');
+const { isBengaluruPincode, OUTSIDE_DELIVERY_AREA_ERROR } = require('../utils/deliveryArea');
 
 const router = express.Router();
 
@@ -375,6 +376,7 @@ router.post('/addresses', authConsumer, [
   const errs = validationResult(req);
   if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
   const { label, name, phone, address, pincode, is_default } = req.body;
+  if (!isBengaluruPincode(pincode)) return res.status(400).json({ error: OUTSIDE_DELIVERY_AREA_ERROR });
   const makeDefault = is_default ? 1 : 0;
   if (makeDefault) db.prepare(`UPDATE consumer_addresses SET is_default=0 WHERE consumer_id=?`).run(req.consumer.id);
 
@@ -417,6 +419,8 @@ router.put('/addresses/:id', authConsumer, [
 
   const finalAddress = address ?? existing.address;
   const finalPincode = pincode ?? existing.pincode;
+
+  if (!isBengaluruPincode(finalPincode)) return res.status(400).json({ error: OUTSIDE_DELIVERY_AREA_ERROR });
 
   // Re-geocode if address or pincode changed
   let latitude = existing.latitude, longitude = existing.longitude, h3_index = existing.h3_index;
@@ -557,6 +561,14 @@ router.post('/orders', authConsumer, [
     if (!delivery_address) return res.status(400).json({ error: 'Delivery address required' });
     if (!pincode)          return res.status(400).json({ error: 'Pincode required' });
   }
+
+  /* Bengaluru-only delivery. Checked here — regardless of whether the
+   * address came from a saved address or inline fields — so a stale saved
+   * address from before this restriction can't slip an order through. */
+  if (!isBengaluruPincode(pincode)) {
+    return res.status(400).json({ error: OUTSIDE_DELIVERY_AREA_ERROR });
+  }
+
   const consumer = req.consumer;
 
   /* Backfill consumer.phone from delivery_phone for consumers who signed up
