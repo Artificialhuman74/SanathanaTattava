@@ -6,6 +6,7 @@ import {
   Star, AlertCircle,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface CommissionSummary {
   dealer_id: number;
@@ -135,7 +136,7 @@ export default function AdminCommissions() {
         </div>
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">

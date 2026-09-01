@@ -10,6 +10,7 @@ import {
 import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 const STATUS_COLORS: Record<string, string> = {
   pending:    'bg-amber-100 text-amber-700',
@@ -82,7 +83,7 @@ export default function TraderDashboard() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <LiquidLoader size={84} />
     </div>
   );
 

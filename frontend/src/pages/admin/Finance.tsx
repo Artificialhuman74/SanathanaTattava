@@ -10,6 +10,7 @@ import {
   ResponsiveContainer, LineChart, Line,
 } from 'recharts';
 import * as XLSX from 'xlsx';
+import LiquidLoader from '../../components/LiquidLoader';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface Summary {
@@ -271,7 +272,7 @@ export default function AdminFinance() {
 
       {loading && (
         <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+          <LiquidLoader size={76} />
         </div>
       )}
 
@@ -800,7 +801,7 @@ function ContainerFinanceLog() {
   useEffect(() => { load(); }, [load]);
 
   if (loading) {
-    return <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">Loading container finance log…</div>;
+    return <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 flex justify-center"><LiquidLoader size={72} /></div>;
   }
 
   return (

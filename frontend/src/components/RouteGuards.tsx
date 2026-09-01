@@ -1,10 +1,14 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LiquidLoader from './LiquidLoader';
 
-const Spinner = ({ accent = 'brand-600' }: { accent?: string }) => (
+/* The first thing anyone sees on a guarded route, so it is the loader that
+ * sets the tone for the whole app. The `accent` prop the arc used to take is
+ * gone: the drop carries the brand itself and does not tint. */
+const Spinner = () => (
   <div className="flex items-center justify-center min-h-screen">
-    <div className={`animate-spin rounded-full h-8 w-8 border-b-2 border-${accent}`} />
+    <LiquidLoader size={96} />
   </div>
 );
 
@@ -18,7 +22,7 @@ export const PrivateRoute = ({ children, role }: { children: React.ReactNode; ro
 
 export const DeliveryRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  if (loading) return <Spinner accent="emerald-600" />;
+  if (loading) return <Spinner />;
   if (!user) return <Navigate to="/delivery/login" replace />;
   if (user.role !== 'trader' && user.role !== 'admin') return <Navigate to="/delivery/login" replace />;
   return <>{children}</>;

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 type Status = 'pending_delivery' | 'held' | 'refund_requested' | 'refunded' | 'forfeited';
 type Destination = 'manual_bank' | 'store_credit' | null;
@@ -151,7 +152,7 @@ export default function AdminHoldings() {
 
       {/* List */}
       {loading ? (
-        <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+        <div className="py-16 flex justify-center"><LiquidLoader size={72} /></div>
       ) : !data || data.holdings.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
           No holdings match your filters.
@@ -315,7 +316,7 @@ function DetailDrawer({
         </div>
 
         {loading || !data ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-400">Loading…</div>
+          <div className="flex-1 flex items-center justify-center"><LiquidLoader size={64} /></div>
         ) : (
           <div className="flex-1 p-5 space-y-5">
             {/* Status block */}

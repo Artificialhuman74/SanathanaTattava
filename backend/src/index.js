@@ -77,6 +77,8 @@ const deliveryRoutes      = require('./routes/delivery');
 const paymentRoutes       = require('./routes/payments');
 const publicRoutes        = require('./routes/public');
 const financeRoutes       = require('./routes/finance');
+const luckyDrawRoutes     = require('./routes/luckyDraw');
+const devToolsRoutes      = require('./routes/devTools');
 
 const app  = express();
 const PORT = process.env.PORT || 5001;
@@ -182,6 +184,8 @@ app.use('/api/delivery',      deliveryRoutes);
 app.use('/api/payments',      paymentRoutes);
 app.use('/api/invoice',       require('./routes/invoices'));
 app.use('/api/public',        publicRoutes);
+app.use('/api/lucky-draw',    luckyDrawRoutes);
+app.use('/api/dev-tools',     devToolsRoutes);
 
 app.get('/api/health', (_req, res) => {
   try {
@@ -323,6 +327,10 @@ setInterval(scheduleReviewEmails, 60 * 60 * 1000);
 /* ── Automated weekly payouts (admin-configurable day/time, IST) ─────────── */
 const { startPayoutScheduler } = require('./services/payoutScheduler');
 startPayoutScheduler();
+
+// ─── Bhagya Chakra monthly draw — 12th at 5PM IST by default ───────────────
+const { startDrawScheduler } = require('./services/luckyDraw/drawScheduler');
+startDrawScheduler();
 
 /* ── Abandoned-order sweeper ──────────────────────────────────────────────── */
 const { sweepAbandonedOrders } = require('./services/orderSweeperService');

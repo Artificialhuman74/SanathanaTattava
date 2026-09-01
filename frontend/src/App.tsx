@@ -31,6 +31,7 @@ import AdminDealerInventory from './pages/admin/DealerInventory';
 import AdminFinance        from './pages/admin/Finance';
 import AdminContainerFinance from './pages/admin/ContainerFinance';
 import AdminHoldings           from './pages/admin/Holdings';
+import AdminLuckyDraw          from './pages/admin/LuckyDraw';
 
 import TraderDashboard     from './pages/trader/Dashboard';
 import TraderProducts      from './pages/trader/Products';
@@ -41,6 +42,7 @@ import TraderCommissions   from './pages/trader/Commissions';
 import TraderProfile       from './pages/trader/Profile';
 import TraderInventory     from './pages/trader/Inventory';
 import TraderSubDealerCommissions from './pages/trader/SubDealerCommissions';
+import TraderLuckyDraw     from './pages/trader/LuckyDraw';
 import ConfirmCommission   from './pages/ConfirmCommission';
 
 import Shop                from './pages/consumer/Shop';
@@ -57,6 +59,8 @@ import ConsumerSupport     from './pages/consumer/Support';
 import ConsumerLegal       from './pages/consumer/Legal';
 import ConsumerReview      from './pages/consumer/Review';
 import VerifyPending       from './pages/consumer/VerifyPending';
+import ConsumerLuckyDraw   from './pages/consumer/LuckyDraw';
+import ConsumerTestConsole from './pages/consumer/TestConsole';
 
 import DeliveryLogin     from './pages/delivery/Login';
 import DeliveryDashboard from './pages/delivery/Dashboard';
@@ -93,6 +97,7 @@ const PartnerRoutes = () => {
         <Route path="container-deposits"  element={<Navigate to="/admin/container-finance" replace />} />
         <Route path="manual-refunds"      element={<Navigate to="/admin/container-finance" replace />} />
         <Route path="holdings"          element={<AdminHoldings />} />
+        <Route path="lucky-draw"        element={<AdminLuckyDraw />} />
         <Route path="settings"        element={<AdminSettings />} />
       </Route>
 
@@ -107,6 +112,7 @@ const PartnerRoutes = () => {
         <Route path="sub-dealer-commissions" element={<TraderSubDealerCommissions />} />
         <Route path="profile"         element={<TraderProfile />} />
         <Route path="inventory"       element={<TraderInventory />} />
+        <Route path="lucky-draw"      element={<TraderLuckyDraw />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -155,6 +161,8 @@ const ConsumerRoutes = () => (
       <Route path="wallet"     element={<ConsumerRoute><ConsumerWallet /></ConsumerRoute>} />
       <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />
       <Route path="checkout"  element={<ConsumerCheckout />} />
+      <Route path="lucky-draw" element={<ConsumerRoute><ConsumerLuckyDraw /></ConsumerRoute>} />
+      <Route path="test-console" element={<ConsumerRoute><ConsumerTestConsole /></ConsumerRoute>} />
       <Route path="profile"         element={<ConsumerRoute><ConsumerProfile /></ConsumerRoute>} />
       <Route path="profile/account" element={<ConsumerRoute><ConsumerAccount /></ConsumerRoute>} />
       <Route path="support"         element={<ConsumerSupport />} />

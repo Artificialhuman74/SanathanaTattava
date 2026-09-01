@@ -3,11 +3,12 @@ import toast from 'react-hot-toast';
 import {
   Package, CheckCircle2, AlertTriangle, Info, RefreshCcw, X,
   Phone, MapPin, Calendar, FileText, Download, ShieldCheck, ShieldAlert,
-  IndianRupee, Image as ImageIcon, Loader2, Search, Filter, Trash2,
+  IndianRupee, Image as ImageIcon, Search, Filter, Trash2,
   Banknote, History, Wallet, Inbox, EyeOff, RotateCcw,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 /**
  * Phase 10 — unified Container Finance page.
@@ -188,7 +189,7 @@ function QueueTab({ setPreview }: { setPreview: (u: string | null) => void }) {
   };
 
   if (loading) {
-    return <div className="py-16 text-center text-slate-400 text-sm flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading queue…</div>;
+    return <div className="py-16 flex justify-center"><LiquidLoader size={72} /></div>;
   }
 
   const empty =
@@ -554,7 +555,7 @@ function HistoryTab({ setPreview }: { setPreview: (u: string | null) => void }) 
 
       {/* events list */}
       {loading ? (
-        <div className="py-16 text-center text-slate-400 text-sm flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading events…</div>
+        <div className="py-16 flex justify-center"><LiquidLoader size={72} /></div>
       ) : events.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
           <p className="text-base font-semibold text-slate-800">No events match</p>
@@ -665,7 +666,7 @@ function DisputesTab({ setPreview }: { setPreview: (u: string | null) => void })
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-slate-400 text-sm flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading…</div>
+        <div className="py-16 flex justify-center"><LiquidLoader size={72} /></div>
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
           <p className="text-base font-semibold text-slate-800">No disputes</p>

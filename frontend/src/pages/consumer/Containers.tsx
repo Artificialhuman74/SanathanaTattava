@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Package, RefreshCw, ArrowLeftRight, X, History, AlertCircle, Wallet, ChevronRight, AlertTriangle, MessageCircle } from 'lucide-react';
+import { Package, RefreshCw, ArrowLeftRight, X, History, AlertCircle, Wallet, ChevronRight, AlertTriangle, MessageCircle, Check, Loader2 } from 'lucide-react';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
+import ChakraIcon from '../../components/luckyDraw/ChakraIcon';
+import { LUCKY_DRAW_NAME } from '../../config/luckyDraw';
 
 type HoldingStatus =
   | 'pending_delivery'
@@ -21,6 +24,7 @@ interface HeldHolding {
   container_type: string;
   deposit_amount: number;
   status: HoldingStatus;
+  source?: 'purchase' | 'lucky_draw_reward';
   created_at: string;
   updated_at: string;
   current_product_name: string;
@@ -34,6 +38,7 @@ interface HistoryHolding {
   container_type: string;
   deposit_amount: number;
   status: HoldingStatus;
+  source?: 'purchase' | 'lucky_draw_reward';
   refund_destination: 'manual_bank' | 'store_credit' | null;
   requested_at: string | null;
   resolved_at: string | null;
@@ -99,6 +104,13 @@ const DEST_LABEL: Record<NonNullable<HistoryHolding['refund_destination']>, stri
   store_credit: 'Store credit',
 };
 
+/** "September" from a 'YYYY-MM' key. */
+function monthLabelOf(key: string) {
+  const [y, m] = String(key || '').split('-').map(Number);
+  if (!y || !m) return 'this month';
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long' });
+}
+
 export default function ConsumerContainers() {
   const { consumer, consumerLogout } = useAuth();
   const navigate = useNavigate();
@@ -108,9 +120,45 @@ export default function ConsumerContainers() {
   const [swappable, setSwappable] = useState<SwappableProduct[]>([]);
   const [refundModal, setRefundModal] = useState<HeldHolding | null>(null);
   const [swapModal, setSwapModal] = useState<HeldHolding | null>(null);
+  /* The reward container's actions are the round's actions, so the page needs
+   * the cycle to know whether this month has been claimed yet. */
+  const [cycle, setCycle] = useState<any>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [disputeModal, setDisputeModal] = useState<HistoryHolding | null>(null);
   const [wallet, setWallet] = useState<StoreCreditResponse | null>(null);
   const [supportWhatsapp, setSupportWhatsapp] = useState<string | null>(null);
+
+  /** This month's free delivery, claimed from the container it arrives in. */
+  const claimThisMonth = async () => {
+    setClaiming(true);
+    try {
+      await consumerApi.post('/lucky-draw/consumer/reward-order', {}, { skipBaseRotation: true } as any);
+      toast.success('Your free refill is on its way.');
+      fetchAllRef.current?.();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "That didn't go through. Try again in a moment.");
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  /** Hand the container back and step out of the round, in one action. */
+  const returnAndLeave = async () => {
+    if (!window.confirm(
+      'Return this container and leave the round? Your free deliveries stop, and your agent will collect the container. This cannot be undone.'
+    )) return;
+    setLeaving(true);
+    try {
+      await consumerApi.post('/lucky-draw/consumer/leave', {}, { skipBaseRotation: true } as any);
+      toast.success('You have left the round. Your agent will collect the container.');
+      fetchAllRef.current?.();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Couldn't do that. Try again in a moment.");
+    } finally {
+      setLeaving(false);
+    }
+  };
 
   const fetchAll = useCallback(() => {
     if (!consumer) { navigate('/shop/login', { replace: true }); return; }
@@ -118,8 +166,10 @@ export default function ConsumerContainers() {
     Promise.all([
       consumerApi.get<ContainersResponse>('/consumer/containers'),
       consumerApi.get<StoreCreditResponse>('/consumer/store-credit').catch(() => null),
+      consumerApi.get('/lucky-draw/consumer/status', { skipAuthRedirect: true } as any).catch(() => null),
     ])
-      .then(([containersRes, walletRes]) => {
+      .then(([containersRes, walletRes, drawRes]: any[]) => {
+        setCycle(drawRes?.data?.cycle ?? null);
         setHeld(containersRes.data.held || []);
         setHistory(containersRes.data.history || []);
         setSwappable(containersRes.data.swappable || []);
@@ -136,6 +186,9 @@ export default function ConsumerContainers() {
       })
       .finally(() => setLoading(false));
   }, [consumer]); // eslint-disable-line
+
+  const fetchAllRef = useRef<(() => void) | null>(null);
+  fetchAllRef.current = fetchAll;
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -159,7 +212,7 @@ export default function ConsumerContainers() {
       {wallet && wallet.balance > 0 && <WalletPill balance={wallet.balance} />}
 
       {loading ? (
-        <div className="py-20 text-center text-slate-400 text-sm">Loading…</div>
+        <div className="py-20 flex justify-center"><LiquidLoader size={72} /></div>
       ) : held.length === 0 && visibleHistory.length === 0 ? (
         <EmptyState />
       ) : (
@@ -182,6 +235,14 @@ export default function ConsumerContainers() {
                     onRefill={() => navigate('/shop')}
                     onRefund={() => setRefundModal(h)}
                     onSwap={() => setSwapModal(h)}
+                    reward={h.source === 'lucky_draw_reward' && cycle?.won && cycle?.reward ? {
+                      claimed: !!cycle.reward.this_month_ordered,
+                      delivered: !!cycle.reward.this_month_delivered,
+                      monthLabel: monthLabelOf(cycle.month_key),
+                      claiming, leaving,
+                      onClaim: claimThisMonth,
+                      onLeave: returnAndLeave,
+                    } : null}
                   />
                 ))}
               </ul>
@@ -301,32 +362,66 @@ function EmptyState() {
   );
 }
 
+interface RewardActions {
+  /** True once this month's free delivery has been ordered. */
+  claimed: boolean;
+  delivered: boolean;
+  /** "September", the month the claim belongs to. */
+  monthLabel: string;
+  claiming: boolean;
+  leaving: boolean;
+  onClaim: () => void;
+  onLeave: () => void;
+}
+
 function HeldCard({
   holding,
   onRefill,
   onRefund,
   onSwap,
+  reward,
 }: {
   holding: HeldHolding;
   onRefill: () => void;
   onRefund: () => void;
   onSwap: () => void;
+  /** Present only on the container a lucky-draw reward arrives in. */
+  reward?: RewardActions | null;
 }) {
   const isHeld = holding.status === 'held';
   const isPending = holding.status === 'pending_delivery';
+  /* A container won through Bhagya Chakra: gold rather than the usual white,
+   * because it did not arrive the way the others did. It also cannot be
+   * swapped, so the row below drops to two actions. */
+  const isReward = holding.source === 'lucky_draw_reward';
+
   return (
-    <li className="rounded-xl border border-[#e8dcc8] bg-white p-4">
+    <li
+      className="rounded-xl border p-4"
+      style={isReward
+        ? { borderColor: '#e8c164', backgroundColor: '#fdf8ee', boxShadow: '0 1px 0 rgba(200,150,60,0.18)' }
+        : { borderColor: '#e8dcc8', backgroundColor: '#ffffff' }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-            <Package className="w-5 h-5 text-emerald-600" />
+          <div
+            className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={isReward
+              ? { backgroundColor: '#f8edcc' }
+              : { backgroundColor: '#ecfdf5' }}
+          >
+            {isReward
+              ? <ChakraIcon size={22} />
+              : <Package className="w-5 h-5 text-emerald-600" />}
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-slate-900 text-sm truncate">
               {holding.container_type} · {holding.current_product_name}
             </p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Deposit ₹{holding.deposit_amount.toFixed(0)} · since {formatIstDate(holding.created_at)}
+            <p className="text-xs mt-0.5" style={{ color: isReward ? '#885c24' : '#64748b' }}>
+              {isReward
+                ? <>Won with {LUCKY_DRAW_NAME} · since {formatIstDate(holding.created_at)}</>
+                : <>Deposit ₹{holding.deposit_amount.toFixed(0)} · since {formatIstDate(holding.created_at)}</>}
             </p>
             {holding.current_product_id !== holding.original_product_id && (
               <p className="text-xs text-slate-400 mt-0.5">
@@ -346,8 +441,49 @@ function HeldCard({
         </p>
       )}
 
-      {isHeld && (
-        <div className="mt-3 grid grid-cols-3 gap-2">
+      {/* A reward container's actions ARE the round's actions: claim this
+          month's free delivery from the can it arrives in, or hand it back and
+          step out. A generic "Refill" here would offer to sell them oil they
+          are already owed. */}
+      {isHeld && isReward && reward && (
+        <div className="mt-3 space-y-2">
+          {reward.claimed ? (
+            <p
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold"
+              style={{ backgroundColor: '#f8edcc', color: '#6a4219' }}
+              role="status"
+            >
+              <Check size={15} className="flex-shrink-0" />
+              {reward.delivered
+                ? `Delivered for ${reward.monthLabel}`
+                : `Ordered for ${reward.monthLabel}`}
+            </p>
+          ) : (
+            <button
+              onClick={reward.onClaim}
+              disabled={reward.claiming}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-700 hover:bg-brand-800 text-white text-sm font-semibold py-2.5 transition-colors disabled:opacity-60"
+              style={{ minHeight: 44 }}
+            >
+              {reward.claiming && <Loader2 size={14} className="animate-spin" />}
+              Order {reward.monthLabel}&rsquo;s free refill
+            </button>
+          )}
+
+          <button
+            onClick={reward.onLeave}
+            disabled={reward.leaving}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border text-sm font-semibold py-2.5 transition-colors disabled:opacity-60 hover:bg-red-50"
+            style={{ borderColor: '#fecaca', color: '#b91c1c', minHeight: 44 }}
+          >
+            {reward.leaving ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+            Return and leave the round
+          </button>
+        </div>
+      )}
+
+      {isHeld && !(isReward && reward) && (
+        <div className={`mt-3 grid gap-2 ${isReward ? 'grid-cols-2' : 'grid-cols-3'}`}>
           <button
             onClick={onRefill}
             className="flex flex-col items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition text-emerald-700 py-2 px-2"
@@ -355,6 +491,9 @@ function HeldCard({
             <RefreshCw className="w-4 h-4" />
             <span className="text-[11px] font-semibold">Refill</span>
           </button>
+          {/* No swap on a reward container: a swap trades one oil for another
+              against the deposit being held, and no deposit was taken here. */}
+          {!isReward && (
           <button
             onClick={onSwap}
             className="flex flex-col items-center gap-1 rounded-lg border border-[#e8dcc8] bg-[#fffbf2] hover:bg-parchment-100 transition text-slate-700 py-2 px-2"
@@ -362,6 +501,7 @@ function HeldCard({
             <ArrowLeftRight className="w-4 h-4" />
             <span className="text-[11px] font-semibold">Swap product</span>
           </button>
+          )}
           <button
             onClick={onRefund}
             className="flex flex-col items-center gap-1 rounded-lg border border-[#e8dcc8] bg-[#fffbf2] hover:bg-parchment-100 transition text-slate-700 py-2 px-2"
@@ -370,6 +510,12 @@ function HeldCard({
             <span className="text-[11px] font-semibold">Return</span>
           </button>
         </div>
+      )}
+
+      {isHeld && isReward && (
+        <p className="mt-2.5 text-[11px] leading-relaxed" style={{ color: '#885c24' }}>
+          Your free delivery each month comes in this container, so it stays with the oil you won it with.
+        </p>
       )}
     </li>
   );

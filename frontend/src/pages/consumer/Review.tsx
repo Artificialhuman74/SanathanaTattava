@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Star, Camera, X, CheckCircle2, ArrowLeft } from 'lucide-react';
+import LiquidLoader from '../../components/LiquidLoader';
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -127,7 +128,7 @@ export default function ReviewPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        <LiquidLoader size={72} />
       </div>
     );
   }

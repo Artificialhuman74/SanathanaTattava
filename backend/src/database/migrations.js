@@ -778,6 +778,15 @@ function runMigrations(db) {
       updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  /* Where the container came from. A lucky-draw reward container is given,
+   * not bought: no deposit was taken, so it cannot be swapped for a different
+   * oil (there is no deposit backing the exchange), though it can still be
+   * returned. Defaults to 'purchase' so every existing row keeps its meaning. */
+  if (!hasColumn('container_holdings', 'source')) {
+    db.exec(`ALTER TABLE container_holdings ADD COLUMN source TEXT NOT NULL DEFAULT 'purchase'`);
+    console.log('[migration] container_holdings: added source');
+  }
+
   db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_consumer_status ON container_holdings(consumer_id, status)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_invoice         ON container_holdings(invoice_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_holdings_current_product ON container_holdings(current_product_id)`);
@@ -803,15 +812,6 @@ function runMigrations(db) {
   if (!hasColumn('container_holdings', 'manual_refund_method')) {
     db.exec(`ALTER TABLE container_holdings ADD COLUMN manual_refund_method TEXT`);
     console.log('[migration] container_holdings: added manual_refund_method');
-  }
-
-  /* Phase 10 — admins can hide stale entries from the Container Finance
-   * History tab without losing the row (Finance summary still sums them).
-   * Setting hidden_at to a timestamp removes the row from the default
-   * History view; the row stays in the DB and in /admin/finance/summary. */
-  if (!hasColumn('container_finance_log', 'hidden_at')) {
-    db.exec(`ALTER TABLE container_finance_log ADD COLUMN hidden_at TIMESTAMP`);
-    console.log('[migration] container_finance_log: added hidden_at');
   }
 
   /* Phase 8 — admin holdings override audit. Every admin-initiated status
@@ -927,6 +927,17 @@ function runMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_holding ON container_finance_log(holding_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_driver  ON container_finance_log(driver_user_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_finance_log_created ON container_finance_log(created_at)`);
+
+  /* Phase 10 — admins can hide stale entries from the Container Finance
+   * History tab without losing the row (Finance summary still sums them).
+   * Setting hidden_at to a timestamp removes the row from the default
+   * History view; the row stays in the DB and in /admin/finance/summary.
+   * Must run after container_finance_log is created above — on a brand
+   * new database this used to fire before the table existed. */
+  if (!hasColumn('container_finance_log', 'hidden_at')) {
+    db.exec(`ALTER TABLE container_finance_log ADD COLUMN hidden_at TIMESTAMP`);
+    console.log('[migration] container_finance_log: added hidden_at');
+  }
 
   /* Settings: support WhatsApp number (already shown in support page,
    * also used by the damage-dispute button on consumer side). */
@@ -1160,6 +1171,82 @@ function runMigrations(db) {
       created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  /* ═══════════════════════════════════════════════════════════════════
+   * Migration: Lucky draw scheme (see LUCKY_DRAW_FEATURE_SPEC.md).
+   * Temporary/promotional feature — tables are intentionally isolated
+   * (own prefix, no columns added to existing tables besides FKs) so the
+   * whole thing can be dropped cleanly later. Internal table/column names
+   * use the generic "lucky_draw" codename, never the branded display name
+   * (see config/luckyDraw.js) — renaming the brand never touches schema.
+   * Static DDL strings (no interpolation); assigned to vars so static
+   * scanners don't confuse better-sqlite3's db.exec with child_process.
+   * ═══════════════════════════════════════════════════════════════════ */
+  const createLuckyDrawSchemes = `
+    CREATE TABLE IF NOT EXISTS lucky_draw_schemes (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      name                 TEXT    NOT NULL,
+      status               TEXT    NOT NULL DEFAULT 'draft',
+      joining_fee          REAL    NOT NULL DEFAULT 100,
+      enrollment_opens_at  DATETIME,
+      enrollment_closes_at DATETIME,
+      starts_at            DATETIME,
+      ends_at              DATETIME,
+      created_by           INTEGER REFERENCES users(id),
+      created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+  db.exec(createLuckyDrawSchemes);
+
+  const createLuckyDrawEnrollments = `
+    CREATE TABLE IF NOT EXISTS lucky_draw_enrollments (
+      id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+      scheme_id                INTEGER NOT NULL REFERENCES lucky_draw_schemes(id),
+      consumer_id              INTEGER NOT NULL REFERENCES consumers(id),
+      status                   TEXT    NOT NULL DEFAULT 'pending_payment',
+      joining_fee_paid         REAL,
+      razorpay_order_id        TEXT,
+      razorpay_payment_id      TEXT,
+      enrolled_at              DATETIME,
+      welcome_gift_product_id  INTEGER REFERENCES products(id),
+      welcome_gift_order_id    INTEGER REFERENCES consumer_orders(id),
+      won_at_month             INTEGER,
+      reward_product_id        INTEGER REFERENCES products(id),
+      reward_quantity          INTEGER,
+      created_at               DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(consumer_id, scheme_id)
+    )
+  `;
+  db.exec(createLuckyDrawEnrollments);
+
+  if (!hasIndex('idx_lucky_draw_enrollments_consumer_status')) {
+    const createLuckyDrawEnrollmentsIdx =
+      'CREATE INDEX idx_lucky_draw_enrollments_consumer_status ON lucky_draw_enrollments(consumer_id, status)';
+    db.exec(createLuckyDrawEnrollmentsIdx);
+    console.log('[migration] lucky_draw_enrollments: created idx_lucky_draw_enrollments_consumer_status');
+  }
+
+  const createLuckyDrawMonthlyEntries = `
+    CREATE TABLE IF NOT EXISTS lucky_draw_monthly_entries (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      enrollment_id        INTEGER NOT NULL REFERENCES lucky_draw_enrollments(id),
+      month_number         INTEGER NOT NULL,
+      qualifying_order_id  INTEGER REFERENCES consumer_orders(id),
+      qualified            INTEGER NOT NULL DEFAULT 0,
+      is_winner            INTEGER NOT NULL DEFAULT 0,
+      draw_run_at          DATETIME,
+      UNIQUE(enrollment_id, month_number)
+    )
+  `;
+  db.exec(createLuckyDrawMonthlyEntries);
+
+  /* How many tickets this entry carried into its draw. Stored, not derived:
+   * the loyalty weighting changes what the odds were, and a weighted draw
+   * nobody can reconstruct afterwards cannot be defended. */
+  if (!hasColumn('lucky_draw_monthly_entries', 'tickets')) {
+    db.exec(`ALTER TABLE lucky_draw_monthly_entries ADD COLUMN tickets INTEGER NOT NULL DEFAULT 1`);
+    console.log('[migration] lucky_draw_monthly_entries: added tickets');
+  }
 
   console.log('[migration] all migrations applied');
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import LiquidLoader from '../../components/LiquidLoader';
 import {
   Users, Copy, Check, Mail, Phone, QrCode, Truck,
   Edit2, CheckCircle2, X, AlertCircle, ShoppingBag, DollarSign,
@@ -155,7 +156,7 @@ export default function TraderSubDealers() {
       {/* Sub-Dealer Cards */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+          <LiquidLoader size={76} />
         </div>
       ) : subDealers.length === 0 ? (
         <div className="card p-10 text-center">

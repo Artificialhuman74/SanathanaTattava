@@ -8,6 +8,8 @@ import {
   Users, Info, HelpCircle, ChevronDown,
   Recycle, PackagePlus, ArrowLeftRight, ArrowDownToLine, Link2,
 } from 'lucide-react';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind } from '../../config/luckyDraw';
 
 interface DeliveryContext {
   isOnline: boolean;
@@ -545,7 +547,10 @@ function FleetView({
             return (
               <div
                 key={o.id}
-                className="w-full p-3 hover:bg-slate-50 transition-colors"
+                className={`w-full p-3 transition-colors ${luckyDrawOrderKind(o.order_number) ? 'border-y' : 'hover:bg-slate-50'}`}
+                style={luckyDrawOrderKind(o.order_number)
+                  ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' }
+                  : undefined}
               >
                 <button onClick={() => onOpen(o.id)} className="w-full text-left">
                   <div className="flex items-start justify-between gap-3">
@@ -556,6 +561,9 @@ function FleetView({
                         </p>
                         <span className="text-xs text-slate-400">·</span>
                         <p className="text-xs text-slate-500 truncate">{o.consumer_name || 'Customer'}</p>
+                        {luckyDrawOrderKind(o.order_number) && (
+                          <LuckyDrawOrderBadge kind={luckyDrawOrderKind(o.order_number)!} size="sm" />
+                        )}
                       </div>
                       <p className="text-[11px] text-slate-500 mt-1">
                         {unassigned ? (

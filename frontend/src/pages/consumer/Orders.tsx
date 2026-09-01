@@ -6,6 +6,9 @@ import toast from 'react-hot-toast';
 import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw } from 'lucide-react';
 import { getCartCount } from '../../services/cartStorage';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind } from '../../config/luckyDraw';
 
 interface ConsumerOrder {
   id: number;
@@ -40,6 +43,14 @@ interface OrderItem {
   total: number;
   container_cost: number;
 }
+
+/** Said to the consumer, in their own orders list. The trader-facing wording
+ *  lives in config/luckyDraw.ts, and the two are not the same sentence. */
+const LUCKY_DRAW_ORDER_NOTE_CONSUMER: Record<string, string> = {
+  welcome_gift: 'Your welcome gift for joining. Nothing to pay on delivery.',
+  reward: 'Your free delivery for winning this round. Nothing to pay.',
+  guarantee: 'Your round finished, so this one is on us. Nothing to pay.',
+};
 
 const STATUS_LABELS: Record<string, string> = {
   pending:    'Order Placed',
@@ -125,7 +136,7 @@ export default function ConsumerOrders() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+      <LiquidLoader size={76} />
     </div>
   );
 
@@ -158,25 +169,36 @@ export default function ConsumerOrders() {
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map(order => (
+          {orders.map(order => {
+          /* A free lucky-draw delivery is an ordinary order priced at zero,
+             which on its own just looks like a mistake. The gold box says
+             where it came from. */
+          const bc = luckyDrawOrderKind(order.order_number);
+          return (
             <div
               key={order.id}
               onClick={() => setSelected(order)}
-              className="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform"
+              className={`rounded-2xl border shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform ${bc ? '' : 'bg-white border-[#e8dcc8]'}`}
+              style={bc ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
             >
               {/* Status header */}
-              <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-parchment-100'}`}>
-                  {STATUS_LABELS[order.status] || order.status}
-                </span>
-                <ChevronRight size={16} className="text-gray-300" />
+              <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[order.status] || 'text-gray-600 bg-parchment-100'}`}>
+                    {STATUS_LABELS[order.status] || order.status}
+                  </span>
+                  {bc && <LuckyDrawOrderBadge kind={bc} size="sm" />}
+                </div>
+                <ChevronRight size={16} className="text-gray-300 flex-shrink-0" />
               </div>
 
               {/* Order meta */}
               <div className="px-4 pb-2">
-                <p className="text-base font-extrabold text-gray-900">₹{parseFloat(String(order.total_amount)).toFixed(2)}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {PAYMENT_LABELS[order.payment_status] || order.payment_status}
+                <p className="text-base font-extrabold" style={{ color: bc ? '#3a2208' : undefined }}>
+                  {bc ? 'Free' : `₹${parseFloat(String(order.total_amount)).toFixed(2)}`}
+                </p>
+                <p className={`text-xs mt-0.5 ${bc ? '' : 'text-gray-400'}`} style={{ color: bc ? '#885c24' : undefined }}>
+                  {bc ? 'Nothing to pay' : (PAYMENT_LABELS[order.payment_status] || order.payment_status)}
                   {' · '}
                   {order.item_count ?? (order.items?.length ?? 0)} {(order.item_count ?? (order.items?.length ?? 0)) === 1 ? 'item' : 'items'}
                   {' · '}
@@ -217,12 +239,15 @@ export default function ConsumerOrders() {
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
       {/* ── Order Detail Modal ─────────────────────────────────────────── */}
-      {selected && (
+      {selected && (() => {
+      const selectedKind = luckyDrawOrderKind(selected.order_number);
+      return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
           <div className="relative bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -231,12 +256,20 @@ export default function ConsumerOrders() {
               <div className="w-10 h-1 bg-parchment-300 rounded-full" />
             </div>
 
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#e8dcc8]">
-              <div>
-                <p className="font-bold text-gray-900">{selected.order_number}</p>
+            <div
+              className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#e8dcc8]"
+              style={selectedKind ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
+            >
+              <div className="min-w-0">
+                {selectedKind && (
+                  <div className="mb-1.5">
+                    <LuckyDrawOrderBadge kind={selectedKind} />
+                  </div>
+                )}
+                <p className="font-bold text-gray-900 truncate">{selected.order_number}</p>
                 <p className="text-xs text-gray-400">{formatIst(selected.created_at)}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[selected.status]}`}>
                   {STATUS_LABELS[selected.status] || selected.status}
                 </span>
@@ -247,6 +280,14 @@ export default function ConsumerOrders() {
             </div>
 
             <div className="p-5 space-y-5">
+              {selectedKind && (
+                <div
+                  className="rounded-xl px-4 py-3 text-sm"
+                  style={{ backgroundColor: '#fdf8ee', border: '1px solid #f0d898', color: '#6a4219' }}
+                >
+                  {LUCKY_DRAW_ORDER_NOTE_CONSUMER[selectedKind]}
+                </div>
+              )}
               {/* Items */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items</p>
@@ -308,7 +349,7 @@ export default function ConsumerOrders() {
                             </div>
                           )}
                           <div className="flex justify-between font-extrabold text-brand-600 text-base border-t border-[#e8dcc8] pt-2 mt-1">
-                            <span>Total Paid</span>
+                            <span>{selectedKind ? 'Total' : 'Total Paid'}</span>
                             <span>₹{parseFloat(String(selected.total_amount)).toFixed(2)}</span>
                           </div>
                         </>
@@ -380,7 +421,8 @@ export default function ConsumerOrders() {
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

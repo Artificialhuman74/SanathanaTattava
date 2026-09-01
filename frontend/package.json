@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite --host",
+    "dev:partner": "VITE_APP_MODE=partner vite --host --port 3001",
     "build": "tsc && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
@@ -15,6 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@rive-app/react-canvas": "^4.31.0",
     "@types/canvas-confetti": "^1.9.0",
     "axios": "^1.6.8",
     "canvas-confetti": "^1.9.4",

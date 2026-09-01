@@ -7,12 +7,15 @@ import {
   UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import ChakraIcon from '../components/luckyDraw/ChakraIcon';
+import { LUCKY_DRAW_NAME } from '../config/luckyDraw';
 import { DELIVERY_SITE_URL } from '../appMode';
 
 const navItems = [
   { to: '/admin/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/inventory',       icon: Package,         label: 'Inventory' },
   { to: '/admin/traders',         icon: Users,           label: 'Partners' },
+  { to: '/admin/lucky-draw',      icon: ChakraIcon,      label: LUCKY_DRAW_NAME },
   { to: '/admin/consumer-orders', icon: ShoppingBag,     label: 'Consumer Orders' },
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
   { to: '/admin/dealer-inventory', icon: Warehouse,       label: 'Partner Inventory' },

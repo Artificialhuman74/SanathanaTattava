@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { ShoppingCart, X, Package, ChevronDown } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -55,7 +56,7 @@ export default function MyOrders() {
 
       <div className="card">
         {loading ? (
-          <div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" /></div>
+          <div className="flex items-center justify-center h-48"><LiquidLoader size={76} /></div>
         ) : (
           <div className="table-wrapper">
             <table>

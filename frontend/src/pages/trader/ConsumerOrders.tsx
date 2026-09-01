@@ -8,6 +8,9 @@ import {
   User, Truck, AlertTriangle, CheckCircle2, ChevronRight,
 } from 'lucide-react';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind, LUCKY_DRAW_ORDER_NOTE } from '../../config/luckyDraw';
 
 interface ConsumerOrder {
   id: number;
@@ -215,7 +218,7 @@ const totalOrders   = orders.length;
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">
@@ -233,13 +236,20 @@ const totalOrders   = orders.length;
                 </tr>
               </thead>
               <tbody className="tr-stagger">
-                {orders.map(o => (
+                {orders.map(o => {
+                /* A ₹0 order with no explanation looks like a mistake to pack.
+                   The gold box says it is a lucky-draw delivery. */
+                const bc = luckyDrawOrderKind(o.order_number);
+                return (
                   <tr
                     key={o.id}
-                    className="cursor-pointer hover:bg-parchment-100 transition-colors"
+                    className={`cursor-pointer transition-colors ${bc ? 'lucky-row' : 'hover:bg-parchment-100'}`}
                     onClick={() => setSelected(o)}
                   >
-                    <td className="font-mono text-brand-600 font-medium text-xs">{o.order_number}</td>
+                    <td className="font-mono text-brand-600 font-medium text-xs">
+                      {o.order_number}
+                      {bc && <div className="mt-1 font-sans"><LuckyDrawOrderBadge kind={bc} size="sm" /></div>}
+                    </td>
                     <td>
                       <p className="font-medium text-sm">{o.consumer_name}</p>
                       <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={9} />{o.consumer_phone}</p>
@@ -253,7 +263,9 @@ const totalOrders   = orders.length;
                         </span>
                       </td>
                     )}
-                    <td className="font-semibold">₹{parseFloat(String(o.total_amount)).toFixed(2)}</td>
+                    <td className="font-semibold" style={{ color: bc ? '#885c24' : undefined }}>
+                      {bc ? 'Free' : `₹${parseFloat(String(o.total_amount)).toFixed(2)}`}
+                    </td>
                     <td onClick={e => e.stopPropagation()}>
                       {isTier1 ? (
                         <select
@@ -295,7 +307,8 @@ const totalOrders   = orders.length;
                     </td>
                     <td className="text-xs text-slate-400">{formatIstDate(o.created_at)}</td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
             {orders.length === 0 && (
@@ -312,14 +325,25 @@ const totalOrders   = orders.length;
       </div>
 
       {/* Detail Modal */}
-      {selected && (
+      {selected && (() => {
+      const selectedKind = luckyDrawOrderKind(selected.order_number);
+      return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
           <div className="relative bg-[#fffbf2] rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-[#e8dcc8]">
+            <div
+              className="flex items-center justify-between p-5 border-b border-[#e8dcc8]"
+              style={selectedKind ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
+            >
               <div>
+                {selectedKind && <div className="mb-1.5"><LuckyDrawOrderBadge kind={selectedKind} /></div>}
                 <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
                 <p className="text-xs text-slate-400">{formatIst(selected.created_at)}</p>
+                {selectedKind && (
+                  <p className="text-xs mt-1 font-medium" style={{ color: '#6a4219' }}>
+                    {LUCKY_DRAW_ORDER_NOTE[selectedKind]}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className={`badge ${STATUS_COLORS[selected.status]}`}>{selected.status}</span>
@@ -457,7 +481,8 @@ const totalOrders   = orders.length;
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
 
       {/* Insufficient stock warning */}
       {stockWarning && (

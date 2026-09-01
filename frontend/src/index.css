@@ -102,6 +102,16 @@
   tbody tr { border-bottom: 1px solid #f5ede0; transition: background 0.15s; }
   tbody tr:hover { background: #fdf8f0; }
   tbody td { @apply px-4 py-3.5; color: #3d2e1a; }
+
+  /* A Bhagya Chakra free order, boxed in gold wherever orders are listed in
+   * a table. Drawn on the cells rather than the row because border-collapse
+   * discards a row's own border, and this has to be a closed box: it is the
+   * mark that says collect nothing on delivery. */
+  tbody tr.lucky-row { background: #fdf8ee; }
+  tbody tr.lucky-row:hover { background: #fbf2de; }
+  tbody tr.lucky-row > td { border-top: 1px solid #e8c164; border-bottom: 1px solid #e8c164; }
+  tbody tr.lucky-row > td:first-child { border-left: 1px solid #e8c164; }
+  tbody tr.lucky-row > td:last-child { border-right: 1px solid #e8c164; }
 }
 
 @layer utilities {
@@ -148,4 +158,62 @@
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* ── Bhagya Chakra: shared-element morph for the wheel, both from the Shop
+   invite card into the enrollment page and from the loading view into the
+   loaded one (see utils/viewTransition.ts). Same exponential ease-out as the
+   rest of the app's motion (chakra-spin-settle); no bounce. Browsers without
+   View Transitions support just navigate normally — this block only matters
+   where the API exists. ── */
+
+/* The GROUP is the one that carries the wheel across the screen: it animates
+   position and size between the two placements. Without a duration here it
+   runs at the browser default of 250ms, so the wheel arrived before anyone
+   saw it leave, no matter how long the fade below was told to take. */
+::view-transition-group(bhagya-chakra-hero) {
+  animation-duration: 0.65s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The image pair cross-fades over the same span, so the size and colour
+   change resolve exactly as the wheel touches down rather than before it. */
+::view-transition-old(bhagya-chakra-hero),
+::view-transition-new(bhagya-chakra-hero) {
+  animation-duration: 0.65s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The page underneath settles a little faster, so the wheel stays the thing
+   the eye follows instead of competing with a whole screen in motion. */
+::view-transition-group(root) {
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+
+/* ── Loaders ────────────────────────────────────────────────────────────
+   Keyframes for LiquidLoader and WagonWheelLoader. They live here rather
+   than in tailwind.config.js because both components set their own
+   durations inline, which a utility class cannot carry. ── */
+
+/* The oil rising and falling inside the drop. */
+@keyframes liquidRise { 0%, 100% { height: 16%; } 50% { height: 97%; } }
+
+/* Two offset discs turning under the surface line, so the meniscus reads as
+   moving liquid instead of a bar sliding up and down. */
+@keyframes liquidWave  { from { transform: translateX(-50%) rotate(0deg); }   to { transform: translateX(-50%) rotate(360deg); } }
+@keyframes liquidWave2 { from { transform: translateX(-50%) rotate(0deg); }   to { transform: translateX(-50%) rotate(-360deg); } }
+
+/* The shadow the drop casts, breathing with the fill. */
+@keyframes liquidGlow { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.8; } }
+
+/* The wagon wheel's turn, and the warm halo behind it. */
+@keyframes wheelTurn { to { transform: rotate(360deg); } }
+@keyframes wheelHalo { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }
+
+/* Both loaders are decorative: under reduced motion they hold a still frame
+   rather than animating, and the surrounding text still says what is going on. */
+@media (prefers-reduced-motion: reduce) {
+  [data-loader] * { animation: none !important; }
 }

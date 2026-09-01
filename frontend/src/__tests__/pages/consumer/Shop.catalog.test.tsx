@@ -106,8 +106,8 @@ describe('Shop — catalog UX (Part 12)', () => {
 
     renderShop();
 
-    // Spinner is a div with animate-spin class
-    const spinner = document.querySelector('.animate-spin');
+    // The loader marks itself with data-loader (see LiquidLoader).
+    const spinner = document.querySelector('[data-loader]');
     expect(spinner).not.toBeNull();
   });
 

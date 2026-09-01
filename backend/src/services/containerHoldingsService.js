@@ -15,9 +15,11 @@ const db = require('../database/db');
  * For each order_item where the product has a container_type AND the line
  * was charged a container_cost, insert one holding row per unit.
  *
- * Refill lines (Phase 4) will pass `container_cost=0` on the order item, so
- * those lines naturally produce zero holdings — they consume existing rows
- * instead of creating new ones.
+ * Refill lines consume an existing container instead of creating one, so they
+ * are excluded explicitly. They used to be filtered out by `container_cost=0`
+ * alone, which stopped working once free lucky-draw lines (also zero-cost)
+ * started producing holdings: a winner's second month would have minted a
+ * second container they never received.
  *
  * Idempotent: skips if any holding already exists for this invoice.
  */
@@ -27,21 +29,32 @@ function createHoldingsForInvoice({ invoiceId, orderId, consumerId }) {
   ).get(invoiceId);
   if (existing) return { created: 0, skipped: true };
 
+  /* A lucky-draw reward is delivered in a real container but charged nothing,
+   * so its line carries container_cost = 0 and the deposit filter below would
+   * drop it. Without this the winner receives a steel container every month
+   * that the system has no record of: not in their list, not returnable, and
+   * with no deposit to bring it back. */
+  const order = db.prepare(`SELECT order_number FROM consumer_orders WHERE id=?`).get(orderId);
+  const isReward = String(order?.order_number || '').startsWith('BCFREE-');
+
   const items = db.prepare(`
     SELECT oi.id AS order_item_id, oi.product_id, oi.quantity, oi.container_cost,
            p.container_type, p.name
       FROM consumer_order_items oi
       JOIN products p ON p.id=oi.product_id
-     WHERE oi.order_id=? AND oi.container_cost > 0
-  `).all(orderId);
+     WHERE oi.order_id=?
+       AND p.container_type IS NOT NULL
+       AND oi.is_refill = 0
+       AND (oi.container_cost > 0 OR ? = 1)
+  `).all(orderId, isReward ? 1 : 0);
 
   if (!items.length) return { created: 0, skipped: false };
 
   const insert = db.prepare(`
     INSERT INTO container_holdings
       (consumer_id, invoice_id, order_item_id, original_product_id, current_product_id,
-       container_type, deposit_amount, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_delivery')
+       container_type, deposit_amount, status, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_delivery', ?)
   `);
 
   let created = 0;
@@ -52,12 +65,15 @@ function createHoldingsForInvoice({ invoiceId, orderId, consumerId }) {
         console.warn(`[holdings] product ${it.product_id} (${it.name}) has no container_type — skipping ${it.quantity} unit(s) on invoice ${invoiceId}`);
         continue;
       }
-      const perUnitDeposit = +(it.container_cost / it.quantity).toFixed(2);
+      // Nothing was charged for a reward container, so nothing is owed back
+      // on it. The row exists so the container is visible and returnable.
+      const perUnitDeposit = isReward ? 0 : +(it.container_cost / it.quantity).toFixed(2);
       for (let q = 0; q < it.quantity; q++) {
         insert.run(
           consumerId, invoiceId, it.order_item_id,
           it.product_id, it.product_id,
-          it.container_type, perUnitDeposit
+          it.container_type, perUnitDeposit,
+          isReward ? 'lucky_draw_reward' : 'purchase'
         );
         created++;
       }
@@ -93,7 +109,7 @@ function getHeldContainers(consumerId) {
   return db.prepare(`
     SELECT h.id, h.invoice_id, h.order_item_id,
            h.original_product_id, h.current_product_id,
-           h.container_type, h.deposit_amount, h.status,
+           h.container_type, h.deposit_amount, h.status, h.source,
            h.created_at, h.updated_at,
            p_cur.name  AS current_product_name,
            p_cur.unit  AS current_product_unit,
@@ -125,7 +141,7 @@ function getRefillCap({ consumerId, productId, cartReservedQty = 0 }) {
  * on the My Containers page. */
 function getAllHoldingsForConsumer(consumerId) {
   return db.prepare(`
-    SELECT h.id, h.invoice_id, h.container_type, h.deposit_amount, h.status,
+    SELECT h.id, h.invoice_id, h.container_type, h.deposit_amount, h.status, h.source,
            h.refund_destination, h.requested_at, h.resolved_at,
            h.notes, h.created_at, h.updated_at,
            h.damage_photo_url, h.damage_dispute_status,
@@ -215,7 +231,7 @@ function cancelRefund({ holdingId, consumerId }) {
  */
 function requestSwap({ holdingId, consumerId, targetProductId }) {
   const holding = db.prepare(`
-    SELECT h.id, h.consumer_id, h.status, h.current_product_id, h.container_type
+    SELECT h.id, h.consumer_id, h.status, h.current_product_id, h.container_type, h.source
       FROM container_holdings h
      WHERE h.id=?
   `).get(holdingId);
@@ -227,6 +243,14 @@ function requestSwap({ holdingId, consumerId, targetProductId }) {
   if (holding.status !== 'held') {
     const err = new Error(`cannot swap from status=${holding.status}`);
     err.code = 'INVALID_STATUS';
+    throw err;
+  }
+  /* A swap trades one oil for another against the deposit that is already
+   * held. A reward container carries no deposit, so there is nothing to trade
+   * against: it stays the oil it was won with. Returning it is still fine. */
+  if (holding.source === 'lucky_draw_reward') {
+    const err = new Error('A container that came with a Bhagya Chakra reward stays with the oil it was won with. You can still return it.');
+    err.code = 'REWARD_NO_SWAP';
     throw err;
   }
   if (holding.current_product_id === targetProductId) {

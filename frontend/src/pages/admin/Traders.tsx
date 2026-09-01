@@ -6,6 +6,7 @@ import {
   Calendar, Truck, ChevronRight, ChevronUp, Edit2, Check, X, Trash2, ShieldCheck, ShieldOff, RefreshCw,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface Trader {
   id: number;
@@ -375,7 +376,7 @@ export default function AdminTraders() {
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">

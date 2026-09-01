@@ -1,0 +1,23 @@
+# What the backend image needs is backend/package*.json and backend/src — see
+# backend/Dockerfile. Everything below is uploaded to the builder otherwise,
+# and none of it is ever copied into the image.
+#
+# This matters because .gitignore cannot help here: the root node_modules/ and
+# data/database.db are committed, so they ride along on every `railway up`
+# regardless. That pushed the upload to 28MB and the deploy began timing out
+# against Railway's API, where earlier 4MB uploads went through fine.
+
+node_modules/
+frontend/
+data/
+e2e/
+.github/
+.claude/
+.netlify/
+
+# Design source handed over during the lucky-draw work; not part of any build.
+*.zip
+Lucky Draw Winning Animation/
+
+*.md
+.DS_Store

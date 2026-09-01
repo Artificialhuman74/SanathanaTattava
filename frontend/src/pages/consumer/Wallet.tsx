@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface LedgerEntry {
   id: number;
@@ -169,7 +170,7 @@ export default function ConsumerWallet() {
         </div>
 
         {loading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <div className="py-16 flex justify-center"><LiquidLoader size={72} /></div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-[#fffbf2] border border-[#e8dcc8] p-8 text-center">
             <div className="w-14 h-14 mx-auto rounded-full bg-parchment-200 flex items-center justify-center mb-3">

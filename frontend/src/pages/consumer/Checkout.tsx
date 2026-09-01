@@ -5,6 +5,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { clearCart, loadCart, saveCart } from '../../services/cartStorage';
 import { isBengaluruPincode, OUTSIDE_DELIVERY_AREA_ERROR } from '../../utils/deliveryArea';
+import CheckoutDrawNote from '../../components/luckyDraw/CheckoutDrawNote';
 import {
   ArrowLeft, MapPin, Tag, CheckCircle2, Package, Home, Briefcase,
   PlusCircle, User, Phone, Star, Hash, ShoppingBag, Wallet,
@@ -491,6 +492,10 @@ export default function Checkout() {
         {/* ── Left column: Delivery + Referral ──────────────────────── */}
         <div className="lg:col-span-2 space-y-5">
 
+          {/* They came to buy oil; buying oil is what enters them. This is the
+              one screen where saying so is useful rather than decorative. */}
+          <CheckoutDrawNote />
+
           {/* Guest prompt */}
           {!consumer && (
             <div className="p-4 bg-brand-50 rounded-xl border border-brand-100 text-sm text-brand-800">
@@ -778,8 +783,10 @@ export default function Checkout() {
                         value={referralCode}
                         onChange={e => setReferralCode(e.target.value.toUpperCase())}
                         className="form-input pl-10 uppercase tracking-widest font-mono"
-                        placeholder=""
-                        maxLength={5}
+                        placeholder="A0001"
+                        /* 5 or 6: see LinkTraderCard. A two-letter prefix
+                           code was being cut to five characters here too. */
+                        maxLength={6}
                         autoFocus
                       />
                     </div>

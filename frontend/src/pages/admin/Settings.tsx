@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import LiquidLoader from '../../components/LiquidLoader';
 import {
   Settings, Percent, Save, Info, MapPin, Navigation,
   RefreshCw, Loader2, AlertTriangle, Users, Clock, Zap,
@@ -193,7 +194,7 @@ export default function AdminSettings() {
 
         {loading ? (
           <div className="flex items-center justify-center h-20">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
+            <LiquidLoader size={68} />
           </div>
         ) : (
           <div className="space-y-5">

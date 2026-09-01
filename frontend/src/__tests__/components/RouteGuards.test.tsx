@@ -102,7 +102,7 @@ describe('PrivateRoute', () => {
         </Routes>
       </MemoryRouter>
     );
-    expect(container.querySelector('.animate-spin')).toBeTruthy();
+    expect(container.querySelector('[data-loader]')).toBeTruthy();
     expect(screen.queryByText('PROTECTED')).toBeNull();
   });
 });
@@ -152,10 +152,30 @@ describe('DeliveryRoute', () => {
     expect(screen.getByText('DELIVERY_LOGIN_PAGE')).toBeTruthy();
   });
 
-  test('non-trader (admin) → redirected to /delivery/login', () => {
+  /* Admins are deliberately allowed onto the delivery site: they act as the
+   * fallback delivery agent (see appMode.ts and the role check in
+   * RouteGuards). This asserted the opposite, and had been failing since the
+   * guard changed in commit c510e09, three days after the test was written. */
+  test('admin → allowed through as the fallback delivery agent', () => {
     mockUseAuth.mockReturnValue({
       ...baseAuth,
       user: { id: 1, role: 'admin', name: 'A', email: 'a@x.com', status: 'active' },
+    });
+    render(
+      <MemoryRouter initialEntries={['/delivery/dashboard']}>
+        <Routes>
+          <Route path="/delivery/dashboard" element={<DeliveryRoute><Protected /></DeliveryRoute>} />
+          <Route path="/delivery/login"     element={<DeliveryLogin />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('PROTECTED')).toBeTruthy();
+  });
+
+  test('any other role → redirected to /delivery/login', () => {
+    mockUseAuth.mockReturnValue({
+      ...baseAuth,
+      user: { id: 9, role: 'warehouse', name: 'W', email: 'w@x.com', status: 'active' },
     });
     render(
       <MemoryRouter initialEntries={['/delivery/dashboard']}>

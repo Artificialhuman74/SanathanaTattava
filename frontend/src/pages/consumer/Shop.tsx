@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { consumerApi } from '../../contexts/AuthContext';
 import { formatIstDate } from '../../utils/dateTime';
+import LuckyDrawInviteCard from '../../components/luckyDraw/LuckyDrawInviteCard';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface Product {
   id: number;
@@ -719,6 +721,10 @@ export default function Shop() {
         </div>
       </div>
 
+      <div className="px-4 sm:px-6 pb-4">
+        <LuckyDrawInviteCard />
+      </div>
+
       {/* Sticky search + category chips — these stay pinned at the top
           of the viewport once the title scrolls past. Frosted glass:
           translucent fill + strong backdrop-blur + a saturation lift
@@ -784,7 +790,7 @@ export default function Shop() {
       <div className="px-4 sm:px-6 pt-8 pb-12">
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+          <LiquidLoader size={76} />
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -1342,7 +1348,7 @@ function ProductReviews({ productId, consumer }: { productId: number; consumer: 
         )}
       </div>
 
-      {loading && <p className="text-xs text-slate-400 py-2">Loading reviews…</p>}
+      {loading && <div className="py-2 flex justify-center"><LiquidLoader size={44} label={null} /></div>}
 
       {!loading && reviews.length === 0 && (
         <p className="text-xs text-slate-400 py-2">No reviews yet. Be the first!</p>

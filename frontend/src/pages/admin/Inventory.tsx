@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import LiquidLoader from '../../components/LiquidLoader';
 import {
   Plus, Search, Edit2, Trash2, Package, AlertTriangle, X,
   Upload, ChevronDown, CheckCircle2, CropIcon,
@@ -272,7 +273,7 @@ export default function AdminInventory() {
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">

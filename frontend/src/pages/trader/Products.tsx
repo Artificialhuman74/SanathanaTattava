@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import LiquidLoader from '../../components/LiquidLoader';
 import {
   Search, ShoppingCart, Plus, Minus, X, Package, Trash2, ChevronDown,
   CheckCircle2, Tag,
@@ -137,7 +138,7 @@ export default function TraderProducts() {
 
       {/* Products Grid */}
       {loading ? (
-        <div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" /></div>
+        <div className="flex items-center justify-center h-48"><LiquidLoader size={76} /></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 tr-stagger">
           {products.map(p => {

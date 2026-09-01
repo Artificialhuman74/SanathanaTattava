@@ -6,6 +6,9 @@ import {
   User, Star, Truck, Clock, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind, LUCKY_DRAW_ORDER_NOTE } from '../../config/luckyDraw';
 
 interface ConsumerOrder {
   id: number;
@@ -182,7 +185,7 @@ export default function AdminConsumerOrders() {
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">
@@ -200,14 +203,17 @@ export default function AdminConsumerOrders() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map(o => (
+                {orders.map(o => {
+                const bc = luckyDrawOrderKind(o.order_number);
+                return (
                   <tr
                     key={o.id}
-                    className="cursor-pointer hover:bg-slate-50 transition-colors"
+                    className={`cursor-pointer transition-colors ${bc ? 'lucky-row' : 'hover:bg-slate-50'}`}
                     onClick={() => setSelected(o)}
                   >
                     <td className="font-mono text-brand-600 font-medium text-xs">
                       {o.order_number}
+                      {bc && <div className="mt-1 font-sans"><LuckyDrawOrderBadge kind={bc} size="sm" /></div>}
                       {o.admin_overridden_at && (
                         <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
                           Delivered directly by {o.delivery_dealer_name || 'admin'}
@@ -231,7 +237,9 @@ export default function AdminConsumerOrders() {
                         {o.dealer_tier === 1 ? 'Tier 1' : 'Sub-Dealer'}
                       </span>
                     </td>
-                    <td className="font-semibold">₹{parseFloat(String(o.total_amount)).toFixed(2)}</td>
+                    <td className="font-semibold" style={{ color: bc ? '#885c24' : undefined }}>
+                      {bc ? 'Free' : `₹${parseFloat(String(o.total_amount)).toFixed(2)}`}
+                    </td>
                     <td onClick={e => e.stopPropagation()}>
                       {(() => {
                         const eff = effectiveStatus(o);
@@ -267,7 +275,8 @@ export default function AdminConsumerOrders() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
             {orders.length === 0 && (
@@ -281,15 +290,26 @@ export default function AdminConsumerOrders() {
       </div>
 
       {/* Detail Modal */}
-      {selected && (
+      {selected && (() => {
+      const selectedKind = luckyDrawOrderKind(selected.order_number);
+      return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelected(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+            <div
+              className="flex items-center justify-between p-5 border-b border-slate-100"
+              style={selectedKind ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
+            >
               <div>
+                {selectedKind && <div className="mb-1.5"><LuckyDrawOrderBadge kind={selectedKind} /></div>}
                 <h3 className="font-bold text-slate-900">Order {selected.order_number}</h3>
                 <p className="text-xs text-slate-400 mt-0.5">{formatIst(selected.created_at)}</p>
+                {selectedKind && (
+                  <p className="text-xs mt-1 font-medium" style={{ color: '#6a4219' }}>
+                    {LUCKY_DRAW_ORDER_NOTE[selectedKind]}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {(() => {
@@ -454,7 +474,8 @@ export default function AdminConsumerOrders() {
             </div>
           </div>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

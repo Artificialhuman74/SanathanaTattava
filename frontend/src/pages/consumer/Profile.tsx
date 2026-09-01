@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { User, MapPin, ShoppingBag, LogOut, ChevronRight, Tag } from 'lucide-react';
+import LinkTraderCard from '../../components/LinkTraderCard';
 
 export default function ConsumerProfile() {
   const { consumer, consumerLogout } = useAuth();
@@ -79,7 +80,7 @@ export default function ConsumerProfile() {
       </div>
 
       {/* Referral */}
-      {discountPct > 0 && (
+      {(discountPct > 0 || !consumer.linked_dealer_id) && (
         <div className="mt-4">
           {consumer.referral_code_used ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
@@ -94,15 +95,7 @@ export default function ConsumerProfile() {
               </div>
             </div>
           ) : (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <Tag size={16} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-amber-800">Have a referral code?</p>
-                <p className="text-xs text-amber-600 mt-0.5">Enter it at checkout to get <strong>{discountPct}% off</strong></p>
-              </div>
-            </div>
+            <LinkTraderCard discountPct={discountPct} />
           )}
         </div>
       )}

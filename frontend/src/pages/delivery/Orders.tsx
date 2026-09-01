@@ -5,6 +5,8 @@ import {
   Package, Loader2, AlertCircle, MapPin, ChevronRight,
   ShoppingBag,
 } from 'lucide-react';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind } from '../../config/luckyDraw';
 
 const DELIVERY_STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700',
@@ -110,15 +112,19 @@ export default function DeliveryOrders() {
         ) : (
           filteredOrders.map(order => {
             const status = order.delivery_status || 'pending';
+            /* A lucky-draw delivery is prepaid at zero. The agent has to know
+               that before they knock, so it is marked on the list itself. */
+            const bc = luckyDrawOrderKind(order.order_number);
             return (
               <button
                 key={order.id}
                 onClick={() => navigate(`/delivery/orders/${order.id}`)}
-                className="w-full bg-white rounded-xl border border-slate-100 p-4 text-left hover:shadow-md transition-shadow"
+                className={`w-full rounded-xl border p-4 text-left hover:shadow-md transition-shadow ${bc ? '' : 'bg-white border-slate-100'}`}
+                style={bc ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
               >
                 <div className="flex items-start justify-between mb-1">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-bold text-slate-800">
                         #{order.order_number}
                       </p>
@@ -126,6 +132,7 @@ export default function DeliveryOrders() {
                         {DELIVERY_STATUS_LABELS[status] || status}
                       </span>
                     </div>
+                    {bc && <div className="mt-1.5"><LuckyDrawOrderBadge kind={bc} size="sm" /></div>}
                     <p className="text-xs text-slate-500 mt-1">
                       {order.consumer_name || 'Customer'}
                     </p>
@@ -143,8 +150,8 @@ export default function DeliveryOrders() {
                 <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
                   <div className="flex items-center gap-3 text-xs text-slate-400">
                     <span>{order.items?.length || 0} items</span>
-                    <span className="font-semibold text-slate-600">
-                      ₹{parseFloat(order.total_amount || 0).toFixed(0)}
+                    <span className={`font-semibold ${bc ? '' : 'text-slate-600'}`} style={{ color: bc ? '#885c24' : undefined }}>
+                      {bc ? 'Collect nothing' : `₹${parseFloat(order.total_amount || 0).toFixed(0)}`}
                     </span>
                   </div>
                   {order.delivery_distance_km && (

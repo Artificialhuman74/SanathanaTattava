@@ -8,6 +8,7 @@ import {
   X, Check, AlertCircle, Navigation, Loader2, RefreshCw,
 } from 'lucide-react';
 import { isBengaluruPincode, OUTSIDE_DELIVERY_AREA_ERROR } from '../../utils/deliveryArea';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface Address {
   id: number;
@@ -199,7 +200,7 @@ export default function Addresses() {
   };
 
   if (loading) return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center text-slate-400">Loading addresses…</div>
+    <div className="max-w-2xl mx-auto px-4 py-16 flex justify-center"><LiquidLoader size={72} /></div>
   );
 
   return (

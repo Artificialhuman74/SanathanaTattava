@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { parseDbDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface ProfileData {
   user: {
@@ -219,7 +220,7 @@ export default function TraderProfile() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <LiquidLoader size={84} />
     </div>
   );
 

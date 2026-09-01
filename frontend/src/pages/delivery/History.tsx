@@ -5,6 +5,8 @@ import {
   CheckCircle2, XCircle, Loader2, AlertCircle, Clock,
   TrendingUp, Package,
 } from 'lucide-react';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind } from '../../config/luckyDraw';
 import { formatIstDate } from '../../utils/dateTime';
 
 export default function DeliveryHistory() {
@@ -110,13 +112,18 @@ export default function DeliveryHistory() {
                         <p className="text-sm font-semibold text-slate-800">
                           #{order.order_number}
                         </p>
-                        <p className="text-sm font-semibold text-slate-700">
-                          ₹{parseFloat(order.total_amount || 0).toFixed(0)}
+                        <p className="text-sm font-semibold" style={{ color: luckyDrawOrderKind(order.order_number) ? '#885c24' : '#334155' }}>
+                          {luckyDrawOrderKind(order.order_number)
+                            ? 'Free'
+                            : `₹${parseFloat(order.total_amount || 0).toFixed(0)}`}
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-xs text-slate-500 truncate">
+                        <p className="text-xs text-slate-500 truncate flex items-center gap-1.5">
                           {order.consumer_name || 'Customer'}
+                          {luckyDrawOrderKind(order.order_number) && (
+                            <LuckyDrawOrderBadge kind={luckyDrawOrderKind(order.order_number)!} size="sm" />
+                          )}
                         </p>
                         <p className="text-[10px] text-slate-400 flex-shrink-0 ml-2">
                           {date ? formatIstDate(date) : ''}

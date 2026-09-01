@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { ShoppingCart, Search, ChevronDown, Eye, X } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface Order {
   id: number; order_number: string; trader_name: string; trader_email: string;
@@ -100,7 +101,7 @@ export default function AdminOrders() {
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">

@@ -11,6 +11,7 @@ import {
   Legend, Line, ComposedChart,
 } from 'recharts';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 /* Field names match the /admin/stats response exactly. The previous
  * dashboard read consumerOrders / pendingCommissions / recentConsumerOrders,
@@ -103,7 +104,7 @@ export default function AdminDashboard() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <LiquidLoader size={84} />
     </div>
   );
   if (!stats) return null;
@@ -229,7 +230,7 @@ export default function AdminDashboard() {
 
           {alertsLoading ? (
             <div className="flex-1 flex items-center justify-center py-10">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
+              <LiquidLoader size={68} />
             </div>
           ) : alerts.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-10 px-4">

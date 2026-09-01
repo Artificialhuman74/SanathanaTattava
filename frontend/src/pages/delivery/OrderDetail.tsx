@@ -8,6 +8,8 @@ import {
   XCircle, Navigation, Send,
 } from 'lucide-react';
 import { formatIst } from '../../utils/dateTime';
+import LuckyDrawOrderBadge from '../../components/luckyDraw/LuckyDrawOrderBadge';
+import { luckyDrawOrderKind, LUCKY_DRAW_ORDER_NOTE } from '../../config/luckyDraw';
 
 const DELIVERY_STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700',
@@ -175,10 +177,17 @@ export default function DeliveryOrderDetail() {
   const timeline = order.timeline;
   const readOnly = !!order.read_only;
 
+  /* The one thing an agent must know before knocking on a lucky-draw
+     delivery: there is nothing to collect. */
+  const bc = luckyDrawOrderKind(order.order_number);
+
   return (
     <div className="animate-fade-in pb-6">
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-4 py-3 sticky top-0 z-10">
+      <div
+        className={`border-b px-4 py-3 sticky top-0 z-10 ${bc ? '' : 'bg-white border-slate-100'}`}
+        style={bc ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
+      >
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-lg hover:bg-slate-100">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
@@ -187,14 +196,26 @@ export default function DeliveryOrderDetail() {
             <p className="text-sm font-bold text-slate-800">
               Order #{order.order_number}
             </p>
-            <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
-              {DELIVERY_STATUS_LABELS[status] || status}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+              <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${DELIVERY_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600'}`}>
+                {DELIVERY_STATUS_LABELS[status] || status}
+              </span>
+              {bc && <LuckyDrawOrderBadge kind={bc} size="sm" />}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="p-4 space-y-4">
+        {bc && (
+          <div
+            className="rounded-xl px-4 py-3 text-sm font-medium"
+            style={{ backgroundColor: '#fdf8ee', border: '1px solid #e8c164', color: '#6a4219' }}
+          >
+            {LUCKY_DRAW_ORDER_NOTE[bc]}
+          </div>
+        )}
+
         {readOnly && (
           <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />

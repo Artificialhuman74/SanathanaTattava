@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation, NavLink } from 'react-router-do
 import { useAuth } from '../contexts/AuthContext';
 import { Home, ShoppingBag, User, Menu, X, LogOut, MapPin, ChevronRight, HeadphonesIcon, ShoppingCart, Package, Wallet } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
+import DevToolsLauncher from '../components/devTools/DevToolsLauncher';
 import { getCartCount } from '../services/cartStorage';
 
 export default function ConsumerLayout() {
@@ -190,6 +191,8 @@ export default function ConsumerLayout() {
       <main className="flex-1 pb-20 sm:pb-0">
         <Outlet />
       </main>
+
+      <DevToolsLauncher />
 
       {/* ── Bottom Navigation (mobile only) ───────────────────────────── */}
       <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-[#fffbf2] border-t border-[#e8dcc8] safe-bottom">

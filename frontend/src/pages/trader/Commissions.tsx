@@ -6,6 +6,7 @@ import {
   TrendingUp, AlertCircle, Loader2, CheckCircle2, RefreshCw, HelpCircle, ChevronDown,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface CommissionData {
   summary: {
@@ -94,7 +95,7 @@ export default function TraderCommissions() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <LiquidLoader size={84} />
     </div>
   );
 

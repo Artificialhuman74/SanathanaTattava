@@ -92,7 +92,7 @@ consumerApi.interceptors.response.use(
   (res) => res,
   (err) => {
     const cfg = err?.config || {};
-    if (!cfg.__apiFailoverRetried && shouldRotateApiBase(err) && rotateApiBaseUrl()) {
+    if (!cfg.skipBaseRotation && !cfg.__apiFailoverRetried && shouldRotateApiBase(err) && rotateApiBaseUrl()) {
       cfg.__apiFailoverRetried = true;
       cfg.baseURL = getApiHttpBaseUrl();
       return consumerApi.request(cfg);

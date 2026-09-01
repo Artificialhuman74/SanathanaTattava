@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
+import LiquidLoader from '../../components/LiquidLoader';
 import {
   Warehouse, Search, AlertTriangle, Package, ChevronDown, X,
   ArrowRight, RefreshCcw, Truck, Plus, Minus,
@@ -147,7 +148,7 @@ export default function AdminDealerInventory() {
           </div>
           <div className="card">
             {loading ? (
-              <div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" /></div>
+              <div className="flex items-center justify-center h-48"><LiquidLoader size={76} /></div>
             ) : (
               <div className="table-wrapper">
                 <table>
@@ -192,7 +193,7 @@ export default function AdminDealerInventory() {
       {tab === 'warehouse' && (
         <div className="card">
           {whLoading ? (
-            <div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" /></div>
+            <div className="flex items-center justify-center h-48"><LiquidLoader size={76} /></div>
           ) : (
             <div className="table-wrapper">
               <table>

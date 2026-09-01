@@ -69,9 +69,124 @@ export default {
         'roll-in-from-bottom': 'rollInFromBottom 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)',
         'roll-out-up':         'rollOutToTop 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)',
         'roll-out-down':       'rollOutToBottom 0.26s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        'chakra-spin-settle':  'chakraSpinSettle 1.2s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'chakra-idle-spin':    'chakraIdleSpin 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite',
+        // Bhagya Chakra win reveal — one drop falls and floods the screen.
+        // Durations here are the spine of the sequence; the component only
+        // supplies delays, so retiming happens in one place.
+        'oil-drop':      'oilDrop 0.7s linear both',
+        'oil-pool':      'oilPool 2.3s linear both',
+        'oil-flood':     'oilFlood 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'oil-crown':     'oilCrown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'oil-satellite': 'oilSatellite 0.55s cubic-bezier(0.3, 0, 0.6, 1) both',
+        'oil-word':      'oilWord 0.42s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'oil-rise':      'oilRise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+        // Paced to the caustic drift in the shader so the headline reads as
+        // lit by the light overhead rather than as a separate CSS effect.
+        'lit':           'litPulse 4.4s ease-in-out infinite',
+        // Bhagya Chakra round tracker — the winner's twelve months as a rail.
+        // Viscous, exponential-out: the month fills, it doesn't snap.
+        // `month-live` is the breath on the month currently claimable.
+        'month-pour':    'monthPour 0.72s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'month-live':    'monthLive 3.2s ease-in-out infinite',
+        // The wheel turning while a result waits to be opened. Linear and
+        // very slow on purpose: `chakra-idle-spin` is 2.6s on an ease-in-out
+        // curve, which reads as a loading spinner. A ghani stone is heavy and
+        // turns at one steady speed, so this is 16s with no easing at all.
+        'chakra-wait':   'chakraIdleSpin 16s linear infinite',
+        // One gold pass across the row the first time someone lands on the
+        // shop page already entered. Marks the crossing, then never again.
+        'entered-sweep': 'enteredSweep 1.1s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'tick-in':       'tickIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
       keyframes: {
         fadeIn:  { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        monthPour: {
+          '0%':   { clipPath: 'inset(0 100% 0 0)' },
+          '100%': { clipPath: 'inset(0 0 0 0)' },
+        },
+        monthLive: {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(200, 150, 60, 0.45)' },
+          '50%':      { boxShadow: '0 0 0 3.5px rgba(200, 150, 60, 0)' },
+        },
+        chakraSpinSettle: {
+          '0%':   { transform: 'rotate(0deg) scale(0.9)', opacity: '0' },
+          '20%':  { opacity: '1' },
+          '100%': { transform: 'rotate(720deg) scale(1)', opacity: '1' },
+        },
+        enteredSweep: {
+          '0%':   { transform: 'translateX(-100%)', opacity: '0' },
+          '35%':  { opacity: '1' },
+          '100%': { transform: 'translateX(100%)', opacity: '0' },
+        },
+        tickIn: {
+          '0%':   { transform: 'scale(0.4)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        chakraIdleSpin: {
+          '0%':   { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        // The drop: forms, hangs heavy, releases, elongates, flattens on
+        // contact. `--oil-fall` is the distance to the impact point, set by
+        // the component so the fall lands mid-screen at any viewport height.
+        oilDrop: {
+          '0%':   { opacity: '0', transform: 'translateY(0) scale(0.2)' },
+          '26%':  { opacity: '1', transform: 'translateY(0) scale(1)', animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          '48%':  { opacity: '1', transform: 'translateY(0) scale(0.86, 1.3)', animationTimingFunction: 'cubic-bezier(0.5, 0, 0.75, 0.55)' },
+          '96%':  { opacity: '1', transform: 'translateY(var(--oil-fall)) scale(0.9, 1.2)' },
+          '100%': { opacity: '0', transform: 'translateY(var(--oil-fall)) scale(1.4, 0.5)' },
+        },
+        // The flood swallows the screen from the point of contact.
+        oilFlood: {
+          '0%':   { transform: 'scale(0)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        // The pool grows one landing at a time. Each step spreads quickly then
+        // holds, so the growth reads as five discrete arrivals rather than one
+        // continuous swell — the whole point of the sequence.
+        oilPool: {
+          '0%':    { opacity: '0', transform: 'scale(0)' },
+          '29%':   { opacity: '0', transform: 'scale(0)' },
+          '30.4%': { opacity: '1', transform: 'scale(0.34)', animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          '50%':   { transform: 'scale(0.37)' },
+          '54.3%': { transform: 'scale(0.55)', animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          '70%':   { transform: 'scale(0.58)' },
+          '73.9%': { transform: 'scale(0.73)', animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          '86%':   { transform: 'scale(0.76)' },
+          '89.1%': { transform: 'scale(0.89)', animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+          '97%':   { transform: 'scale(0.92)' },
+          '100%':  { transform: 'scale(1)' },
+        },
+        // Starts at 0 opacity, not 0.9: `fill-mode: both` holds the 0% frame
+        // through the animation-delay, so a visible first keyframe would park
+        // the ring on screen from t=0 — before the drop has even fallen.
+        oilCrown: {
+          '0%':   { opacity: '0',   transform: 'scale(0.3)' },
+          '12%':  { opacity: '0.9', transform: 'scale(0.6)' },
+          '100%': { opacity: '0',   transform: 'scale(2.6)' },
+        },
+        // Satellites use per-element --oil-tx / --oil-ty so eight droplets
+        // share one keyframe instead of eight near-identical ones.
+        oilSatellite: {
+          '0%':   { opacity: '0',   transform: 'translate(0, 0) scale(0.4)' },
+          '20%':  { opacity: '1' },
+          '60%':  { transform: 'translate(var(--oil-tx), var(--oil-ty)) scale(1)' },
+          '100%': { opacity: '0',   transform: 'translate(calc(var(--oil-tx) * 1.15), 18px) scale(0.5)' },
+        },
+        // The oil parts around each word rather than fading it in.
+        oilWord: {
+          '0%':   { clipPath: 'inset(0 100% 0 0)', transform: 'translateY(6px)' },
+          '100%': { clipPath: 'inset(0 -3px 0 0)', transform: 'translateY(0)' },
+        },
+        litPulse: {
+          '0%, 100%': { textShadow: '0 0 0 rgba(255, 240, 200, 0)' },
+          '50%':      { textShadow: '0 1px 20px rgba(255, 238, 196, 0.6)' },
+        },
+        oilRise: {
+          '0%':   { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         wiggle: {
           '0%, 100%': { transform: 'rotate(0deg)' },

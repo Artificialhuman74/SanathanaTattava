@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { Warehouse, Search, AlertTriangle, Package, Bell, Pencil, Check, X, Info } from 'lucide-react';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface InventoryItem {
   id: number;
@@ -83,7 +84,7 @@ export default function TraderInventory() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      <LiquidLoader size={84} />
     </div>
   );
 

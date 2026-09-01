@@ -6,6 +6,7 @@ import {
   Loader2, X, AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 type Status = 'pending' | 'awaiting_confirmation' | 'paid' | 'disputed';
 
@@ -165,7 +166,7 @@ export default function SubDealerCommissions() {
 
         {loading && commissions.length === 0 ? (
           <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="table-wrapper">

@@ -18,6 +18,8 @@ const { generateInvoiceForOrder } = require('../services/invoiceService');
 const { applyStoreCredit } = require('../services/storeCreditService');
 const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 const fs = require('fs');
+const { recordQualifyingOrder } = require('../services/luckyDraw/drawService');
+const { finalizeEnrollment } = require('../services/luckyDraw/enrollmentService');
 
 const router = express.Router();
 
@@ -173,6 +175,14 @@ router.post('/verify', authConsumer, async (req, res) => {
   try { syncAdminDeliveryCommission(order.id); }
   catch (err) { console.error(`[commission] admin-delivery sync failed for order ${order.id}:`, err.message); }
 
+  /* Bhagya Chakra: a paid order is a qualifying purchase (spec §3.6), so the
+   * month's draw entry is written here rather than reconstructed from order
+   * history later. Outside the payment transaction and swallowed on failure,
+   * same rule as the commission sync above: lucky-draw bookkeeping must never
+   * roll back a confirmed payment. */
+  recordQualifyingOrder(order.id);
+
+
   /* Notify linked dealer — show only their commission, not the customer's payment amount */
   if (order.linked_dealer_id) {
     try {
@@ -308,11 +318,35 @@ router.post('/webhook', (req, res) => {
     switch (event.event) {
       case 'payment.captured': {
         const p = event.payload.payment.entity;
+
+        /* A lucky-draw joining fee is NOT a consumer_order: it lives on
+         * lucky_draw_enrollments, which this handler never looked at. So a
+         * paid enrollment whose browser callback failed had nothing left to
+         * rescue it, and the ₹100 was simply taken. */
+        const pendingEnrollment = db.prepare(`
+          SELECT * FROM lucky_draw_enrollments
+           WHERE razorpay_order_id = ? AND status = 'pending_payment'
+        `).get(p.order_id);
+        if (pendingEnrollment) {
+          try {
+            const scheme = db.prepare('SELECT * FROM lucky_draw_schemes WHERE id = ?').get(pendingEnrollment.scheme_id);
+            finalizeEnrollment({
+              enrollment: pendingEnrollment, scheme,
+              consumerId: pendingEnrollment.consumer_id, paymentId: p.id,
+            });
+            console.log(`[webhook] payment.captured → enrollment ${pendingEnrollment.id} activated`);
+          } catch (err) {
+            console.error(`[webhook] enrollment ${pendingEnrollment.id} activation failed:`, err.message);
+          }
+          break;
+        }
+
         const order = db.prepare('SELECT * FROM consumer_orders WHERE razorpay_order_id = ?').get(p.order_id);
         if (order && order.payment_status !== 'paid') {
           db.prepare(`UPDATE consumer_orders SET payment_status='paid', status='confirmed', razorpay_payment_id=? WHERE id=?`)
             .run(p.id, order.id);
           console.log(`[webhook] payment.captured → order ${order.order_number} marked paid (safety net)`);
+          recordQualifyingOrder(order.id);
         }
         /* Generate GST-compliant invoice + email PDF (idempotent — skips if invoice row already exists) */
         if (order) {
@@ -388,6 +422,8 @@ router.post('/webhook', (req, res) => {
             }
           }
         })();
+
+        recordQualifyingOrder(order.id);
 
         /* Notifications */
         try { emitOrderUpdate({ orderId: order.id, orderNumber: order.order_number, status: 'confirmed', consumerId: order.consumer_id, linkedDealerId: order.linked_dealer_id, deliveryDealerId: order.delivery_dealer_id, extra: { event: 'order_paid' } }); } catch {}

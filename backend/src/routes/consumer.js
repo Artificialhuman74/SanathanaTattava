@@ -511,6 +511,41 @@ router.put('/addresses/:id/default', authConsumer, (req, res) => {
 });
 
 /* ── Auth: Place Order ────────────────────────────────────────────────── */
+/**
+ * Link a trader by their referral code, outside of checkout.
+ *
+ * Until now the ONLY way a consumer ever got a linked dealer was entering a
+ * code during checkout, as a side effect of buying. That is no good once
+ * joining the lucky draw requires one: someone who wants to join before their
+ * first order had no way to get there.
+ *
+ * Permanent and one-way, exactly as the checkout path is: a link decides who
+ * delivers to this person and earns commission on them, so it is not
+ * something to let people flip back and forth from a profile screen.
+ */
+router.post('/link-dealer', authConsumer, (req, res) => {
+  const code = String(req.body.referral_code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Enter your dealer\u2019s referral code.' });
+
+  const existing = db.prepare(`SELECT linked_dealer_id FROM consumers WHERE id = ?`).get(req.consumer.id);
+  if (existing?.linked_dealer_id != null) {
+    return res.status(409).json({ error: 'Your account is already linked to a trader.' });
+  }
+
+  const dealer = db.prepare(`
+    SELECT id, name FROM users
+     WHERE referral_code = ? AND role = 'trader' AND status = 'active' AND pan_verified = 1
+  `).get(code);
+  if (!dealer) {
+    return res.status(404).json({ error: 'No trader found with that code. Check it with your dealer and try again.' });
+  }
+
+  db.prepare(`UPDATE consumers SET linked_dealer_id = ?, referral_code_used = ? WHERE id = ?`)
+    .run(dealer.id, code, req.consumer.id);
+
+  res.json({ success: true, dealer_name: dealer.name, referral_code_used: code });
+});
+
 router.post('/orders', authConsumer, [
   body('items').isArray({ min: 1 }).withMessage('At least one item required'),
   body('items.*.product_id').isInt({ min: 1 }),

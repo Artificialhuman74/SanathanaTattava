@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import LocationPrompt from '../components/LocationPrompt';
 import NotificationBell from '../components/NotificationBell';
+import ChakraIcon from '../components/luckyDraw/ChakraIcon';
+import { LUCKY_DRAW_NAME } from '../config/luckyDraw';
 import { DELIVERY_SITE_URL } from '../appMode';
 
 export default function TraderLayout() {
@@ -22,6 +24,7 @@ export default function TraderLayout() {
     { to: '/trader/orders',           icon: ShoppingCart,    label: 'My Orders',       show: true },
     { to: '/trader/consumer-orders',  icon: ShoppingBag,     label: 'Consumer Orders', show: true },
     { to: '/trader/inventory',         icon: Warehouse,       label: 'My Inventory',    show: true },
+    { to: '/trader/lucky-draw',       icon: ChakraIcon,      label: LUCKY_DRAW_NAME,   show: true },
     { to: '/trader/sub-dealers',      icon: Users,           label: 'Sub-Partners',    show: isTier1 },
     { to: '/trader/sub-dealer-commissions', icon: HandCoins,  label: 'Pay Sub-Partners', show: isTier1 },
     { to: '/trader/commissions',      icon: DollarSign,      label: 'Commissions',     show: true },

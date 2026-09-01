@@ -8,6 +8,7 @@ import {
   ChevronRight, X, ShoppingBag, RotateCcw, ScrollText,
 } from 'lucide-react';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface ConsumerOrder {
   id: number;
@@ -163,7 +164,7 @@ export default function Support() {
 
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
+              <LiquidLoader size={68} />
             </div>
           ) : orders.length === 0 ? (
             <div className="bg-[#fffbf2] rounded-2xl border border-[#e8dcc8] shadow-sm p-10 text-center">

@@ -304,7 +304,9 @@ export default function ConsumerRegister() {
                     onChange={e => setRefCode(e.target.value.toUpperCase())}
                     className="form-input uppercase tracking-wider font-mono pr-10"
                     placeholder="e.g. A0000"
-                    maxLength={5}
+                    /* 5 or 6: a two-letter prefix (AA0000) appears once the
+                       single-letter codes are used up. */
+                    maxLength={6}
                     autoComplete="off"
                     style={
                       codeValid === true  ? { borderColor: '#15803d' } :

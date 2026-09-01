@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { Users, Search, Tag, Phone, MapPin, ShoppingBag, TrendingUp, X } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
+import LiquidLoader from '../../components/LiquidLoader';
 
 interface Consumer {
   id: number;
@@ -128,7 +129,7 @@ export default function AdminConsumers() {
         {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+            <LiquidLoader size={76} />
           </div>
         ) : (
           <div className="overflow-x-auto">
