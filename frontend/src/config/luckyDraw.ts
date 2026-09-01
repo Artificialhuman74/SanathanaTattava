@@ -76,3 +76,24 @@ export const LUCKY_DRAW_ORDER_NOTE: Record<LuckyDrawOrderKind, string> = {
   reward: 'They won this round. Free every month. Collect nothing.',
   guarantee: 'Their round ended without a win, so this one is free. Collect nothing.',
 };
+
+/** "12th", "3rd", "21st" — the draw day, said the way a person says it. */
+export function ordinalDay(day: number): string {
+  const n = Math.trunc(day);
+  const rest = n % 100;
+  if (rest >= 11 && rest <= 13) return `${n}th`;
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+}
+
+/** "17:00" reads as a timetable. "5pm" reads as a time of day. */
+export function clockLabel(hhmm: string): string {
+  const [h, m] = String(hhmm || '').split(':').map(Number);
+  if (!Number.isFinite(h)) return hhmm;
+  const suffix = h < 12 ? 'am' : 'pm';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${hour}.${String(m).padStart(2, '0')}${suffix}` : `${hour}${suffix}`;
+}
+
+/** How many qualified months buy one more entry, and the ceiling (spec §3.17). */
+export const TICKETS_PER_MONTHS = 3;
+export const MAX_TICKETS = 4;

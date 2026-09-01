@@ -22,11 +22,31 @@ const { createNotification } = require('../notificationService');
 const { generateInvoiceForOrder } = require('../invoiceService');
 const { LUCKY_DRAW_NAME } = require('../../config/luckyDraw');
 
-/* Spec §3: qualify by the 10th, draw on the 12th at 5PM IST, 12-month round. */
-const ENTRY_DEADLINE_DAY = 10;
-const DRAW_DAY = 12;
-const DRAW_HOUR_IST = 17;
+/* Spec §3, as settled with the founder: buying counts right up to the moment
+ * the draw runs, and that moment is the admin's to set (default the 12th at
+ * 5PM IST). The entry deadline is therefore not a separate date any more.
+ * Two dates meant a consumer could buy on the 11th, see the draw run on the
+ * 12th and reasonably believe they were in it. */
+const DEFAULT_DRAW_DAY = 12;
+const DEFAULT_DRAW_TIME = '17:00';
+const MAX_DRAW_DAY = 28;             // every month has one; see drawScheduler
 const SCHEME_MONTHS = 12;
+
+/* Read straight from settings rather than through drawScheduler, which
+ * imports this file: going the other way would close the loop. */
+function drawDayAndTime() {
+  const row = key => {
+    try { return db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key)?.value; }
+    catch { return undefined; }
+  };
+  const day = parseInt(row('lucky_draw_day') ?? DEFAULT_DRAW_DAY, 10);
+  const [h, m] = String(row('lucky_draw_time') ?? DEFAULT_DRAW_TIME).split(':');
+  return {
+    day: Math.min(Math.max(Number.isFinite(day) ? day : DEFAULT_DRAW_DAY, 1), MAX_DRAW_DAY),
+    hour: Math.min(Math.max(parseInt(h, 10) || 0, 0), 23),
+    minute: Math.min(Math.max(parseInt(m, 10) || 0, 0), 59),
+  };
+}
 
 /* The business runs on IST and the draw time is written in IST, but SQLite
  * stores UTC and the server may sit in any zone. Everything below converts
@@ -77,14 +97,20 @@ function cycleWindow(now = new Date()) {
   const { year, month } = istParts(now);
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
+  const { day, hour, minute } = drawDayAndTime();
+  const drawAt = istInstant(year, month, day, hour, minute);
+  const nextDrawAt = istInstant(nextYear, nextMonth, day, hour, minute);
   return {
     month_key: monthKey(now),
     month_starts_at: istInstant(year, month, 1).toISOString(),
-    // Inclusive of the whole 10th: a purchase at 11:59PM on the 10th counts.
-    entry_deadline: istInstant(year, month, ENTRY_DEADLINE_DAY, 23, 59).toISOString(),
-    draw_at: istInstant(year, month, DRAW_DAY, DRAW_HOUR_IST).toISOString(),
-    next_entry_deadline: istInstant(nextYear, nextMonth, ENTRY_DEADLINE_DAY, 23, 59).toISOString(),
-    next_draw_at: istInstant(nextYear, nextMonth, DRAW_DAY, DRAW_HOUR_IST).toISOString(),
+    /* The deadline IS the draw. An order placed a minute before the wheel
+     * turns is in that draw; a minute after it, it counts for next month. */
+    entry_deadline: drawAt.toISOString(),
+    draw_at: drawAt.toISOString(),
+    next_entry_deadline: nextDrawAt.toISOString(),
+    next_draw_at: nextDrawAt.toISOString(),
+    draw_day: day,
+    draw_time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
   };
 }
 

@@ -48,13 +48,29 @@ function getActiveEnrollment(consumerId) {
   `).get(consumerId, ...ACTIVE_STATUSES);
 }
 
-function listWelcomeGiftProducts() {
+/**
+ * The welcome gift is one fixed product, not a choice of many: groundnut oil
+ * 200ml, seeded by the migration and never sold in the shop. The only
+ * decision left to the consumer is whether they want it at all.
+ *
+ * Stock is deliberately not consulted anywhere in this file. A 200ml pour
+ * comes out of what the trader already has, and the platform has never
+ * carried a 200ml SKU with a real count on it. Gating a paid enrolment on
+ * that number would refuse money over an inventory figure nobody keeps.
+ */
+const WELCOME_GIFT_SKU = 'ST-BC-GIFT-GN-200';
+
+function welcomeGiftProduct() {
   return db.prepare(`
     SELECT id, name, description, price, image_url, unit
-      FROM products
-     WHERE unit = '200ml' AND status = 'active'
-     ORDER BY name
-  `).all();
+      FROM products WHERE sku = ?
+  `).get(WELCOME_GIFT_SKU) || null;
+}
+
+/** Kept as a list for the existing endpoint; it is one product or none. */
+function listWelcomeGiftProducts() {
+  const gift = welcomeGiftProduct();
+  return gift ? [gift] : [];
 }
 
 function resolveDeliveryAddress(consumerId) {
@@ -79,7 +95,7 @@ function resolveDeliveryAddress(consumerId) {
  * which case this finalizes the enrollment immediately and there is no
  * step 2 for the frontend to run.
  */
-function startEnrollment({ consumerId, schemeId, welcomeGiftProductId }) {
+function startEnrollment({ consumerId, schemeId, wantsWelcomeGift = true }) {
   const scheme = db.prepare(`SELECT * FROM lucky_draw_schemes WHERE id = ?`).get(schemeId);
   if (!scheme) throw httpError(404, 'Scheme not found');
   if (scheme.status !== 'enrollment_open') throw httpError(400, `${LUCKY_DRAW_NAME} isn't open for enrollment right now`);
@@ -92,8 +108,10 @@ function startEnrollment({ consumerId, schemeId, welcomeGiftProductId }) {
     throw httpError(409, `You're already in ${existing.scheme_name} — you can join a new round once that one ends`);
   }
 
-  const gift = db.prepare(`SELECT id, name FROM products WHERE id = ? AND unit = '200ml' AND status = 'active'`).get(welcomeGiftProductId);
-  if (!gift) throw httpError(400, 'Pick a valid welcome gift');
+  /* Declining is a real answer, not a failure to choose: someone who does not
+   * want a trial bottle should still be able to join. */
+  const gift = wantsWelcomeGift ? welcomeGiftProduct() : null;
+  if (wantsWelcomeGift && !gift) throw httpError(503, 'The welcome gift is unavailable right now');
 
   if (!resolveDeliveryAddress(consumerId)) {
     throw httpError(400, 'Add a delivery address to your account before joining');
@@ -129,10 +147,12 @@ function startEnrollment({ consumerId, schemeId, welcomeGiftProductId }) {
     const r = db.prepare(`
       INSERT INTO lucky_draw_enrollments (scheme_id, consumer_id, status, welcome_gift_product_id)
       VALUES (?, ?, 'pending_payment', ?)
-    `).run(schemeId, consumerId, gift.id);
+    `).run(schemeId, consumerId, gift ? gift.id : null);
     enrollment = db.prepare(`SELECT * FROM lucky_draw_enrollments WHERE id = ?`).get(r.lastInsertRowid);
-  } else if (enrollment.welcome_gift_product_id !== gift.id) {
-    db.prepare(`UPDATE lucky_draw_enrollments SET welcome_gift_product_id = ? WHERE id = ?`).run(gift.id, enrollment.id);
+  } else if (enrollment.welcome_gift_product_id !== (gift ? gift.id : null)) {
+    // They changed their mind on the retry: take the answer they gave last.
+    db.prepare(`UPDATE lucky_draw_enrollments SET welcome_gift_product_id = ? WHERE id = ?`)
+      .run(gift ? gift.id : null, enrollment.id);
   }
 
   if (DEV_MOCK_PAYMENTS) {
@@ -166,9 +186,35 @@ function startEnrollment({ consumerId, schemeId, welcomeGiftProductId }) {
  */
 function finalizeEnrollment({ enrollment, scheme, consumerId, paymentId }) {
   const consumer = db.prepare(`SELECT * FROM consumers WHERE id = ?`).get(consumerId);
-  const gift = db.prepare(`SELECT * FROM products WHERE id = ?`).get(enrollment.welcome_gift_product_id);
+  const gift = enrollment.welcome_gift_product_id
+    ? db.prepare(`SELECT * FROM products WHERE id = ?`).get(enrollment.welcome_gift_product_id)
+    : null;
   const addr = resolveDeliveryAddress(consumerId);
   if (!addr) throw httpError(400, 'Add a delivery address to your account before joining');
+
+  /* They turned the gift down. The money still bought them a place in the
+   * round, so the enrolment goes active with no order attached and the
+   * trader is told a name has joined under them rather than told to pack. */
+  if (!gift) {
+    db.prepare(`
+      UPDATE lucky_draw_enrollments
+         SET status='active', joining_fee_paid=?, razorpay_payment_id=?, enrolled_at=CURRENT_TIMESTAMP
+       WHERE id=?
+    `).run(scheme.joining_fee, paymentId, enrollment.id);
+
+    const dealerId = consumer.linked_dealer_id ?? null;
+    if (dealerId) {
+      try {
+        createNotification(
+          'dealer', dealerId,
+          `${consumer.name} joined ${scheme.name}`,
+          `${consumer.name} is in ${LUCKY_DRAW_NAME} under you. They turned down the welcome gift, so there is nothing to pack today. Every free delivery they earn from here on comes to you.`,
+          { scheme_id: scheme.id },
+        );
+      } catch { /* non-fatal */ }
+    }
+    return { success: true, order_number: null, scheme_name: scheme.name, welcome_gift: null };
+  }
 
   const linkedDealerId = consumer.linked_dealer_id ?? null;
   const isDirect = linkedDealerId === null ? 1 : 0;
@@ -197,7 +243,9 @@ function finalizeEnrollment({ enrollment, scheme, consumerId, paymentId }) {
       INSERT INTO consumer_order_items (order_id, product_id, quantity, price, total, container_cost, is_refill)
       VALUES (?, ?, 1, 0, 0, 0, 0)
     `).run(or.lastInsertRowid, gift.id);
-    db.prepare(`UPDATE products SET stock = MAX(0, stock - 1) WHERE id = ?`).run(gift.id);
+    /* No stock movement. The 200ml gift is not a stocked SKU: the trader
+     * pours it from what they hold, so there is no number here to decrement
+     * and nothing to be short of. */
 
     db.prepare(`
       UPDATE lucky_draw_enrollments
@@ -214,7 +262,7 @@ function finalizeEnrollment({ enrollment, scheme, consumerId, paymentId }) {
       createNotification(
         'dealer', deliveryDealerId,
         `${LUCKY_DRAW_NAME} welcome gift to pack — ${consumer.name}`,
-        `${consumer.name} joined ${scheme.name} and picked ${gift.name} as their welcome gift. Pack & deliver (no charge).`,
+        `${consumer.name} joined ${scheme.name}. Their welcome gift is one ${gift.name} — pour it from your own stock and deliver, no charge.`,
         { order_id: result.orderId, order_number: result.orderNumber, scheme_id: scheme.id },
       );
     } catch { /* non-fatal */ }
@@ -226,7 +274,7 @@ function finalizeEnrollment({ enrollment, scheme, consumerId, paymentId }) {
   generateInvoiceForOrder(result.orderId)
     .catch(err => console.error(`[lucky-draw] welcome-gift invoice for ${result.orderNumber} failed:`, err.message));
 
-  return { success: true, order_number: result.orderNumber, scheme_name: scheme.name };
+  return { success: true, order_number: result.orderNumber, scheme_name: scheme.name, welcome_gift: gift.name };
 }
 
 /**

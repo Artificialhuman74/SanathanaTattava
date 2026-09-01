@@ -98,6 +98,8 @@ export default {
         // shop page already entered. Marks the crossing, then never again.
         'entered-sweep': 'enteredSweep 1.1s cubic-bezier(0.16, 1, 0.3, 1) both',
         'tick-in':       'tickIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both',
+        /* The loyalty ladder growing out from the left, one rung at a time. */
+        'ticket-fill':   'ticketFill 0.55s cubic-bezier(0.22, 1, 0.36, 1) both',
       },
       keyframes: {
         fadeIn:  { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -118,6 +120,10 @@ export default {
           '0%':   { transform: 'translateX(-100%)', opacity: '0' },
           '35%':  { opacity: '1' },
           '100%': { transform: 'translateX(100%)', opacity: '0' },
+        },
+        ticketFill: {
+          '0%':   { transform: 'scaleX(0)', opacity: '0' },
+          '100%': { transform: 'scaleX(1)', opacity: '1' },
         },
         tickIn: {
           '0%':   { transform: 'scale(0.4)', opacity: '0' },

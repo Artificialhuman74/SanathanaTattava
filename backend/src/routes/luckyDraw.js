@@ -59,9 +59,14 @@ router.get('/consumer/status', authConsumer, async (req, res) => {
 
   const active = enrollmentService.getActiveEnrollment(req.consumer.id);
   const openSchemes = active ? [] : schemeService.listOpenSchemes();
+  const { day, time } = drawScheduler.getSchedule();
   res.json({
     active_enrollment: active || null,
     open_schemes: openSchemes,
+    /* The rules a joiner reads have to match the day the draw actually runs,
+     * which the admin can change. Sending it beats hard-coding "the 12th"
+     * into the copy and quietly lying the first time it moves. */
+    draw_schedule: { day, time },
     // Null until they're in a running scheme. The shop page reads this to
     // decide whether the draw takes over the front page this month.
     cycle: drawService.getConsumerCycle(req.consumer.id),
@@ -87,7 +92,8 @@ router.post('/consumer/reward-order', authConsumer, (req, res) => {
 });
 
 router.get('/consumer/welcome-gifts', authConsumer, (_req, res) => {
-  res.json({ products: enrollmentService.listWelcomeGiftProducts() });
+  const products = enrollmentService.listWelcomeGiftProducts();
+  res.json({ products, product: products[0] || null });
 });
 
 /** Visible to any logged-in consumer, not just winners — the "who won it" moment. */
@@ -96,15 +102,18 @@ router.get('/consumer/recent-winners', authConsumer, (_req, res) => {
 });
 
 router.post('/consumer/enroll', authConsumer, async (req, res) => {
-  const { scheme_id, welcome_gift_product_id } = req.body;
-  if (!scheme_id || !welcome_gift_product_id) {
-    return res.status(400).json({ error: 'scheme_id and welcome_gift_product_id are required' });
-  }
+  const { scheme_id, welcome_gift } = req.body;
+  if (!scheme_id) return res.status(400).json({ error: 'scheme_id is required' });
   try {
+    /* The gift is one fixed product now, so the body carries a yes/no rather
+     * than a product id. An older client that still sends the id is saying
+     * yes, and is treated that way. */
     const result = await enrollmentService.startEnrollment({
       consumerId: req.consumer.id,
       schemeId: scheme_id,
-      welcomeGiftProductId: welcome_gift_product_id,
+      wantsWelcomeGift: welcome_gift === undefined
+        ? req.body.welcome_gift_product_id != null
+        : welcome_gift !== false,
     });
     res.json(result);
   } catch (err) {

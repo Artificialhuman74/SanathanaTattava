@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Check, Gift, Package, CalendarClock, RotateCcw, ShieldCheck, Store, Trophy } from 'lucide-react';
+import { ArrowLeft, Check, Gift, Trophy } from 'lucide-react';
 import ChakraIcon from '../../components/luckyDraw/ChakraIcon';
 import WagonWheelLoader from '../../components/luckyDraw/WagonWheelLoader';
 import { withViewTransition } from '../../utils/viewTransition';
 import WinReveal from '../../components/luckyDraw/WinReveal';
+import HowItWorks from '../../components/luckyDraw/HowItWorks';
 import { LUCKY_DRAW_NAME, LUCKY_DRAW_TAGLINE, drawSeenKey } from '../../config/luckyDraw';
 
 interface Scheme {
@@ -77,8 +78,11 @@ export default function LuckyDraw() {
   useEffect(() => () => window.clearTimeout(revealTimer.current), []);
   const [openSchemes, setOpenSchemes] = useState<Scheme[]>([]);
   const [activeEnrollment, setActiveEnrollment] = useState<ActiveEnrollment | null>(null);
-  const [gifts, setGifts] = useState<GiftProduct[]>([]);
-  const [selectedGiftId, setSelectedGiftId] = useState<number | null>(null);
+  const [gift, setGift] = useState<GiftProduct | null>(null);
+  /* Ticked by default: it is free and most people want it. The point of the
+   * control is that turning it down never blocks joining. */
+  const [wantsGift, setWantsGift] = useState(true);
+  const [drawSchedule, setDrawSchedule] = useState<{ day: number; time: string }>({ day: 12, time: '17:00' });
   const [enrolling, setEnrolling] = useState(false);
   const [justEnrolled, setJustEnrolled] = useState<{ orderNumber: string; giftName: string } | null>(null);
   const [winners, setWinners] = useState<Winner[]>([]);
@@ -96,6 +100,8 @@ export default function LuckyDraw() {
       data.active_enrollment && data.active_enrollment.status !== 'pending_payment' ? data.active_enrollment : null;
     setActiveEnrollment(enrollment);
     setOpenSchemes(data.open_schemes || []);
+    // The admin can move the draw day. The rules read what is actually set.
+    if (data.draw_schedule) setDrawSchedule(data.draw_schedule);
 
     // The reveal plays for everyone in the scheme once a draw lands, not only
     // for the winner: the draw is the shared moment, and the gold lifts to
@@ -129,8 +135,7 @@ export default function LuckyDraw() {
           consumerApi.get('/lucky-draw/consumer/welcome-gifts', { skipBaseRotation: true }),
           consumerApi.get('/lucky-draw/consumer/recent-winners', { skipBaseRotation: true }).catch(() => ({ data: { winners: [] } })),
         ]);
-        setGifts(giftsRes.data.products || []);
-        if (giftsRes.data.products?.length) setSelectedGiftId(giftsRes.data.products[0].id);
+        setGift(giftsRes.data.product || giftsRes.data.products?.[0] || null);
         setWinners(winnersRes.data.winners || []);
       } catch {
         toast.error(`Couldn't load ${LUCKY_DRAW_NAME}. Try again in a moment.`);
@@ -158,19 +163,18 @@ export default function LuckyDraw() {
   const scheme = openSchemes[0];
 
   const handleEnroll = async () => {
-    if (!scheme || !selectedGiftId) return;
+    if (!scheme) return;
     setEnrolling(true);
     try {
       const { data } = await consumerApi.post('/lucky-draw/consumer/enroll', {
         scheme_id: scheme.id,
-        welcome_gift_product_id: selectedGiftId,
+        welcome_gift: wantsGift,
       }, { skipBaseRotation: true });
 
       if (data.mocked) {
         // Dev-only shortcut (DEV_MOCK_PAYMENTS on the backend) — the fee is
         // already "paid" and the enrollment finalized, no checkout to open.
-        const gift = gifts.find(g => g.id === selectedGiftId);
-        setJustEnrolled({ orderNumber: data.order_number, giftName: gift?.name || 'your gift' });
+        setJustEnrolled({ orderNumber: data.order_number, giftName: wantsGift ? (gift?.name || 'Your welcome gift') : '' });
         return;
       }
 
@@ -189,8 +193,7 @@ export default function LuckyDraw() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             }, { skipBaseRotation: true });
-            const gift = gifts.find(g => g.id === selectedGiftId);
-            setJustEnrolled({ orderNumber: verifyRes.data.order_number, giftName: gift?.name || 'your gift' });
+            setJustEnrolled({ orderNumber: verifyRes.data.order_number, giftName: wantsGift ? (gift?.name || 'Your welcome gift') : '' });
           } catch {
             toast.error('Payment went through but we couldn\'t confirm enrollment. Contact support with your payment ID.');
           }
@@ -250,9 +253,16 @@ export default function LuckyDraw() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">You're in {scheme?.name}.</h1>
           <p className="text-slate-600 max-w-sm mx-auto leading-relaxed">
-            {justEnrolled.giftName} is on its way to you, no charge — order{' '}
-            <span className="font-mono font-semibold text-slate-800">{justEnrolled.orderNumber}</span>. Every order you
-            place from here counts toward this month's draw.
+            {justEnrolled.giftName ? (
+              <>
+                {justEnrolled.giftName} is on its way to you, no charge, as order{' '}
+                <span className="font-mono font-semibold text-slate-800">{justEnrolled.orderNumber}</span>. Every order
+                you place from here counts toward this month&rsquo;s draw.
+              </>
+            ) : (
+              <>Every order you place from here counts toward this month&rsquo;s draw. Buy any oil before the draw and
+              your name is in it.</>
+            )}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
             <Link to="/shop" className="btn-primary py-3 px-8">Continue Shopping</Link>
@@ -305,99 +315,52 @@ export default function LuckyDraw() {
             <p className="text-slate-500 text-sm mt-1">{LUCKY_DRAW_TAGLINE}</p>
           </div>
 
-          <div className="card p-5 sm:p-6 space-y-4 mb-6">
-            <h2 className="font-bold text-slate-900 text-sm">How it works</h2>
-            <ul className="space-y-3 text-sm text-slate-700">
-              <li className="flex items-start gap-3">
-                <Gift size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>Join for ₹{scheme.joining_fee} and pick a free 200ml oil to start.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <Package size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>Any order you place in a month enters you into that month's draw. No minimum.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CalendarClock size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>One winner is picked on the 12th of every month.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <ChakraIcon size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>Win, and we deliver whatever you bought most recently, free, every month for the rest of the round.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <RotateCcw size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>Don't win by month 12? You still get your last order delivered free in month 13.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <ShieldCheck size={16} className="text-gold-600 mt-0.5 flex-shrink-0" />
-                <span>You can only be in one round of {LUCKY_DRAW_NAME} at a time.</span>
-              </li>
-            </ul>
+          <HowItWorks
+            joiningFee={scheme.joining_fee}
+            drawDay={drawSchedule.day}
+            drawTime={drawSchedule.time}
+            hasTrader={!!consumer?.linked_dealer_id}
+          />
 
-            {/* Only for someone who cannot join yet. Every delivery in a round
-                goes through their trader, so without one there is nobody to
-                pack any of it. Says what is missing and where to fix it, in
-                the card that is already explaining the rules. */}
-            {!consumer?.linked_dealer_id && (
-              <div
-                className="flex items-start gap-3 rounded-xl border px-4 py-3 mt-1"
-                style={{ borderColor: '#f0d898', backgroundColor: '#fdf8ee' }}
-              >
-                <Store size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#a87830' }} />
-                <div className="text-sm">
-                  <p className="font-semibold" style={{ color: '#3a2208' }}>
-                    You need a trader linked before you can join.
-                  </p>
-                  <p className="leading-relaxed mt-1" style={{ color: '#6a4219' }}>
-                    Your trader is the one who packs and delivers everything in the round, including the free
-                    ones. Add your dealer&rsquo;s referral code to your profile and you can join straight after.
-                  </p>
-                  <Link
-                    to="/shop/profile"
-                    className="inline-block font-semibold mt-2 hover:underline focus-visible:underline"
-                    style={{ color: '#885c24' }}
-                  >
-                    Link a trader in your profile
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-
+          {/* One gift, and the only question is whether they want it. It used
+              to be a list of every 200ml in the catalogue, which in production
+              was empty: the join button was disabled and nobody could pay. */}
           <div className="card p-5 sm:p-6 mb-6">
-            <h2 className="font-bold text-slate-900 text-sm mb-1">Pick your free 200ml oil</h2>
-            <p className="text-slate-500 text-xs mb-4">No can deposit on the trial size — this one's a gift.</p>
-            <div className="space-y-2">
-              {gifts.map(g => (
-                <label
-                  key={g.id}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
-                    selectedGiftId === g.id ? 'border-gold-500 bg-gold-50' : 'border-[#e8dcc8] hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="welcome-gift"
-                    checked={selectedGiftId === g.id}
-                    onChange={() => setSelectedGiftId(g.id)}
-                    className="accent-gold-600"
-                  />
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-semibold text-slate-900">{g.name}</span>
-                    <span className="block text-xs text-slate-500 truncate">{g.description}</span>
-                  </span>
-                  {selectedGiftId === g.id && <Check size={16} className="text-gold-600 flex-shrink-0" />}
-                </label>
-              ))}
-              {gifts.length === 0 && (
-                <p className="text-sm text-slate-400 py-4 text-center">No welcome gifts available right now — check back soon.</p>
-              )}
-            </div>
+            <h2 className="font-bold text-slate-900 text-sm mb-1">Your welcome gift</h2>
+            <p className="text-slate-500 text-xs mb-4">Yours the day you join. No deposit on the trial size.</p>
+
+            <label
+              className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-colors ${
+                wantsGift ? 'border-gold-500 bg-gold-50' : 'border-[#e8dcc8] hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={wantsGift}
+                onChange={e => setWantsGift(e.target.checked)}
+                className="accent-gold-600 w-4 h-4 flex-shrink-0"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-slate-900">
+                  {gift?.name || 'Groundnut Oil 200ml'}
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Free, delivered by your trader with your first {LUCKY_DRAW_NAME} order.
+                </span>
+              </span>
+              {wantsGift && <Check size={16} className="text-gold-600 flex-shrink-0" />}
+            </label>
+
+            <p className="text-xs text-slate-400 mt-2.5">
+              {wantsGift
+                ? 'Untick it if you would rather not take the bottle. Joining works either way.'
+                : 'No gift then. You are still in every draw from the day you join.'}
+            </p>
           </div>
 
           <button
             onClick={handleEnroll}
-            disabled={enrolling || !selectedGiftId || !consumer?.linked_dealer_id}
+            disabled={enrolling || !consumer?.linked_dealer_id}
             className="w-full py-3.5 text-base font-semibold rounded-2xl bg-gold-600 hover:bg-gold-700 active:bg-gold-800 text-white shadow-sm hover:shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {enrolling && <ChakraIcon size={16} motion="idle" className="text-white" />}

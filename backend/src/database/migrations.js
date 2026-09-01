@@ -1248,6 +1248,30 @@ function runMigrations(db) {
     console.log('[migration] lucky_draw_monthly_entries: added tickets');
   }
 
+  /* The one welcome gift (spec §3.4, settled with the founder): groundnut
+   * oil 200ml, take it or leave it. It is not a catalogue product — it is
+   * never sold, so it carries status 'gift' and stays out of the shop, which
+   * filters on status='active'. It is seeded here rather than left to the
+   * admin because enrolment cannot happen without it, and production had no
+   * 200ml row at all: the join button simply did nothing.
+   *
+   * Stock is not tracked on it. A trial-size pour is drawn from whatever the
+   * trader already has on hand, so gating a ₹100 joining fee on an inventory
+   * number nobody maintains would block real money for no reason. */
+  const giftSku = 'ST-BC-GIFT-GN-200';
+  if (!db.prepare(`SELECT 1 FROM products WHERE sku = ?`).get(giftSku)) {
+    db.prepare(`
+      INSERT INTO products (name, description, category, sku, price, stock, min_stock, unit, status, container_cost, container_type)
+      VALUES (?, ?, ?, ?, 0, 0, 0, '200ml', 'gift', 0, NULL)
+    `).run(
+      'Groundnut Oil 200ml',
+      'Wooden-ghani groundnut oil, trial size. The welcome gift for joining Bhagya Chakra.',
+      (db.prepare(`SELECT category FROM products WHERE status='active' ORDER BY id LIMIT 1`).get() || {}).category || 'Edible',
+      giftSku,
+    );
+    console.log('[migration] products: seeded the Bhagya Chakra welcome gift');
+  }
+
   console.log('[migration] all migrations applied');
 }
 
