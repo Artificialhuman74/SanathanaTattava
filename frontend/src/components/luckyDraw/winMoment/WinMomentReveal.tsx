@@ -145,7 +145,7 @@ export default function WinMomentReveal({
 
   const deadlineLabel = nextEntryDeadline
     ? new Date(nextEntryDeadline).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long' })
-    : 'the 10th';
+    : 'the next draw';
 
   // ── One continuous camera: settles in, pushes on the reveal, eases back out
   const base = MOTION.enter(1.07, 1.0, 0, CUES.Pour)(T);
@@ -248,7 +248,7 @@ export default function WinMomentReveal({
                      stopped on one with no name on it. Saying so is warmer
                      than "no winner", and truer to what was watched. */
                   <>No one ordered in time, so the wheel stopped on an empty spoke.
-                    Order by <span style={{ color: C.cream, fontWeight: 600 }}>{deadlineLabel}</span>
+                    Order before <span style={{ color: C.cream, fontWeight: 600 }}>{deadlineLabel}</span>
                     {' '}and the next one could carry your name.</>
                 ) : isMe ? (
                   rewardProductName ? (
@@ -258,7 +258,7 @@ export default function WinMomentReveal({
                     'We’re delivering your last order free, every month, for the rest of this round.'
                   )
                 ) : (
-                  <>Not this month. Order by{' '}
+                  <>Not this month. Order before{' '}
                     <span style={{ color: C.cream, fontWeight: 600 }}>{deadlineLabel}</span>
                     {' '}to be in the next draw.</>
                 )}

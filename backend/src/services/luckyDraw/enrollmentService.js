@@ -140,7 +140,13 @@ function startEnrollment({ consumerId, schemeId, wantsWelcomeGift = true }) {
     : db.prepare(`SELECT * FROM lucky_draw_enrollments WHERE consumer_id = ? AND scheme_id = ?`).get(consumerId, schemeId);
 
   if (enrollment && enrollment.status !== 'pending_payment') {
-    throw httpError(409, `You're already enrolled in ${scheme.name}`);
+    /* 'withdrawn' is not 'enrolled', and telling someone who left that they
+     * are already in it is both wrong and unhelpful. They cannot rejoin the
+     * same round, because their months and their container went back when
+     * they left, so say that instead. */
+    throw httpError(409, enrollment.status === 'withdrawn'
+      ? `You left ${scheme.name}, so this round is closed to you. You can join the next one when it opens.`
+      : `You're already enrolled in ${scheme.name}`);
   }
 
   if (!enrollment) {

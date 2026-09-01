@@ -18,6 +18,8 @@ export interface Cycle {
   next_entry_deadline: string;
   next_draw_at: string;
   entered: boolean;
+  /** True once the twelve months are up, or the admin has ended the scheme. */
+  round_over?: boolean;
   /** How many entries this month's order is worth (loyalty weighting). */
   tickets?: number;
   qualified_months?: number;
@@ -76,6 +78,9 @@ export default function WinnerRoundCard({ cycle, onClaimed }: { cycle: Cycle; on
   const month = monthName(cycle.month_key);
   const item = reward.product_name;
   const lastOne = reward.months_remaining <= 0;
+  /* The twelve months are up. There is nothing left to claim, and offering a
+   * button that can only return an error is worse than saying so. */
+  const roundOver = !!cycle.round_over;
 
   const claim = async () => {
     setClaiming(true);
@@ -158,7 +163,11 @@ export default function WinnerRoundCard({ cycle, onClaimed }: { cycle: Cycle; on
       {/* Zone 2 — the action. Generous space above it: this is the one thing
           the card wants them to do. */}
       <div className="mt-6">
-        {claimed ? (
+        {roundOver && !claimed ? (
+          <p className="text-sm font-semibold" style={{ color: '#6a4219' }} role="status">
+            Your round is complete. Twelve months, all of them free after you won.
+          </p>
+        ) : claimed ? (
           <p
             className="flex items-center gap-2 text-sm font-semibold motion-safe:animate-fade-in"
             style={{ color: delivered ? '#14532d' : '#885c24' }}

@@ -171,7 +171,7 @@ export default function DrawSchedulePanel() {
       </div>
 
       <p className="text-[11px] text-slate-400 mt-4">
-        Qualifying orders must be placed by the 10th. Day 1 to {maxDay} only, so the draw never lands on a date February doesn&rsquo;t have.
+        Orders count right up to the moment the draw runs, so this time is the entry deadline too. Day 1 to {maxDay} only, so the draw never lands on a date February doesn&rsquo;t have.
       </p>
 
       <div className="mt-5 pt-4 border-t border-[#e8dcc8] flex flex-wrap items-center justify-between gap-3">

@@ -121,6 +121,16 @@ function cycleWindow(now = new Date()) {
  * consumer's own elapsed months.
  */
 function monthNumberFor(scheme, enrollment, now = new Date()) {
+  return Math.min(elapsedMonthNumber(scheme, enrollment, now), SCHEME_MONTHS);
+}
+
+/**
+ * The same count without the cap, so "we are in month 12" can be told apart
+ * from "month 12 finished four months ago". monthNumberFor clamps both to 12,
+ * which is right for display and wrong for deciding whether the round is
+ * still running.
+ */
+function elapsedMonthNumber(scheme, enrollment, now = new Date()) {
   const anchor = parseDbDate(scheme.starts_at)
     || parseDbDate(scheme.enrollment_closes_at)
     || parseDbDate(enrollment.enrolled_at)
@@ -129,7 +139,18 @@ function monthNumberFor(scheme, enrollment, now = new Date()) {
   const a = istParts(anchor);
   const n = istParts(now);
   const elapsed = (n.year - a.year) * 12 + (n.month - a.month);
-  return Math.min(Math.max(elapsed + 1, 1), SCHEME_MONTHS);
+  return Math.max(elapsed + 1, 1);
+}
+
+/**
+ * "12 October" for the next draw, or this one, in IST. Said as a date rather
+ * than as "the 12th" because the admin can move the day, and copy that names
+ * a day the schedule no longer uses is worse than no date at all.
+ */
+function nextDrawLabel(now = new Date(), thisOne = false) {
+  const w = cycleWindow(now);
+  return new Date(thisOne ? w.draw_at : w.next_draw_at)
+    .toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long' });
 }
 
 /** Family-name initial only — the same shape listRecentWinners already uses. */
@@ -156,7 +177,11 @@ function isQualifyingOrder(order) {
     && order.status !== 'cancelled'
     && order.total_amount > 0
     && !String(order.order_number).startsWith('BCGIFT-')
-    && !String(order.order_number).startsWith('BCFREE-');
+    && !String(order.order_number).startsWith('BCFREE-')
+    // The 13th-month guarantee is free too. It is already excluded by the
+    // amount check, but naming it here means a priced version of it later
+    // cannot quietly buy someone an entry.
+    && !String(order.order_number).startsWith('BCGUAR-');
 }
 
 /**
@@ -193,9 +218,19 @@ function recordQualifyingOrder(orderId, nowOverride = null) {
     // late still counts the purchase in the window it was actually made in.
     const placedAt = parseDbDate(order.created_at) || nowOverride || new Date();
     const window = cycleWindow(placedAt);
-    if (placedAt > new Date(window.entry_deadline)) return null;   // after the 10th
 
-    const monthNumber = monthNumberFor(enrollment, enrollment, placedAt);
+    /* A purchase made after this month's draw counts toward the NEXT one.
+     *
+     * It used to count toward nothing at all: too late for the draw that had
+     * already run, and the next month's entry needed an order dated in the
+     * next month. Someone who happened to shop on the 20th of every month
+     * paid to join, bought every single month, and was never once in a draw.
+     * Every purchase now enters the next draw that has not yet been held,
+     * which is what the rules say and what people assume. */
+    const rollsForward = placedAt > new Date(window.entry_deadline);
+    const countedAt = rollsForward ? new Date(window.next_draw_at) : placedAt;
+
+    const monthNumber = monthNumberFor(enrollment, enrollment, countedAt);
 
     // A draw that has already run is settled. Adding an entry to it after the
     // fact would rewrite a result people have already been told about.
@@ -219,6 +254,19 @@ function recordQualifyingOrder(orderId, nowOverride = null) {
     console.error('[lucky-draw] recordQualifyingOrder failed for order', orderId, err.message);
     return null;
   }
+}
+
+/**
+ * The moment the previous draw ran, which is when this draw's window opened.
+ * Entries roll forward past a draw, so the window is draw-to-draw and not
+ * 1st-to-deadline; anything bought after the last draw is in this one.
+ */
+function previousDrawAt(now = new Date()) {
+  const { year, month } = istParts(now);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const { day, hour, minute } = drawDayAndTime();
+  return istInstant(prevYear, prevMonth, day, hour, minute).toISOString();
 }
 
 /** This month's entry row for an enrollment, with the order that earned it. */
@@ -256,9 +304,10 @@ function backfillCurrentMonthEntries(now = new Date()) {
        WHERE consumer_id = ?
          AND payment_status = 'paid' AND status != 'cancelled' AND total_amount > 0
          AND order_number NOT LIKE 'BCGIFT-%' AND order_number NOT LIKE 'BCFREE-%'
-         AND created_at >= ? AND created_at <= ?
+         AND order_number NOT LIKE 'BCGUAR-%'
+         AND created_at > ? AND created_at <= ?
        ORDER BY created_at DESC LIMIT 1
-    `).get(e.consumer_id, sqliteTime(window.month_starts_at), sqliteTime(window.entry_deadline));
+    `).get(e.consumer_id, sqliteTime(previousDrawAt(now)), sqliteTime(window.entry_deadline));
     if (!order) continue;
 
     db.prepare(`
@@ -357,6 +406,12 @@ function getConsumerCycle(consumerId, now = new Date()) {
     enrollment_closes_at: enrollment.enrollment_closes_at,
   };
   const monthNumber = monthNumberFor(scheme, enrollment, now);
+  /* Month 12 is a month of the round like any other: the winner's free
+   * delivery is due in it. The round is over when the twelve months have
+   * been and gone, or when the admin has ended the scheme, and neither of
+   * those is the same thing as "month_number reads 12". */
+  const roundOver = elapsedMonthNumber(scheme, enrollment, now) > SCHEME_MONTHS
+    || enrollment.scheme_status === 'ended';
   const draw = latestDraw(enrollment.scheme_id);
   const won = enrollment.status === 'won';
 
@@ -372,7 +427,9 @@ function getConsumerCycle(consumerId, now = new Date()) {
       product_name: enrollment.reward_product_name,
       quantity: enrollment.reward_quantity || 1,
       won_at_month: enrollment.won_at_month || monthNumber,
-      months_remaining: Math.max(SCHEME_MONTHS - monthNumber, 0),
+      // Free deliveries after this month's. The one due this month is
+      // `this_month_ordered`, and it is not counted here twice.
+      months_remaining: roundOver ? 0 : Math.max(SCHEME_MONTHS - monthNumber, 0),
       this_month_ordered: !!placed,
       this_month_order_number: placed ? placed.order_number : null,
       /* Where the delivery has got to. "On its way" is true the moment the
@@ -394,6 +451,7 @@ function getConsumerCycle(consumerId, now = new Date()) {
     scheme_name: enrollment.scheme_name,
     month_number: monthNumber,
     total_months: SCHEME_MONTHS,
+    round_over: roundOver,
     ...window,
     entered: !!(entry && entry.qualified),
     entry_order_number: entry ? entry.order_number : null,
@@ -422,7 +480,11 @@ function placeRewardOrder(consumerId, now = new Date()) {
   if (cycle.reward.this_month_ordered) {
     throw httpError(409, "This month's free delivery is already on its way");
   }
-  if (cycle.reward.months_remaining <= 0) {
+  /* Guarded on the round being over, not on months_remaining hitting zero.
+   * months_remaining counts the deliveries AFTER this one, so in month 12 it
+   * is legitimately 0 while a delivery is still due, and the old check
+   * quietly swallowed the last month of every winner's reward. */
+  if (cycle.round_over) {
     throw httpError(400, 'This round has finished. There are no free deliveries left on it.');
   }
 
@@ -651,8 +713,8 @@ function runDrawForScheme(schemeId, now = new Date()) {
         won
           ? 'Your reward item will be delivered free every month for the rest of the round.'
           : decision.winner_display_name
-            ? `${decision.winner_display_name} won this month. Order by the 10th to enter the next draw.`
-            : 'No one qualified this month, so the draw went to nobody. Order by the 10th to be in the next one.',
+            ? `${decision.winner_display_name} won this month. Buy any oil before ${nextDrawLabel(now)} to be in the next draw.`
+            : `No one qualified this month, so the draw went to nobody. Buy any oil before ${nextDrawLabel(now)} to be in the next one.`,
         { scheme_id: schemeId, month_number: decision.month_number },
       );
     } catch { /* non-fatal */ }
@@ -692,7 +754,7 @@ function decideDraw(scheme, now) {
 
   // The pool is whoever has a qualified entry row for this month. Those rows
   // were written as their orders were paid, so the draw reads a ledger it
-  // didn't build, and a purchase made at 11:58PM on the 10th is already in it.
+  // didn't build, and a purchase made a minute before the draw is already in it.
   const qualified = pool
     .map(e => ({ enrollment: e, entry: entryFor(e.id, monthNumber) }))
     .filter(x => x.entry && x.entry.qualified && !x.entry.draw_run_at);
@@ -714,7 +776,7 @@ function decideDraw(scheme, now) {
         ? "The one person enrolled hasn't"
         : `None of the ${pool.length} people enrolled have`;
       throw httpError(400,
-        `${who} placed a qualifying order yet, and the window is open until the 10th. `
+        `${who} placed a qualifying order yet, and the window is open until ${nextDrawLabel(now, true)}. `
         + 'There is no one to draw from until then.');
     }
 

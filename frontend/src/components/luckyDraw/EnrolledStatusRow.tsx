@@ -43,16 +43,18 @@ export default function EnrolledStatusRow({ cycle }: { cycle: Cycle }) {
     } catch { /* private browsing: the row is still correct, just unmarked */ }
   }, [entered, cycle.scheme_id, cycle.month_key]);
 
-  /* Three states, and only one of them is a call to action. Past the 10th
-   * there is nothing to ask for, so it stops asking rather than nagging about
-   * a window that has shut. */
+  /* Three states, and only one of them is not a call to action. Once this
+   * month's draw has run there is still something to ask for: a purchase now
+   * rolls into the next draw, so the row points at that date rather than
+   * saying entries are closed, which would send people away for three weeks
+   * over a deadline that has already moved on. */
   const line = entered
     ? tickets > 1
       ? `In this month\u2019s draw with ${tickets} entries \u00b7 ${dayAndMonth(cycle.draw_at)}`
       : `In this month\u2019s draw \u00b7 ${dayAndMonth(cycle.draw_at)}`
     : windowOpen
       ? `Buy any oil by ${dayAndMonth(cycle.entry_deadline)} to enter this month\u2019s draw`
-      : `Entries closed for this month \u00b7 next draw ${dayAndMonth(cycle.next_draw_at)}`;
+      : `Buy any oil to enter the ${dayAndMonth(cycle.next_draw_at)} draw`;
 
   return (
     <button

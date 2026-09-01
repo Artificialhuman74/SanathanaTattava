@@ -32,7 +32,7 @@ export default function HowItWorks({
   return (
     <div className="card p-5 sm:p-6 mb-6">
       <h2 className="font-bold text-slate-900 text-sm">How it works</h2>
-      <p className="text-xs text-slate-500 mt-1 mb-4">Four rules, and the fourth one is the reason people stay.</p>
+      <p className="text-xs text-slate-500 mt-1 mb-4">The whole thing, in seven lines.</p>
 
       <ul className="space-y-3.5 text-sm text-slate-700">
         <Rule icon={CalendarClock}>
@@ -46,8 +46,8 @@ export default function HowItWorks({
         </Rule>
 
         <Rule icon={CalendarX}>
-          Nothing bought by {by}, and you sit that month out. You stay in the round and the next month opens
-          the same as any other, so a missed month costs you that month and nothing more.
+          Nothing bought by {by}, and you sit that month out. Buy after it and your name goes into the next
+          month&rsquo;s draw instead, so a late order is never a wasted one.
         </Rule>
 
         <Rule icon={Ticket}>
@@ -60,7 +60,8 @@ export default function HowItWorks({
 
         <Rule icon={ChakraIcon}>
           Win, and <b className="font-semibold text-slate-900">the oil you bought that month comes to you free</b>,
-          every month, for the rest of the round. Win in month three and that is nine free deliveries.
+          every month, for the rest of the round. Win in month three and that is ten free deliveries, this
+          month included.
         </Rule>
 
         <Rule icon={RotateCcw}>

@@ -8,8 +8,10 @@ interface Cycle {
   scheme_name: string;
   entry_deadline: string;
   draw_at: string;
+  next_draw_at: string;
   entered: boolean;
   won: boolean;
+  round_over?: boolean;
   tickets?: number;
   qualified_months?: number;
 }
@@ -27,8 +29,10 @@ const dayAndMonth = (iso: string) =>
  * between an order and an entry, and they are one tap from it.
  *
  * Renders nothing for anyone not enrolled, for a winner (they are out of the
- * pool), or once the window has shut. A note that appears when it cannot be
- * acted on is just noise on a payment screen.
+ * pool), or once the round is finished. It does keep going after this
+ * month's draw, because an order placed then rolls into the next one: the
+ * note simply names that draw instead. Telling someone their purchase counts
+ * for nothing, when it does count, would lose the order for no reason.
  */
 export default function CheckoutDrawNote() {
   const { consumer } = useAuth();
@@ -44,13 +48,17 @@ export default function CheckoutDrawNote() {
     return () => { alive = false; };
   }, [consumer]);
 
-  if (!cycle || cycle.won) return null;
+  if (!cycle || cycle.won || cycle.round_over) return null;
 
-  // Past the 10th there is nothing this order can do for this month's draw,
-  // and promising otherwise would be a lie at the worst possible moment.
   const deadline = parseDbDate(cycle.entry_deadline);
-  if (Number.isNaN(deadline.getTime()) || Date.now() > deadline.getTime()) return null;
+  if (Number.isNaN(deadline.getTime())) return null;
 
+  /* After this month's draw the order still counts, for the next one. The
+   * note names whichever draw this purchase is actually going into, because
+   * naming the wrong one at the moment of payment is the worst place to be
+   * wrong. */
+  const rollsForward = Date.now() > deadline.getTime();
+  const drawAt = rollsForward ? cycle.next_draw_at : cycle.draw_at;
   const tickets = cycle.tickets ?? 1;
 
   return (
@@ -63,12 +71,14 @@ export default function CheckoutDrawNote() {
         <ChakraIcon size={22} className="flex-shrink-0 mt-0.5" />
         <div className="min-w-0">
           <p className="text-sm font-semibold" style={{ color: '#3a2208' }}>
-            {cycle.entered
-              ? `You're already in this month's ${cycle.scheme_name} draw.`
-              : `This order puts you in this month's ${cycle.scheme_name} draw.`}
+            {rollsForward
+              ? `This order puts you in the next ${cycle.scheme_name} draw.`
+              : cycle.entered
+                ? `You're already in this month's ${cycle.scheme_name} draw.`
+                : `This order puts you in this month's ${cycle.scheme_name} draw.`}
           </p>
           <p className="text-sm leading-relaxed mt-1" style={{ color: '#6a4219' }}>
-            The draw is on {dayAndMonth(cycle.draw_at)}. Win it and we deliver this
+            The draw is on {dayAndMonth(drawAt)}. Win it and we deliver this
             order free, every month, for the rest of the round.
             {tickets > 1 && (
               <>

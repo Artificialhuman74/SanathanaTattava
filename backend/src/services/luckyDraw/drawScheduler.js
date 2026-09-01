@@ -102,7 +102,10 @@ function runDueDraws(now = new Date()) {
       const result = drawService.runDrawForScheme(scheme.id, now);
       ran.push({ scheme_id: scheme.id, scheme_name: scheme.name, ...result });
     } catch (err) {
-      skipped.push({ scheme_id: scheme.id, scheme_name: scheme.name, reason: err.message });
+      /* Carry the status through. A refusal (already drawn, nobody in the
+       * pool) is a settled answer for today; anything without a status is an
+       * error, and the difference decides whether today is marked done. */
+      skipped.push({ scheme_id: scheme.id, scheme_name: scheme.name, reason: err.message, status: err.status || null });
     }
   }
   return { ran, skipped };
@@ -134,7 +137,21 @@ function tick() {
     drawService.backfillCurrentMonthEntries();
 
     const { ran, skipped } = runDueDraws();
-    setSetting('lucky_draw_last_run', new Date().toISOString());
+
+    /* Only mark the day done when the outcome was an actual answer.
+     *
+     * This used to be stamped unconditionally, so one unexpected error at
+     * 5PM on the 12th (a locked database, a bad row, anything without an
+     * HTTP status on it) marked the day as run and the next tick returned
+     * early. The month's draw would then never happen at all, and nothing
+     * would say so. A refusal is fine to stamp: it will refuse again. */
+    const transient = skipped.filter(s => s.status === null);
+    if (transient.length === 0) {
+      setSetting('lucky_draw_last_run', new Date().toISOString());
+    } else {
+      console.error('[draw-scheduler] not marking today done, will retry:',
+        transient.map(t => `${t.scheme_name}: ${t.reason}`).join('; '));
+    }
 
     for (const r of ran) {
       console.log(`[draw-scheduler] ${r.scheme_name}: month ${r.month_number}, ${r.entrants} entrant(s), winner ${r.winner_display_name}`);
