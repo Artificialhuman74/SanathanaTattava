@@ -1248,6 +1248,81 @@ function runMigrations(db) {
     console.log('[migration] lucky_draw_monthly_entries: added tickets');
   }
 
+  /* The round's first draw, pinned.
+   *
+   * A round is twelve draws, one a month, on the draw day (§3.8/§3.10) — so
+   * month N is the Nth draw, and the numbering has to hang off a draw instant.
+   * It used to hang off `starts_at`, the day enrollment closed, which is any
+   * day of any month: a round starting on the 20th held its first draw in what
+   * the maths called month 2 (month 1 never had one), and met the draw day a
+   * thirteenth time before its end date.
+   *
+   * Stored rather than recomputed so that moving the draw day mid-round cannot
+   * renumber months that have already been drawn.
+   */
+  if (!hasColumn('lucky_draw_schemes', 'first_draw_at')) {
+    db.exec(`ALTER TABLE lucky_draw_schemes ADD COLUMN first_draw_at DATETIME`);
+    console.log('[migration] lucky_draw_schemes: added first_draw_at');
+  }
+
+  const unpinned = db.prepare(`
+    SELECT id, status, starts_at, enrollment_closes_at FROM lucky_draw_schemes
+     WHERE first_draw_at IS NULL
+  `).all();
+  if (unpinned.length) {
+    /* The draw maths is inlined rather than imported from
+     * services/luckyDraw/drawService. Migrations run inside db.js's own
+     * initialisation, so requiring that service here pulls notificationService
+     * in behind it and reaches for a `db` export that does not exist yet. It is
+     * six lines, it is a one-time data fix, and it must not depend on the
+     * service layer booting first. */
+    const IST = 5.5 * 60 * 60 * 1000;
+    const setting = (k, d) => (db.prepare('SELECT value FROM settings WHERE key=?').get(k) || {}).value || d;
+    const drawDay = Math.min(Math.max(parseInt(setting('lucky_draw_day', '12'), 10) || 12, 1), 28);
+    const [dh, dm] = String(setting('lucky_draw_time', '17:00')).split(':').map(n => parseInt(n, 10) || 0);
+    const istParts = d => { const x = new Date(d.getTime() + IST); return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1 }; };
+    /** The draw instant `months` on from a given IST calendar month. */
+    const drawAt = (y, m, months = 0) => {
+      const t = y * 12 + (m - 1) + months;
+      return new Date(Date.UTC(Math.floor(t / 12), t % 12, drawDay, dh, dm) - IST);
+    };
+    /** The first draw day strictly after `iso`. */
+    const firstDrawAfter = iso => {
+      const a = new Date(iso);
+      const { y, m } = istParts(a);
+      const own = drawAt(y, m);
+      return own > a ? own : drawAt(y, m, 1);
+    };
+
+    const drawnAlready = db.prepare(`
+      SELECT 1 FROM lucky_draw_monthly_entries me
+        JOIN lucky_draw_enrollments e ON e.id = me.enrollment_id
+       WHERE e.scheme_id = ? AND me.draw_run_at IS NOT NULL LIMIT 1
+    `);
+    const pin = db.prepare(`UPDATE lucky_draw_schemes SET first_draw_at = ? WHERE id = ?`);
+    const reEnd = db.prepare(`UPDATE lucky_draw_schemes SET ends_at = ? WHERE id = ?`);
+
+    for (const sc of unpinned) {
+      const anchor = sc.starts_at || sc.enrollment_closes_at;
+      if (!anchor) continue;
+      /* A scheme that has ALREADY held draws keeps the numbering those draws
+       * were filed under, or the rows on disk would silently mean something
+       * else. Pinning to the draw instant in the anchor's own month reproduces
+       * the old count exactly. Everything else — nothing drawn yet — gets the
+       * correct first draw, the one that actually falls after the round starts. */
+      const a = istParts(new Date(anchor));
+      const first = drawnAlready.get(sc.id)
+        ? drawAt(a.y, a.m)              // the anchor month's own draw: old numbering, preserved
+        : firstDrawAfter(anchor);       // the real first draw of the round
+      pin.run(first.toISOString(), sc.id);
+      if (sc.status !== 'ended') {
+        const f = istParts(first);
+        reEnd.run(drawAt(f.y, f.m, 12).toISOString(), sc.id);
+      }
+    }
+    console.log(`[migration] lucky_draw_schemes: pinned first_draw_at on ${unpinned.length} scheme(s)`);
+  }
+
   /* The one welcome gift (spec §3.4, settled with the founder): groundnut
    * oil 200ml, take it or leave it. It is not a catalogue product — it is
    * never sold, so it carries status 'gift' and stays out of the shop, which

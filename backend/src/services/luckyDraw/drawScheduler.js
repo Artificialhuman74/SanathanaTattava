@@ -1,12 +1,12 @@
 /**
  * Automated monthly draw scheduler.
  *
- * Checks once a minute whether the configured draw moment has been reached
- * (day-of-month + time, both in IST, because the business runs on Indian time
- * regardless of where the server lives). Fires at most once per IST day, and
- * CATCHES UP: if the server was down, or the feature was switched on after the
- * scheduled time, the run happens at the next tick rather than being skipped
- * for a whole month.
+ * Checks once a minute whether the month's draw moment has passed without that
+ * draw being held (day-of-month + time, both in IST, because the business runs
+ * on Indian time regardless of where the server lives). CATCHES UP properly: if
+ * the server was down for an hour, a day, or a week, the draw happens on the
+ * next tick rather than being lost. A round is twelve consecutive draws, so a
+ * month that quietly never resolves is not an option.
  *
  * Deliberately the same shape as payoutScheduler.js. A second scheduler with
  * its own conventions would be a second thing to reason about at 5PM on the
@@ -22,7 +22,6 @@ const db = require('../../database/db');
 const drawService = require('./drawService');
 const schemeService = require('./schemeService');
 
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const TICK_MS = 60 * 1000;
 
 /* Above the 28th a monthly schedule silently skips February, so the input is
@@ -45,15 +44,6 @@ function setSetting(key, value) {
     INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
   `).run(key, String(value));
-}
-
-/** Date-like whose getUTC* methods report IST wall-clock values. */
-function nowIST() {
-  return new Date(Date.now() + IST_OFFSET_MS);
-}
-
-function istDateString(d) {
-  return d.toISOString().slice(0, 10);
 }
 
 /** The current config, clamped to values the scheduler can actually honour. */
@@ -117,19 +107,24 @@ function tick() {
     // stall because automatic draws happen to be paused.
     schemeService.advanceSchemeStatuses();
 
-    const { enabled, day, time, last_run } = getSchedule();
+    const { enabled, last_run } = getSchedule();
     if (!enabled) return;
 
-    const ist = nowIST();
-    if (ist.getUTCDate() !== day) return;
-
-    const hhmm = `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}`;
-    if (hhmm < time) return;                       // not yet reached today
-
-    if (last_run) {
-      const lastIST = new Date(new Date(last_run).getTime() + IST_OFFSET_MS);
-      if (istDateString(lastIST) === istDateString(ist)) return;   // already ran today
-    }
+    /* Has the draw come due, and have we held it?
+     *
+     * This used to gate on `ist.getUTCDate() !== day` — the draw could only
+     * ever fire ON the 12th. The header promised it would catch up "if the
+     * server was down", and it did, but only within that one calendar day:
+     * lose the whole of the 12th and that month's draw was skipped for good,
+     * silently, with nothing to say so. That is not a hypothetical on a backend
+     * that runs on a laptop behind a tunnel, and a round is supposed to be
+     * twelve CONSECUTIVE draws.
+     *
+     * Comparing against the due draw instant instead catches up across days
+     * and months, and still cannot double-run: once a draw has been held,
+     * last_run is at or after it until the next one comes due. */
+    const due = drawService.dueDrawAt();
+    if (last_run && new Date(last_run) >= due) return;
 
     // Catches anyone whose entry write was missed while the server was down,
     // right before the pool is read. Cheap, and the alternative is quietly
@@ -169,6 +164,11 @@ function startDrawScheduler() {
   try {
     const seed = db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`);
     for (const [key, value] of Object.entries(DEFAULTS)) seed.run(key, value);
+    /* Baseline the catch-up so it only ever looks forward. Without this, the
+     * first tick on a fresh install would see "a draw came due and last_run is
+     * empty" and immediately hold whatever draw the current month had already
+     * passed — closing a month nobody knew was being drawn. */
+    seed.run('lucky_draw_last_run', new Date().toISOString());
   } catch (err) {
     console.error('[draw-scheduler] seed defaults failed:', err.message);
   }

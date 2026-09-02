@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import ChakraIcon from '../../components/luckyDraw/ChakraIcon';
 import { LUCKY_DRAW_NAME } from '../../config/luckyDraw';
 import DrawSchedulePanel from '../../components/luckyDraw/DrawSchedulePanel';
-import { Plus, X, Loader2, Users, Gift, Play, Pause, Square, Trophy, Ticket } from 'lucide-react';
+import { Plus, X, Loader2, Users, Gift, Play, Pause, Square, Trophy, Ticket, CalendarClock, AlertTriangle } from 'lucide-react';
 import LiquidLoader from '../../components/LiquidLoader';
 import EligibilityTree from '../../components/luckyDraw/EligibilityTree';
 
@@ -19,6 +19,10 @@ interface Scheme {
   enrolled_count: number;
   won_count: number;
   qualified_this_month: number;
+  /** 1 only when a consumer can actually join right now. The status alone
+   *  does not answer this: a lapsed window leaves it at 'enrollment_open'. */
+  enrollment_open_now: number;
+  draws_held: number;
 }
 
 type SchemeAction = 'start' | 'pause' | 'resume' | 'end';
@@ -103,6 +107,28 @@ export default function AdminLuckyDraw() {
     }
   };
 
+  /* Reopening a lapsed window. Kept next to the card it belongs to rather than
+   * in the create form: it is a repair to one scheme, and the admin gets here
+   * because that scheme is broken. */
+  const [reopening, setReopening] = useState<{ id: number; date: string } | null>(null);
+
+  const reopen = async (scheme: Scheme) => {
+    if (!reopening?.date) { toast.error('Pick a new closing date'); return; }
+    setActingOn(`${scheme.id}-reopen`);
+    try {
+      await api.put(`/lucky-draw/admin/schemes/${scheme.id}/enrollment`, {
+        enrollment_closes_at: new Date(reopening.date).toISOString(),
+      }, { skipBaseRotation: true });
+      setReopening(null);
+      await fetchAll();
+      toast.success(`${scheme.name} is open for enrollment again`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Couldn't reopen enrollment");
+    } finally {
+      setActingOn(null);
+    }
+  };
+
   const openNew = () => {
     const nextNumber = schemes.length + 1;
     setForm({ name: `Scheme ${nextNumber}`, joining_fee: '100', enrollment_closes_at: '' });
@@ -172,16 +198,25 @@ export default function AdminLuckyDraw() {
                 <div key={s.id} className="card p-5 flex flex-col">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <p className="font-bold text-slate-900 truncate">{s.name}</p>
+                    {/* A lapsed window leaves the status at 'enrollment_open',
+                        so reading the chip off the status alone showed a green
+                        "Enrolling" for a round no consumer could join. */}
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      STATUS_STYLE[s.status] || 'bg-slate-100 text-slate-600'
+                      s.status === 'enrollment_open' && !s.enrollment_open_now
+                        ? 'bg-red-100 text-red-700'
+                        : STATUS_STYLE[s.status] || 'bg-slate-100 text-slate-600'
                     }`}>
-                      {STATUS_LABEL[s.status] || s.status}
+                      {s.status === 'enrollment_open' && !s.enrollment_open_now
+                        ? 'Closed'
+                        : STATUS_LABEL[s.status] || s.status}
                     </span>
                   </div>
 
                   <p className="text-xs text-slate-500 mb-3">
                     {s.status === 'enrollment_open'
-                      ? <>Enrollment closes {fmtDate(s.enrollment_closes_at)}</>
+                      ? s.enrollment_open_now
+                        ? <>Enrollment closes {fmtDate(s.enrollment_closes_at)}</>
+                        : <>Enrollment closed {fmtDate(s.enrollment_closes_at)}</>
                       : s.status === 'ended'
                         ? <>Ran until {fmtDate(s.ends_at)}</>
                         : <>Round ends {fmtDate(s.ends_at)}</>}
@@ -199,6 +234,50 @@ export default function AdminLuckyDraw() {
                     )}
                     <span>₹{s.joining_fee} fee</span>
                   </div>
+
+                  {/* The failure that actually reached consumers: the window
+                      lapsed, the round was invisible in the shop, and nothing
+                      on this page said so or could undo it. */}
+                  {s.status === 'enrollment_open' && !s.enrollment_open_now && (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
+                      <p className="text-xs text-red-800 font-semibold flex items-start gap-1.5">
+                        <AlertTriangle size={13} className="mt-px flex-shrink-0" />
+                        No one can join. The enrollment window has passed, so this round is not shown to consumers.
+                      </p>
+                      {s.draws_held === 0 && (
+                        reopening?.id === s.id ? (
+                          <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                            <input
+                              type="datetime-local"
+                              value={reopening.date}
+                              onChange={e => setReopening({ id: s.id, date: e.target.value })}
+                              className="input text-xs py-1 px-2 flex-1 min-w-[11rem]"
+                            />
+                            <button
+                              onClick={() => reopen(s)}
+                              disabled={actingOn !== null}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
+                            >
+                              {actingOn === `${s.id}-reopen`
+                                ? <Loader2 size={12} className="animate-spin" />
+                                : <CalendarClock size={12} />}
+                              Reopen
+                            </button>
+                            <button onClick={() => setReopening(null)} className="text-xs text-red-700 hover:underline">
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setReopening({ id: s.id, date: '' })}
+                            className="mt-2 text-xs font-semibold text-red-700 hover:underline inline-flex items-center gap-1.5"
+                          >
+                            <CalendarClock size={12} /> Reopen enrollment on a new date
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
 
                   {s.status === 'paused' && (
                     <p className="text-xs text-amber-700 mt-3">

@@ -466,6 +466,12 @@ router.put('/consumer-orders/:id/status', (req, res) => {
       nextOrderStatus = 'cancelled';
       try { returnOrderInventory(order.id); }
       catch (invErr) { console.error('[admin cancel] inventory restore failed:', invErr.message); }
+
+      /* Same reasoning as the refund path: a cancelled order stops counting
+       * as the qualifying purchase it bought, unless that month has already
+       * been drawn. */
+      try { require('../services/luckyDraw/drawService').revokeQualifyingOrder(order.id); }
+      catch (ldErr) { console.error('[admin cancel] lucky-draw entry revoke failed:', ldErr.message); }
     } else {
       // pending / accepted / packed / out_for_delivery / failed — drive
       // delivery_status only; keep order.status moving in lockstep with

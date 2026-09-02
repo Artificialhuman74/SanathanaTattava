@@ -29,23 +29,38 @@ const razorpay = process.env.RAZORPAY_KEY_ID
  * testing's case) Razorpay flow. */
 const DEV_MOCK_PAYMENTS = process.env.DEV_MOCK_PAYMENTS === 'true';
 
-const ACTIVE_STATUSES = ['pending_payment', 'active', 'won'];
-
 function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }
 
-/** The one enrollment (if any) currently occupying this consumer's single slot. */
+/**
+ * The one enrollment (if any) currently occupying this consumer's single slot.
+ *
+ * 'pending_payment' is a slot-holder only while the round it points at can
+ * still be joined. Nothing expires those rows, so someone who opened the
+ * Razorpay sheet once and closed it was left holding a slot for ever: they
+ * could never join anything again, and because the status endpoint stops
+ * offering open schemes to anyone with a slot, the page told them
+ * "Bhagya Chakra isn't running right now" — with money still in their pocket
+ * and a round open in front of them. An unpaid intent is not an enrollment.
+ */
 function getActiveEnrollment(consumerId) {
   return db.prepare(`
     SELECT e.*, s.name AS scheme_name, s.status AS scheme_status, p.name AS reward_product_name
       FROM lucky_draw_enrollments e
       JOIN lucky_draw_schemes s ON s.id = e.scheme_id
       LEFT JOIN products p ON p.id = e.reward_product_id
-     WHERE e.consumer_id = ? AND e.status IN (${ACTIVE_STATUSES.map(() => '?').join(',')})
-     ORDER BY e.created_at DESC
+     WHERE e.consumer_id = ?
+       AND (
+         e.status IN ('active','won')
+         OR (e.status = 'pending_payment'
+             AND s.status = 'enrollment_open'
+             AND (s.enrollment_closes_at IS NULL
+                  OR datetime(s.enrollment_closes_at) > datetime('now')))
+       )
+     ORDER BY CASE e.status WHEN 'pending_payment' THEN 1 ELSE 0 END, e.created_at DESC
      LIMIT 1
-  `).get(consumerId, ...ACTIVE_STATUSES);
+  `).get(consumerId);
 }
 
 /**
@@ -484,14 +499,21 @@ function privacyName(fullName) {
  * first name + last initial, no email/phone/exact address.
  */
 function listRecentWinners(limit = 8) {
+  /* Ordered by when they actually WON, which is the draw that stamped their
+   * winning entry. It used to order by enrollment id — i.e. by who signed up
+   * most recently — so "recent winners" listed a stranger who joined last
+   * week above the person who won yesterday, and the order never changed
+   * again no matter who won next. */
   const rows = db.prepare(`
-    SELECT e.id, c.name AS consumer_name, s.name AS scheme_name, p.name AS reward_product_name
+    SELECT e.id, c.name AS consumer_name, s.name AS scheme_name, p.name AS reward_product_name,
+           (SELECT MAX(me.draw_run_at) FROM lucky_draw_monthly_entries me
+             WHERE me.enrollment_id = e.id AND me.is_winner = 1) AS won_at
       FROM lucky_draw_enrollments e
       JOIN consumers c ON c.id = e.consumer_id
       JOIN lucky_draw_schemes s ON s.id = e.scheme_id
       LEFT JOIN products p ON p.id = e.reward_product_id
      WHERE e.status = 'won'
-     ORDER BY e.id DESC
+     ORDER BY won_at IS NULL, won_at DESC, e.id DESC
      LIMIT ?
   `).all(limit);
   return rows.map(r => ({

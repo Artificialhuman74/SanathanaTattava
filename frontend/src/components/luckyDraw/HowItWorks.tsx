@@ -150,8 +150,14 @@ function TicketLadder() {
           }}
         />
       ))}
+      {/* The ceiling is reached at the START of the top tier, not at the end
+          of it: entries are 1 + floor(months / 3), so the fourth is earned on
+          the 9th qualifying month. TICKETS_PER_MONTHS * MAX_TICKETS said
+          month 12 — the last month of the round — which told people the top
+          rate arrives three months later than it does, on the one card whose
+          whole job is stating the odds honestly. */}
       <span className="text-[11px] font-medium ml-1" style={{ color: '#885c24' }}>
-        month {TICKETS_PER_MONTHS * MAX_TICKETS}
+        month {TICKETS_PER_MONTHS * (MAX_TICKETS - 1)}
       </span>
     </span>
   );

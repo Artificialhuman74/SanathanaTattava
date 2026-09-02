@@ -114,32 +114,117 @@ function cycleWindow(now = new Date()) {
   };
 }
 
-/**
- * Which month of the round a scheme is in, 1-based. Counted from the scheme's
- * start (falling back to when enrollment closed, then to the enrollment
- * itself) so a mid-round join still reports the round's month, not the
- * consumer's own elapsed months.
+/* ── The round is twelve draws, not twelve calendar months ────────────────
+ *
+ * A round is defined by the draws it holds: twelve of them, one per month, on
+ * the draw day, back to back. Month N IS the Nth draw. The thirteenth month is
+ * what follows the twelfth draw, and it is when the guarantee goes out.
+ *
+ * It used to be counted as calendar months from `starts_at` — the day
+ * enrollment closed, which is any day of any month. Because the draw sits on a
+ * FIXED day, that arbitrary anchor pushed the numbering out of step with the
+ * draws themselves: a round starting on the 20th held its first draw in what
+ * the maths called month 2, so month 1 never had a draw at all, and the draw
+ * day came round a thirteenth time before the round's end date. Eleven real
+ * draws and one duplicate, instead of twelve.
+ *
+ * Everything below therefore counts in draws. `roundAnchor` is the round's
+ * FIRST draw, and every month number is that draw's index.
  */
-function monthNumberFor(scheme, enrollment, now = new Date()) {
-  return Math.min(elapsedMonthNumber(scheme, enrollment, now), SCHEME_MONTHS);
+
+/** The draw instant in a given IST calendar month. */
+function drawInstantIn(year, month) {
+  const { day, hour, minute } = drawDayAndTime();
+  return istInstant(year, month, day, hour, minute);
+}
+
+/** The draw instant `months` on from a given IST calendar month (may be negative). */
+function drawInstantAfter(year, month, months) {
+  const total = year * 12 + (month - 1) + months;
+  return drawInstantIn(Math.floor(total / 12), (total % 12) + 1);
 }
 
 /**
- * The same count without the cap, so "we are in month 12" can be told apart
- * from "month 12 finished four months ago". monthNumberFor clamps both to 12,
- * which is right for display and wrong for deciding whether the round is
- * still running.
+ * A round's first draw: the first draw day that falls after it starts.
+ *
+ * Pinned to `first_draw_at` on the scheme once it exists, so moving the draw
+ * day mid-round cannot silently renumber months that have already been drawn.
  */
+function firstDrawAt(startsAt) {
+  const anchor = parseDbDate(startsAt) || new Date();
+  const { year, month } = istParts(anchor);
+  const inOwnMonth = drawInstantIn(year, month);
+  return inOwnMonth > anchor ? inOwnMonth : drawInstantAfter(year, month, 1);
+}
+
+/** When a round starting at `startsAt` is over: where its 13th draw would fall. */
+function roundEndsAt(startsAt) {
+  const f = istParts(firstDrawAt(startsAt));
+  return drawInstantAfter(f.year, f.month, SCHEME_MONTHS);
+}
+
+/** The draw a purchase made at `instant` goes into: the next one not yet held. */
+function targetDrawAt(instant) {
+  const { year, month } = istParts(instant);
+  const thisMonth = drawInstantIn(year, month);
+  return instant <= thisMonth ? thisMonth : drawInstantAfter(year, month, 1);
+}
+
+/** The draw that is DUE at `now`: the most recent one at or before it. */
+function dueDrawAt(now = new Date()) {
+  const { year, month } = istParts(now);
+  const thisMonth = drawInstantIn(year, month);
+  return now >= thisMonth ? thisMonth : drawInstantAfter(year, month, -1);
+}
+
+/** The purchases that feed the draw an order placed at `instant` goes into. */
+function entryWindowFor(instant) {
+  const to = targetDrawAt(instant);
+  const t = istParts(to);
+  return { from: drawInstantAfter(t.year, t.month, -1), to };
+}
+
+function roundAnchor(scheme, enrollment) {
+  return parseDbDate(scheme.first_draw_at)
+    || firstDrawAt(scheme.starts_at
+      || scheme.enrollment_closes_at
+      || enrollment?.enrolled_at
+      || enrollment?.created_at);
+}
+
+/** Which of the round's twelve draws a given draw instant is. Uncapped. */
+function monthNumberAtDraw(scheme, enrollment, drawInstant) {
+  const f = istParts(roundAnchor(scheme, enrollment));
+  const d = istParts(drawInstant);
+  return (d.year - f.year) * 12 + (d.month - f.month) + 1;
+}
+
+/**
+ * Which month of the round we are in at `now` — i.e. the draw currently being
+ * played for. This is the number an ENTRY is filed under, and the one the
+ * consumer's card shows. Capped at 12 for display; use elapsedMonthNumber to
+ * tell "we are in month 12" from "month 12 finished four months ago".
+ */
+function monthNumberFor(scheme, enrollment, now = new Date()) {
+  return Math.min(Math.max(elapsedMonthNumber(scheme, enrollment, now), 1), SCHEME_MONTHS);
+}
+
+/** The same, uncapped: > 12 means the round's twelve draws are behind us. */
 function elapsedMonthNumber(scheme, enrollment, now = new Date()) {
-  const anchor = parseDbDate(scheme.starts_at)
-    || parseDbDate(scheme.enrollment_closes_at)
-    || parseDbDate(enrollment.enrolled_at)
-    || parseDbDate(enrollment.created_at);
-  if (!anchor) return 1;
-  const a = istParts(anchor);
-  const n = istParts(now);
-  const elapsed = (n.year - a.year) * 12 + (n.month - a.month);
-  return Math.max(elapsed + 1, 1);
+  return monthNumberAtDraw(scheme, enrollment, targetDrawAt(now));
+}
+
+/**
+ * Which month the draw being HELD at `now` is for.
+ *
+ * Deliberately not the same question as elapsedMonthNumber. A purchase looks
+ * FORWARD to the next draw; a draw looks BACK at the one that just came due.
+ * They differ exactly when a draw runs late — and the scheduler is built to
+ * catch up — where asking the forward question would draw next month's draw a
+ * month early and leave the due one unheld for ever.
+ */
+function drawMonthNumber(scheme, enrollment, now = new Date()) {
+  return monthNumberAtDraw(scheme, enrollment, dueDrawAt(now));
 }
 
 /**
@@ -206,7 +291,7 @@ function recordQualifyingOrder(orderId, nowOverride = null) {
     // Only people still trying to qualify have an entry to record. Winners
     // are out of the pool for the rest of the round.
     const enrollment = db.prepare(`
-      SELECT e.*, s.starts_at, s.enrollment_closes_at, s.status AS scheme_status
+      SELECT e.*, s.starts_at, s.enrollment_closes_at, s.first_draw_at, s.status AS scheme_status
         FROM lucky_draw_enrollments e
         JOIN lucky_draw_schemes s ON s.id = e.scheme_id
        WHERE e.consumer_id = ? AND e.status = 'active'
@@ -217,20 +302,15 @@ function recordQualifyingOrder(orderId, nowOverride = null) {
     // Dated from the order, not from the clock: a webhook that lands two days
     // late still counts the purchase in the window it was actually made in.
     const placedAt = parseDbDate(order.created_at) || nowOverride || new Date();
-    const window = cycleWindow(placedAt);
 
-    /* A purchase made after this month's draw counts toward the NEXT one.
-     *
-     * It used to count toward nothing at all: too late for the draw that had
-     * already run, and the next month's entry needed an order dated in the
-     * next month. Someone who happened to shop on the 20th of every month
-     * paid to join, bought every single month, and was never once in a draw.
-     * Every purchase now enters the next draw that has not yet been held,
-     * which is what the rules say and what people assume. */
-    const rollsForward = placedAt > new Date(window.entry_deadline);
-    const countedAt = rollsForward ? new Date(window.next_draw_at) : placedAt;
-
-    const monthNumber = monthNumberFor(enrollment, enrollment, countedAt);
+    /* A purchase made after this month's draw counts toward the NEXT one, and
+     * that roll-forward is now simply what targetDrawAt means — the month
+     * number IS the draw this purchase goes into, so there is nothing left to
+     * shift by hand. (It used to count toward nothing at all: too late for the
+     * draw that had already run, and the next month's entry needed an order
+     * dated in the next calendar month. Someone who shopped on the 20th of
+     * every month paid to join, bought every month, and was never in a draw.) */
+    const monthNumber = monthNumberFor(enrollment, enrollment, placedAt);
 
     // A draw that has already run is settled. Adding an entry to it after the
     // fact would rewrite a result people have already been told about.
@@ -256,18 +336,6 @@ function recordQualifyingOrder(orderId, nowOverride = null) {
   }
 }
 
-/**
- * The moment the previous draw ran, which is when this draw's window opened.
- * Entries roll forward past a draw, so the window is draw-to-draw and not
- * 1st-to-deadline; anything bought after the last draw is in this one.
- */
-function previousDrawAt(now = new Date()) {
-  const { year, month } = istParts(now);
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  const { day, hour, minute } = drawDayAndTime();
-  return istInstant(prevYear, prevMonth, day, hour, minute).toISOString();
-}
 
 /** This month's entry row for an enrollment, with the order that earned it. */
 function entryFor(enrollmentId, monthNumber) {
@@ -286,38 +354,54 @@ function entryFor(enrollmentId, monthNumber) {
  * it is safe to run on every boot.
  */
 function backfillCurrentMonthEntries(now = new Date()) {
-  const window = cycleWindow(now);
   const enrollments = db.prepare(`
-    SELECT e.*, s.starts_at, s.enrollment_closes_at FROM lucky_draw_enrollments e
+    SELECT e.*, s.starts_at, s.enrollment_closes_at, s.first_draw_at FROM lucky_draw_enrollments e
     JOIN lucky_draw_schemes s ON s.id = e.scheme_id
     WHERE e.status = 'active'
   `).all();
 
+  /* Two draws can still be open at once: the one that has come due but may not
+   * have been held yet, and the one purchases are currently rolling into. A
+   * single "this month" window missed whichever of the two it wasn't, which is
+   * precisely the gap this function exists to close. */
+  const due = dueDrawAt(now);
+  const d = istParts(due);
+  const targets = [due, drawInstantAfter(d.year, d.month, 1)];
+
   let added = 0;
   for (const e of enrollments) {
-    const monthNumber = monthNumberFor(e, e, now);
-    const existing = entryFor(e.id, monthNumber);
-    if (existing && (existing.qualified || existing.draw_run_at)) continue;
+    for (const target of targets) {
+      const monthNumber = monthNumberAtDraw(e, e, target);
+      if (monthNumber < 1 || monthNumber > SCHEME_MONTHS) continue;
 
-    const order = db.prepare(`
-      SELECT id FROM consumer_orders
-       WHERE consumer_id = ?
-         AND payment_status = 'paid' AND status != 'cancelled' AND total_amount > 0
-         AND order_number NOT LIKE 'BCGIFT-%' AND order_number NOT LIKE 'BCFREE-%'
-         AND order_number NOT LIKE 'BCGUAR-%'
-         AND created_at > ? AND created_at <= ?
-       ORDER BY created_at DESC LIMIT 1
-    `).get(e.consumer_id, sqliteTime(previousDrawAt(now)), sqliteTime(window.entry_deadline));
-    if (!order) continue;
+      const existing = entryFor(e.id, monthNumber);
+      if (existing && (existing.qualified || existing.draw_run_at)) continue;
 
-    db.prepare(`
-      INSERT INTO lucky_draw_monthly_entries
-        (enrollment_id, month_number, qualifying_order_id, qualified, is_winner)
-      VALUES (?,?,?,1,0)
-      ON CONFLICT(enrollment_id, month_number) DO UPDATE SET
-        qualifying_order_id = excluded.qualifying_order_id, qualified = 1
-    `).run(e.id, monthNumber, order.id);
-    added++;
+      const t = istParts(target);
+      const from = drawInstantAfter(t.year, t.month, -1);
+      const to = target < now ? target : now;
+      if (to <= from) continue;
+
+      const order = db.prepare(`
+        SELECT id FROM consumer_orders
+         WHERE consumer_id = ?
+           AND payment_status = 'paid' AND status != 'cancelled' AND total_amount > 0
+           AND order_number NOT LIKE 'BCGIFT-%' AND order_number NOT LIKE 'BCFREE-%'
+           AND order_number NOT LIKE 'BCGUAR-%'
+           AND created_at > ? AND created_at <= ?
+         ORDER BY created_at DESC LIMIT 1
+      `).get(e.consumer_id, sqliteTime(from.toISOString()), sqliteTime(to.toISOString()));
+      if (!order) continue;
+
+      db.prepare(`
+        INSERT INTO lucky_draw_monthly_entries
+          (enrollment_id, month_number, qualifying_order_id, qualified, is_winner)
+        VALUES (?,?,?,1,0)
+        ON CONFLICT(enrollment_id, month_number) DO UPDATE SET
+          qualifying_order_id = excluded.qualifying_order_id, qualified = 1
+      `).run(e.id, monthNumber, order.id);
+      added++;
+    }
   }
   return added;
 }
@@ -389,7 +473,7 @@ function rewardOrderThisMonth(consumerId, window) {
 function getConsumerCycle(consumerId, now = new Date()) {
   const enrollment = db.prepare(`
     SELECT e.*, s.name AS scheme_name, s.status AS scheme_status,
-           s.starts_at, s.enrollment_closes_at,
+           s.starts_at, s.enrollment_closes_at, s.first_draw_at,
            p.name AS reward_product_name
       FROM lucky_draw_enrollments e
       JOIN lucky_draw_schemes s ON s.id = e.scheme_id
@@ -404,6 +488,7 @@ function getConsumerCycle(consumerId, now = new Date()) {
   const scheme = {
     starts_at: enrollment.starts_at,
     enrollment_closes_at: enrollment.enrollment_closes_at,
+    first_draw_at: enrollment.first_draw_at,
   };
   const monthNumber = monthNumberFor(scheme, enrollment, now);
   /* Month 12 is a month of the round like any other: the winner's free
@@ -750,7 +835,48 @@ function decideDraw(scheme, now) {
     throw httpError(400, 'No one is still qualifying in this scheme. Everyone enrolled has either won already or the scheme has no members.');
   }
 
-  const monthNumber = monthNumberFor(scheme, pool[0], now);
+  /* Which draw is being held. The one that has come DUE, not the one
+   * purchases are rolling into — a draw running late must still be the draw it
+   * was always going to be, or a catch-up run would hold next month's draw a
+   * month early and leave the due one unheld for ever. */
+  const monthNumber = drawMonthNumber(scheme, pool[0], now);
+
+  /* Before the round's first draw there is nothing to hold. */
+  if (monthNumber < 1) {
+    throw httpError(400,
+      `${scheme.name} has not reached its first draw yet. That is on ${nextDrawLabel(now, true)}.`);
+  }
+
+  /* After the twelfth, likewise. A round is twelve draws (§3.8); the thirteenth
+   * month is the guarantee's, not a draw's. This used to be unreachable: month
+   * numbers were clamped to 12, so the extra draw day a calendar-anchored round
+   * ran into simply landed on month 12 again and crowned a SECOND winner for
+   * it — against §3.11, paying a second reward out of a finished round, and
+   * repeating every month after. */
+  if (monthNumber > SCHEME_MONTHS) {
+    throw httpError(400,
+      `${scheme.name} has held all ${SCHEME_MONTHS} of its draws. There are none left on it.`);
+  }
+
+  /* Whatever the calendar says, a month that has already been drawn is settled.
+   * The month_key check above compares when draws RAN; this one compares which
+   * month they were FOR, and only the second is what §3.11 protects. */
+  const alreadyDrawn = db.prepare(`
+    SELECT 1 FROM lucky_draw_monthly_entries me
+      JOIN lucky_draw_enrollments e ON e.id = me.enrollment_id
+     WHERE e.scheme_id = ? AND me.month_number = ? AND me.draw_run_at IS NOT NULL
+     LIMIT 1
+  `).get(schemeId, monthNumber);
+  if (alreadyDrawn) {
+    /* Said as "the next one is on X" when that is what it means. Reaching here
+     * before this month's draw is due means the due one is already settled and
+     * the admin is simply early. */
+    if (now < new Date(window.draw_at)) {
+      throw httpError(400,
+        `The next ${scheme.name} draw is on ${nextDrawLabel(now, true)}. Entries are still open until then.`);
+    }
+    throw httpError(409, `Month ${monthNumber} of ${scheme.name} has already been drawn`);
+  }
 
   // The pool is whoever has a qualified entry row for this month. Those rows
   // were written as their orders were paid, so the draw reads a ledger it
@@ -854,8 +980,80 @@ function decideDraw(scheme, now) {
   };
 }
 
+/**
+ * Take back the entry a cancelled or refunded order paid for.
+ *
+ * recordQualifyingOrder writes an entry the moment an order is confirmed paid,
+ * and nothing ever unwrote it. So the cheapest way into a draw was to buy, be
+ * entered, and then ask for a refund: the entry stood, the tickets stood, and
+ * the refunded order could still be snapshotted as the reward the winner then
+ * received free for the rest of the round.
+ *
+ * Only ever touches a month that has NOT been drawn. A settled draw stays
+ * settled — rewriting a result people have already been told about would be a
+ * worse wrong than the one this fixes, and it is the admin's call, not a
+ * refund's.
+ *
+ * If an earlier order in the same window still qualifies, the entry falls back
+ * to that one rather than being dropped: they did buy that month, and one
+ * cancelled order out of two should not cost them the month.
+ *
+ * Never throws, for the same reason recordQualifyingOrder never throws: the
+ * refund is the important half of this transaction.
+ */
+function revokeQualifyingOrder(orderId, nowOverride = null) {
+  try {
+    const order = db.prepare(`SELECT * FROM consumer_orders WHERE id = ?`).get(orderId);
+    if (!order) return null;
+
+    const entry = db.prepare(`
+      SELECT me.id, me.enrollment_id, me.month_number, me.draw_run_at, e.consumer_id
+        FROM lucky_draw_monthly_entries me
+        JOIN lucky_draw_enrollments e ON e.id = me.enrollment_id
+       WHERE me.qualifying_order_id = ?
+    `).get(orderId);
+    if (!entry) return null;
+    if (entry.draw_run_at) return null;      // settled; leave it alone
+
+    const placedAt = parseDbDate(order.created_at) || nowOverride || new Date();
+    const window = entryWindowFor(placedAt);
+    const from = sqliteTime(window.from.toISOString());
+    const to = sqliteTime(window.to.toISOString());
+
+    // Anything else they bought in the same window that still stands.
+    const fallback = db.prepare(`
+      SELECT id FROM consumer_orders
+       WHERE consumer_id = ? AND id != ?
+         AND payment_status = 'paid' AND status != 'cancelled' AND total_amount > 0
+         AND order_number NOT LIKE 'BCGIFT-%' AND order_number NOT LIKE 'BCFREE-%'
+         AND order_number NOT LIKE 'BCGUAR-%'
+         AND created_at > ? AND created_at <= ?
+       ORDER BY created_at DESC LIMIT 1
+    `).get(entry.consumer_id, orderId, from, to);
+
+    if (fallback) {
+      db.prepare(`
+        UPDATE lucky_draw_monthly_entries SET qualifying_order_id = ?, qualified = 1 WHERE id = ?
+      `).run(fallback.id, entry.id);
+      return { enrollment_id: entry.enrollment_id, month_number: entry.month_number, replaced_with: fallback.id };
+    }
+
+    db.prepare(`
+      UPDATE lucky_draw_monthly_entries SET qualifying_order_id = NULL, qualified = 0 WHERE id = ?
+    `).run(entry.id);
+    return { enrollment_id: entry.enrollment_id, month_number: entry.month_number, replaced_with: null };
+  } catch (err) {
+    console.error('[lucky-draw] revokeQualifyingOrder failed for order', orderId, err.message);
+    return null;
+  }
+}
+
 module.exports = {
   ticketsFor,
+  roundEndsAt,
+  firstDrawAt,
+  dueDrawAt,
+  revokeQualifyingOrder,
   leaveScheme,
   getConsumerCycle,
   placeRewardOrder,

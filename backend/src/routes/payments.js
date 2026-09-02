@@ -18,7 +18,7 @@ const { generateInvoiceForOrder } = require('../services/invoiceService');
 const { applyStoreCredit } = require('../services/storeCreditService');
 const { syncAdminDeliveryCommission } = require('../services/commissionRoutingService');
 const fs = require('fs');
-const { recordQualifyingOrder } = require('../services/luckyDraw/drawService');
+const { recordQualifyingOrder, revokeQualifyingOrder } = require('../services/luckyDraw/drawService');
 const { finalizeEnrollment } = require('../services/luckyDraw/enrollmentService');
 
 const router = express.Router();
@@ -492,6 +492,13 @@ router.post('/refund', authenticate, requireAdmin, auditLog('refund'), async (re
 
     db.prepare(`UPDATE consumer_orders SET refund_id=?, refund_status=?, refund_amount=?, status='cancelled' WHERE id=?`)
       .run(refund.id, refund.status, refund.amount / 100, order.id);
+
+    /* A refunded purchase is not a purchase, so it must not go on buying a
+     * lucky-draw entry. Only ever touches a month that has not been drawn
+     * yet; a settled draw stays settled. Swallowed like the rest of the
+     * post-refund bookkeeping — the money is already back. */
+    try { revokeQualifyingOrder(order.id); }
+    catch (e) { console.error('[refund] lucky-draw entry revoke failed:', e.message); }
 
     // Restore dealer inventory (idempotent — no-op if already restored)
     try { returnOrderInventory(order.id); }

@@ -8,7 +8,8 @@ import WagonWheelLoader from '../../components/luckyDraw/WagonWheelLoader';
 import { withViewTransition } from '../../utils/viewTransition';
 import WinReveal from '../../components/luckyDraw/WinReveal';
 import HowItWorks from '../../components/luckyDraw/HowItWorks';
-import { LUCKY_DRAW_NAME, LUCKY_DRAW_TAGLINE, drawSeenKey } from '../../config/luckyDraw';
+import { LUCKY_DRAW_NAME, LUCKY_DRAW_TAGLINE, drawSeenKey, ordinalDay } from '../../config/luckyDraw';
+import { parseDbDate } from '../../utils/dateTime';
 
 interface Scheme {
   id: number;
@@ -23,6 +24,7 @@ interface ActiveEnrollment {
   scheme_name: string;
   scheme_id: number;
   reward_product_name: string | null;
+  enrolled_at: string | null;
 }
 
 interface GiftProduct {
@@ -113,7 +115,17 @@ export default function LuckyDraw() {
     // mid-animation skip the moment for good.
     const c = data.cycle;
     setCycle(c || null);
-    if (c?.latest_draw && !localStorage.getItem(drawSeenKey(c.scheme_id, c.latest_draw.month_key))) {
+    /* Only ever reveal a draw that was held AFTER they joined.
+     *
+     * `latest_draw` is the round's last draw, not theirs. Someone enrolling on
+     * the 20th used to be met, on their very first visit, with the full-screen
+     * reveal for the 12th — a draw they were never in, lifting a stranger's
+     * name. The moment only belongs to people who were in the wheel when it
+     * turned. */
+    const ranAt = c?.latest_draw?.ran_at;
+    const joinedAt = data.active_enrollment?.enrolled_at;
+    const wasInIt = !!ranAt && (!joinedAt || parseDbDate(ranAt) >= parseDbDate(joinedAt));
+    if (c?.latest_draw && wasInIt && !localStorage.getItem(drawSeenKey(c.scheme_id, c.latest_draw.month_key))) {
       setShowWinReveal(true);
     }
   };
@@ -297,7 +309,7 @@ export default function LuckyDraw() {
               ? (activeEnrollment.reward_product_name
                   ? <>We're delivering your <span className="font-semibold text-slate-800">{activeEnrollment.reward_product_name}</span> free, every month, for the rest of this round.</>
                   : "We're delivering your last order free, every month, for the rest of this round.")
-              : "Any purchase this month enters you into the draw on the 12th. Win, and we'll deliver whatever you bought most recently, free, for the rest of the round."}
+              : `Any purchase this month enters you into the draw on the ${ordinalDay(drawSchedule.day)}. Win, and we'll deliver whatever you bought most recently, free, for the rest of the round.`}
           </p>
           <Link to="/shop" className="btn-primary py-3 px-8 inline-block mt-8">Continue Shopping</Link>
           <RecentWinners winners={winners} />

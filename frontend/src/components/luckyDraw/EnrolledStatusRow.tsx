@@ -32,29 +32,41 @@ export default function EnrolledStatusRow({ cycle }: { cycle: Cycle }) {
   const entered = cycle.entered;
   const tickets = cycle.tickets ?? 1;
   const windowOpen = Date.now() <= parseDbDate(cycle.entry_deadline).getTime();
+  /* Has THIS month's draw already been held? `entered` stays true for the rest
+   * of the month once it has, so without this the row went on saying "In this
+   * month's draw · 12 September" for the three weeks AFTER the 12th — to
+   * someone who had already lost it. A tick and a future-tense promise against
+   * a settled result is the one thing the row must never say. */
+  const drawn = cycle.latest_draw?.month_key === cycle.month_key;
+  const inThisDraw = entered && !drawn;
 
   useEffect(() => {
-    if (!entered) return;
+    if (!inThisDraw) return;
     const key = enteredSeenKey(cycle.scheme_id, cycle.month_key);
     try {
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, '1');
       setJustCrossed(true);
     } catch { /* private browsing: the row is still correct, just unmarked */ }
-  }, [entered, cycle.scheme_id, cycle.month_key]);
+  }, [inThisDraw, cycle.scheme_id, cycle.month_key]);
 
   /* Three states, and only one of them is not a call to action. Once this
    * month's draw has run there is still something to ask for: a purchase now
    * rolls into the next draw, so the row points at that date rather than
    * saying entries are closed, which would send people away for three weeks
    * over a deadline that has already moved on. */
-  const line = entered
-    ? tickets > 1
-      ? `In this month\u2019s draw with ${tickets} entries \u00b7 ${dayAndMonth(cycle.draw_at)}`
-      : `In this month\u2019s draw \u00b7 ${dayAndMonth(cycle.draw_at)}`
-    : windowOpen
-      ? `Buy any oil by ${dayAndMonth(cycle.entry_deadline)} to enter this month\u2019s draw`
-      : `Buy any oil to enter the ${dayAndMonth(cycle.next_draw_at)} draw`;
+  const nextLine = `Buy any oil to enter the ${dayAndMonth(cycle.next_draw_at)} draw`;
+  const line = drawn
+    ? entered
+      ? `This month\u2019s draw has been held \u00b7 ${nextLine.charAt(0).toLowerCase()}${nextLine.slice(1)}`
+      : nextLine
+    : entered
+      ? tickets > 1
+        ? `In this month\u2019s draw with ${tickets} entries \u00b7 ${dayAndMonth(cycle.draw_at)}`
+        : `In this month\u2019s draw \u00b7 ${dayAndMonth(cycle.draw_at)}`
+      : windowOpen
+        ? `Buy any oil by ${dayAndMonth(cycle.entry_deadline)} to enter this month\u2019s draw`
+        : nextLine;
 
   return (
     <button
@@ -82,7 +94,7 @@ export default function EnrolledStatusRow({ cycle }: { cycle: Cycle }) {
           You&rsquo;re in {cycle.scheme_name}
         </span>
         <span className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: '#885c24' }}>
-          {entered && (
+          {inThisDraw && (
             <span
               className={`flex items-center justify-center w-3.5 h-3.5 rounded-full flex-shrink-0 ${justCrossed ? 'motion-safe:animate-tick-in' : ''}`}
               style={{ backgroundColor: '#c8963c' }}

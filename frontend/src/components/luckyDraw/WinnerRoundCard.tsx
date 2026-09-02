@@ -165,7 +165,16 @@ export default function WinnerRoundCard({ cycle, onClaimed }: { cycle: Cycle; on
       <div className="mt-6">
         {roundOver && !claimed ? (
           <p className="text-sm font-semibold" style={{ color: '#6a4219' }} role="status">
-            Your round is complete. Twelve months, all of them free after you won.
+            {/* Counted from the month they actually won. The old copy said
+                "Twelve months, all of them free after you won" to everybody,
+                which is only true of a month-one winner and reads as a boast
+                about deliveries nobody received. */}
+            Your round is complete
+            {reward.won_at_month
+              ? ` — ${cycle.total_months - reward.won_at_month + 1} free ${
+                  cycle.total_months - reward.won_at_month + 1 === 1 ? 'delivery' : 'deliveries'
+                } after you won in month ${reward.won_at_month}.`
+              : '.'}
           </p>
         ) : claimed ? (
           <p

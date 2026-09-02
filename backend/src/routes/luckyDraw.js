@@ -57,8 +57,25 @@ router.get('/consumer/status', authConsumer, async (req, res) => {
     await enrollmentService.reconcilePendingEnrollment(req.consumer.id);
   }
 
+  /* Statuses are time-driven (a window closing, a round finishing), and the
+   * only thing that advanced them was a scheduler tick — so on a backend that
+   * is not always up they went stale, and a consumer could be shown a scheme
+   * state that stopped being true days ago. Idempotent and cheap. */
+  try { schemeService.advanceSchemeStatuses(); } catch { /* never block the page */ }
+
   const active = enrollmentService.getActiveEnrollment(req.consumer.id);
-  const openSchemes = active ? [] : schemeService.listOpenSchemes();
+  /* Someone sitting on an unpaid 'pending_payment' has not joined anything —
+   * they opened the payment sheet and closed it. Hiding the open rounds from
+   * them left the page with nothing to render but "isn't running right now",
+   * which is both false and a dead end. They still get the schemes, and
+   * startEnrollment reuses their pending row when they tap Join again. */
+  /* One round at a time (Decision #4/#5). Someone already in a round is not
+   * shown any other, for the whole of their round INCLUDING the post-win tail —
+   * they cannot join it, so offering it is just a thing to be told no about.
+   * Open rounds are for people not in one: newcomers, and anyone whose last
+   * round has finished. */
+  const holdsASlot = !!active && active.status !== 'pending_payment';
+  const openSchemes = holdsASlot ? [] : schemeService.listOpenSchemes();
   const { day, time } = drawScheduler.getSchedule();
   res.json({
     active_enrollment: active || null,
@@ -194,7 +211,20 @@ router.post('/admin/run-draw-now', authenticate, requireAdmin, (_req, res) => {
 
 
 router.get('/admin/schemes', authenticate, requireAdmin, (_req, res) => {
+  // Same reason as the consumer status endpoint: without this the admin reads
+  // a status that a lapsed date has already invalidated.
+  try { schemeService.advanceSchemeStatuses(); } catch { /* show what we have */ }
   res.json({ schemes: schemeService.listSchemes() });
+});
+
+/** Put a round back into enrollment on a new closing date (before any draw). */
+router.put('/admin/schemes/:id/enrollment', authenticate, requireAdmin, (req, res) => {
+  try {
+    const scheme = schemeService.reopenEnrollment(Number(req.params.id), req.body.enrollment_closes_at);
+    res.json({ scheme });
+  } catch (err) {
+    handleServiceError(err, res);
+  }
 });
 
 router.post('/admin/schemes', authenticate, requireAdmin, (req, res) => {
