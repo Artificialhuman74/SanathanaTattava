@@ -7,6 +7,7 @@ import ChakraIcon from '../../components/luckyDraw/ChakraIcon';
 import WagonWheelLoader from '../../components/luckyDraw/WagonWheelLoader';
 import { withViewTransition } from '../../utils/viewTransition';
 import WinReveal from '../../components/luckyDraw/WinReveal';
+import { fetchDrawStatus } from '../../components/luckyDraw/drawStatus';
 import HowItWorks from '../../components/luckyDraw/HowItWorks';
 import { LUCKY_DRAW_NAME, LUCKY_DRAW_TAGLINE, drawSeenKey, ordinalDay } from '../../config/luckyDraw';
 import { parseDbDate } from '../../utils/dateTime';
@@ -97,7 +98,7 @@ export default function LuckyDraw() {
   const [cycle, setCycle] = useState<any>(null);
 
   const fetchStatus = async () => {
-    const { data } = await consumerApi.get('/lucky-draw/consumer/status', { skipBaseRotation: true });
+    const data = await fetchDrawStatus();
     const enrollment: ActiveEnrollment | null =
       data.active_enrollment && data.active_enrollment.status !== 'pending_payment' ? data.active_enrollment : null;
     setActiveEnrollment(enrollment);

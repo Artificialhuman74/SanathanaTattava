@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth, consumerApi } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { fetchDrawStatus } from './drawStatus';
 import { LUCKY_DRAW_NAME } from '../../config/luckyDraw';
 import { parseDbDate } from '../../utils/dateTime';
 import ChakraIcon from './ChakraIcon';
@@ -41,9 +42,8 @@ export default function CheckoutDrawNote() {
   useEffect(() => {
     if (!consumer) return;
     let alive = true;
-    consumerApi
-      .get('/lucky-draw/consumer/status', { skipBaseRotation: true, skipAuthRedirect: true })
-      .then(({ data }) => { if (alive) setCycle(data?.cycle ?? null); })
+    fetchDrawStatus()
+      .then(data => { if (alive) setCycle(data?.cycle ?? null); })
       .catch(() => { /* the checkout must not care whether this loads */ });
     return () => { alive = false; };
   }, [consumer]);

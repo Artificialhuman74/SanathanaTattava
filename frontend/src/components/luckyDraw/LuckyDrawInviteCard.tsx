@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, consumerApi } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { LUCKY_DRAW_NAME, drawSeenKey, drawInfoSeenKey } from '../../config/luckyDraw';
 import ChakraIcon from './ChakraIcon';
 import { navigateWithViewTransition } from '../../utils/viewTransition';
@@ -8,6 +8,7 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 import DrawResultCard from './DrawResultCard';
 import WinnerRoundCard, { type Cycle } from './WinnerRoundCard';
 import EnrolledStatusRow from './EnrolledStatusRow';
+import { fetchDrawStatus } from './drawStatus';
 
 interface StatusResponse {
   active_enrollment: { status: string; scheme_name: string } | null;
@@ -44,17 +45,43 @@ export default function LuckyDrawInviteCard() {
   const [infoSeen, setInfoSeen] = useState(false);
   const [revealSeen, setRevealSeen] = useState(false);
 
+  /* Keyed on the id, not the consumer object: a refresh elsewhere in the app
+   * hands back a new object with the same id, and depending on the object made
+   * this refetch on every one of them. */
+  const consumerId = consumer?.id;
+
   const load = useCallback(async () => {
-    if (!consumer) return;
+    if (!consumerId) return;
     try {
-      const { data } = await consumerApi.get('/lucky-draw/consumer/status', { skipBaseRotation: true, skipAuthRedirect: true });
-      setStatus(data);
+      setStatus(await fetchDrawStatus());
     } catch {
-      setStatus(null);
+      /* Deliberately NOT setStatus(null).
+       *
+       * A failed refresh is not evidence that the round has gone away, and
+       * blanking on it is what made the card disappear on reload: one dropped
+       * request and the whole thing vanished until the next client-side
+       * navigation remounted it. Keep showing the last good answer; the
+       * listeners below try again. */
     }
-  }, [consumer]);
+  }, [consumerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  /* Come back from a failure on our own. The first load can lose its race with
+   * a cold backend, and without this the card stays empty until the page is
+   * navigated away from and back. */
+  useEffect(() => {
+    if (!consumerId || status) return;
+    const again = () => { if (document.visibilityState === 'visible') load(); };
+    window.addEventListener('online', again);
+    document.addEventListener('visibilitychange', again);
+    const t = window.setTimeout(load, 5000);
+    return () => {
+      window.removeEventListener('online', again);
+      document.removeEventListener('visibilitychange', again);
+      window.clearTimeout(t);
+    };
+  }, [consumerId, status, load]);
 
   const cycle = status?.cycle ?? null;
 
