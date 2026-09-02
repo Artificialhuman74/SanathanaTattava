@@ -10,6 +10,7 @@ import {
   isFirebaseConfigured,
   isGoogleRedirectPending,
 } from '../lib/firebase';
+import AuthCrest from '../components/AuthCrest';
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -104,7 +105,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] via-[#14532d] to-[#0d1f10] flex flex-col items-center justify-center p-4">
-      <div className="absolute inset-0 hero-pattern" />
+      <AuthCrest />
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
@@ -112,10 +113,7 @@ export default function Login() {
           <Link to="/" className="inline-flex items-center gap-2 text-white/60 hover:text-white text-sm mb-6 transition-colors">
             <ArrowLeft size={14} /> Back to Home
           </Link>
-          <div className="flex items-center justify-center gap-3">
-            <img src="/logo.webp" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
-            <span className="text-xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
-          </div>
+          <h1 className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</h1>
           <p className="text-white/60 mt-2 text-sm">Sign in to your account</p>
         </div>
 

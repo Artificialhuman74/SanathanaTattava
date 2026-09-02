@@ -3,6 +3,43 @@
 @tailwind utilities;
 
 @layer utilities {
+  /* ── Auth crest ───────────────────────────────────────────────
+   * The brand seal sunk INTO the dark green auth background rather
+   * than sitting on top of it as a chip.
+   *
+   * logo.webp is an opaque 512x279 photograph of the seal printed on
+   * burlap, so wherever it is placed it draws a tan rectangle against
+   * the green. At 48x48 with object-contain it was worse still: the
+   * wide image letterboxed, so the tan showed as bars above and below
+   * the seal.
+   *
+   * `soft-light` throws the tan away and keeps only the seal's light
+   * and shade for the gradient underneath to colour, and the radial
+   * mask dissolves all four edges, so no rectangle survives. Wider
+   * than the form column on purpose, so the wreath reads down either
+   * side of the card like a letterhead.
+   *
+   * Centred at 60% rather than 50% to keep the seal's own arc
+   * lettering clear of the page's wordmark; two versions of the same
+   * words on top of each other reads as a mistake. */
+  .auth-crest {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    width: min(1180px, 210vw);
+    max-width: none;
+    transform: translate(-50%, -50%);
+    opacity: 0.9;
+    mix-blend-mode: soft-light;
+    -webkit-mask-image: radial-gradient(ellipse 50% 55% at 50% 50%, #000 0%, rgba(0, 0, 0, 0.85) 45%, transparent 75%);
+            mask-image: radial-gradient(ellipse 50% 55% at 50% 50%, #000 0%, rgba(0, 0, 0, 0.85) 45%, transparent 75%);
+  }
+
+  /* Without a mask the crest is exactly the tan rectangle this exists
+   * to remove, so on a browser that cannot mask, show nothing. */
+  @supports not ((-webkit-mask-image: radial-gradient(#000, #000)) or (mask-image: radial-gradient(#000, #000))) {
+    .auth-crest { display: none; }
+  }
   .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 }
 

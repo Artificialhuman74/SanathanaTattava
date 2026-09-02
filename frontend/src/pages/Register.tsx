@@ -8,6 +8,7 @@ import {
   CheckCircle2, XCircle, ArrowLeft, Star, Users, Truck, Info, AlertCircle,
 } from 'lucide-react';
 import { getCurrentGoogleIdToken } from '../lib/firebase';
+import AuthCrest from '../components/AuthCrest';
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 /* Forgiving phone: strip spaces / dashes / parens / leading +91, then a
@@ -125,17 +126,14 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0d1f10] via-[#14532d] to-[#0d1f10] flex flex-col items-center justify-center p-4 py-10">
-      <div className="absolute inset-0 hero-pattern" />
+      <AuthCrest />
 
       <div className="relative w-full max-w-lg">
         <div className="text-center mb-8">
           <Link to="/login" className="inline-flex items-center gap-2 text-white/60 hover:text-white text-sm mb-6 transition-colors">
             <ArrowLeft size={14} /> Back to Login
           </Link>
-          <div className="flex items-center justify-center gap-3">
-            <img src="/logo.webp" className="h-12 w-12 object-contain rounded-xl" alt="Sanathana Tattva" />
-            <span className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</span>
-          </div>
+          <h1 className="text-2xl font-extrabold text-white leading-tight">Sanathana Tattva</h1>
           <p className="text-white/70 mt-2 text-sm" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontStyle: 'italic' }}>
             Join the family that delivers our oils.
           </p>
