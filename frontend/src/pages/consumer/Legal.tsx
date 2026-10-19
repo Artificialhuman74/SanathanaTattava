@@ -553,7 +553,31 @@ function PolicyPrivacy({ refEl }: { refEl: (el: HTMLElement | null) => void }) {
         </p>
       </Clause>
 
-      <Clause n="2.08" title="Updates to this policy">
+      <Clause n="2.08" title="Delivery partners (ST Delivery app)">
+        <p>
+          Shops and riders who deliver our orders use the <strong>ST Delivery</strong>{' '}
+          Android app. For them we collect, in addition to the above:
+        </p>
+        <Bullets items={[
+          <><strong>Identity and verification:</strong> name, email, phone, a selfie, a photo of the driving licence, vehicle type and number plate, and an emergency contact. Our team uses these to approve partners.</>,
+          <><strong>Payouts:</strong> PAN, bank account number, IFSC and account holder name, passed to <strong>Razorpay</strong> to pay delivery fees and commissions.</>,
+          <><strong>Location:</strong> saved start places, and the phone’s precise location only while the partner is <em>Online</em> (shown by an ongoing notification). It is used to offer nearby orders and, during an active delivery, shown to that order’s shop and customer. We keep the latest position, not a location history.</>,
+          <><strong>Proof of delivery:</strong> a photo of the package at the door, and photos taken when collecting empty cans.</>,
+          <><strong>Device:</strong> a Firebase Cloud Messaging token so new orders can ring the phone.</>,
+        ]} />
+        <p>
+          During an order, the shop and customer see the partner’s name, photo,
+          vehicle and live location; the partner can call the customer without
+          seeing their number. Verification documents are seen only by our team
+          and are not public. Partners can ask us to delete their account and
+          documents by writing to{' '}
+          <a href="mailto:privacy@sanathanatattva.shop">privacy@sanathanatattva.shop</a>{' '}
+          or through ST Delivery support; records we must keep by law (payouts,
+          tax) are retained as described in 2.04.
+        </p>
+      </Clause>
+
+      <Clause n="2.09" title="Updates to this policy">
         <p>
           We will post material changes here and notify registered users by
           email at least 14 days before they take effect.
