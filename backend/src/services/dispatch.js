@@ -26,6 +26,7 @@ const hours = require('./deliveryHours');
 const { haversineDistance } = require('./h3Service');
 const { sendDataToUser, sendToUser } = require('./pushService');
 const { createNotification } = require('./notificationService');
+const { setOnline } = require('./presence');
 const { emitAdminEvent, emitOrderUpdate } = require('../websocket/socketServer');
 
 const OFFER_MS = 20 * 60_000;
@@ -356,7 +357,7 @@ async function missed(userId, now) {
   db.prepare('UPDATE users SET missed_offer_streak = missed_offer_streak + 1 WHERE id = ?').run(userId);
   const u = db.prepare('SELECT missed_offer_streak FROM users WHERE id = ?').get(userId);
   if (u.missed_offer_streak >= MISS_LIMIT) {
-    db.prepare('UPDATE users SET partner_online = 0, auto_offline_at = ?, missed_offer_streak = 0 WHERE id = ?').run(iso(now), userId);
+    setOnline(userId, false, { auto_offline_at: iso(now), missed_offer_streak: 0 });
     sendDataToUser(userId, { type: 'auto_offline' }).catch(() => {});
     console.log(`[dispatch] rider ${userId} set offline after ${MISS_LIMIT} missed orders`);
   }

@@ -127,6 +127,24 @@ describe('going online', () => {
     const res = await request(app).put('/api/partner/online').set(a.headers).send({ online: true, place_id: theirs.id });
     expect(res.status).toBe(404);
   });
+
+  test('the app switch and the website toggle are one state', async () => {
+    const { user, headers } = createTrader();
+    db.prepare(`UPDATE users SET will_deliver = 0, availability_status = 'offline' WHERE id = ?`).run(user.id);
+    const state = () => db.prepare('SELECT partner_online, availability_status, will_deliver FROM users WHERE id = ?').get(user.id);
+
+    await request(app).put('/api/partner/online').set(headers).send({ online: true, lat: 12.97, lng: 77.59 });
+    expect(state()).toEqual({ partner_online: 1, availability_status: 'available', will_deliver: 1 });
+
+    await request(app).put('/api/partner/online').set(headers).send({ online: false });
+    expect(state()).toEqual({ partner_online: 0, availability_status: 'offline', will_deliver: 0 });
+
+    await request(app).put('/api/location/dealer/availability').set(headers).send({ status: 'available' });
+    expect(state()).toEqual({ partner_online: 1, availability_status: 'available', will_deliver: 1 });
+
+    await request(app).put('/api/location/dealer/availability').set(headers).send({ status: 'busy' });
+    expect(state()).toEqual({ partner_online: 0, availability_status: 'busy', will_deliver: 0 });
+  });
 });
 
 describe('test alert', () => {

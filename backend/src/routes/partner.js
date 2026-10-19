@@ -17,9 +17,9 @@
  *   PUT    /api/partner/rider-jobs        { on }  trader opts in to other shops' rider jobs
  *   PUT    /api/partner/profile           { name, phone }
  *
- * "Online" here is the app's own switch (partner_online). It deliberately doesn't touch
- * users.availability_status, which today's website dispatch reads; the new dispatch
- * engine (handoff §6.2) will read partner_online.
+ * "Online" is one state shared with the website: the app's switch also sets
+ * availability_status and will_deliver (services/presence.js), so going Online means
+ * "I'll deliver" to both the dispatch engine and the website.
  */
 const express = require('express');
 const db = require('../database/db');
@@ -27,6 +27,7 @@ const { authenticate } = require('../middleware/auth');
 const { latLngToH3Index } = require('../services/h3Service');
 const { sendDataToUser } = require('../services/pushService');
 const hours = require('../services/deliveryHours');
+const { setOnline } = require('../services/presence');
 
 const router = express.Router();
 
@@ -114,7 +115,7 @@ router.get('/home', (req, res) => {
 router.put('/online', (req, res) => {
   const online = req.body?.online === true;
   if (!online) {
-    db.prepare('UPDATE users SET partner_online = 0 WHERE id = ?').run(req.user.id);
+    setOnline(req.user.id, false);
     return res.json({ online: false });
   }
   let placeId = null;
@@ -128,12 +129,15 @@ router.put('/online', (req, res) => {
   } else if (!validCoord(lat, lng)) {
     return res.status(400).json({ error: 'Pick a start place or share your location' });
   }
-  db.prepare(`
-    UPDATE users SET partner_online = 1, online_since = CURRENT_TIMESTAMP, online_place_id = ?,
-      live_lat = ?, live_lng = ?, live_at = CURRENT_TIMESTAMP,
-      missed_offer_streak = 0, auto_offline_at = NULL
-    WHERE id = ?
-  `).run(placeId, lat, lng, req.user.id);
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE users SET online_since = CURRENT_TIMESTAMP, online_place_id = ?,
+        live_lat = ?, live_lng = ?, live_at = CURRENT_TIMESTAMP,
+        missed_offer_streak = 0, auto_offline_at = NULL
+      WHERE id = ?
+    `).run(placeId, lat, lng, req.user.id);
+    setOnline(req.user.id, true);
+  })();
   res.json({ online: true, place_id: placeId });
 });
 

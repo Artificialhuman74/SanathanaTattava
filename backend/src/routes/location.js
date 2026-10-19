@@ -10,6 +10,7 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const db = require('../database/db');
+const { setOnline } = require('../services/presence');
 const { authenticate, requireTrader, requireTraderOrAdmin } = require('../middleware/auth');
 const {
   latLngToH3Index,
@@ -80,8 +81,9 @@ router.put(
     if (!errs.isEmpty()) return res.status(400).json({ error: errs.array()[0].msg });
 
     const willDeliver = req.body.status === 'available' ? 1 : 0;
-    db.prepare(`UPDATE users SET availability_status = ?, will_deliver = ? WHERE id = ?`)
-      .run(req.body.status, willDeliver, req.user.id);
+    // Same switch as the ST Partner app's Online (services/presence.js); 'busy' keeps
+    // its own availability_status but counts as offline for dispatch.
+    setOnline(req.user.id, willDeliver === 1, { availability_status: req.body.status });
 
     res.json({
       success: true,
