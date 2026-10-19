@@ -13,6 +13,10 @@ const {
 const { returnOrderInventory } = require('../services/inventoryService');
 const { emitOrderUpdate } = require('../websocket/socketServer');
 const { authenticate, requireAdmin, requireTrader } = require('../middleware/auth');
+
+/* Who can get a Razorpay Route account: traders, and outside riders once approved
+ * (their delivery fee comes out of the linked trader's commission). */
+const ROUTE_PAYEE = "(role = 'trader' OR (role = 'rider' AND review_status = 'approved'))";
 const { auditLog } = require('../middleware/auditLog');
 const { sendOrderConfirmedEmail } = require('../services/emailService');
 const { generateInvoiceForOrder } = require('../services/invoiceService');
@@ -527,8 +531,16 @@ router.post('/onboard', authenticate, requireAdmin, async (req, res) => {
   const { trader_id } = req.body;
   if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
 
-  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  const trader = db.prepare(`SELECT * FROM users WHERE id=? AND ${ROUTE_PAYEE}`).get(trader_id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
+  // Riders keep their address as start places; use the default one for the Route account.
+  if (!trader.address && trader.role === 'rider') {
+    const base = db.prepare('SELECT address FROM user_addresses WHERE user_id = ? ORDER BY is_default DESC, id LIMIT 1').get(trader.id);
+    if (base) {
+      trader.address = base.address;
+      trader.pincode = trader.pincode || (base.address.match(/\b\d{6}\b/) || [])[0];
+    }
+  }
   if (!trader.bank_account_number || !trader.bank_ifsc || !trader.bank_account_name)
     return res.status(400).json({ error: 'Trader bank details missing — ask trader to fill bank details first' });
   if (!trader.pan)
@@ -646,7 +658,7 @@ router.post('/sync-account', authenticate, requireAdmin, async (req, res) => {
   const { trader_id } = req.body;
   if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
 
-  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  const trader = db.prepare(`SELECT * FROM users WHERE id=? AND ${ROUTE_PAYEE}`).get(trader_id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
   if (!trader.razorpay_linked_account_id)
     return res.status(400).json({ error: 'No linked account — run onboarding first' });
@@ -703,7 +715,7 @@ router.post('/linked-account', authenticate, requireAdmin, async (req, res) => {
   const { trader_id } = req.body;
   if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
 
-  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  const trader = db.prepare(`SELECT * FROM users WHERE id=? AND ${ROUTE_PAYEE}`).get(trader_id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
   if (trader.razorpay_linked_account_id)
     return res.status(400).json({ error: 'Trader already has a linked account', id: trader.razorpay_linked_account_id });
@@ -753,7 +765,7 @@ router.post('/add-bank-account', authenticate, requireAdmin, async (req, res) =>
   const { trader_id } = req.body;
   if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
 
-  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  const trader = db.prepare(`SELECT * FROM users WHERE id=? AND ${ROUTE_PAYEE}`).get(trader_id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
   if (!trader.razorpay_linked_account_id)
     return res.status(400).json({ error: 'Trader has no linked account — call /linked-account first' });
@@ -800,7 +812,7 @@ router.post('/stakeholder', authenticate, requireAdmin, async (req, res) => {
   const { trader_id } = req.body;
   if (!trader_id) return res.status(400).json({ error: 'trader_id required' });
 
-  const trader = db.prepare('SELECT * FROM users WHERE id=? AND role=?').get(trader_id, 'trader');
+  const trader = db.prepare(`SELECT * FROM users WHERE id=? AND ${ROUTE_PAYEE}`).get(trader_id);
   if (!trader) return res.status(404).json({ error: 'Trader not found' });
   if (!trader.razorpay_linked_account_id)
     return res.status(400).json({ error: 'Trader has no linked account — call /linked-account first' });

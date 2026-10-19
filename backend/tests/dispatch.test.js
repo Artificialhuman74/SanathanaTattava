@@ -42,7 +42,6 @@ beforeEach(() => {
   db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('partner_dispatch_enabled', '1')`).run();
   db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('partner_dispatch_enabled_at', '2000-01-01T00:00:00.000Z')`).run();
   db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('rider_fee_per_delivery', '45')`).run();
-  db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('trader_share_on_rider_orders', '70')`).run();
 });
 
 let shops = 0;
@@ -66,7 +65,7 @@ function rider(km, { online = true } = {}) {
   return { id, headers: authHeader(tokenFor(id, 'rider')) };
 }
 
-function order(shopId, { stock = 10 } = {}) {
+function order(shopId, { stock = 10, commission = 124 } = {}) {
   const { consumer } = createConsumer({ linked_dealer_id: shopId, name: 'Lakshmi Devi' });
   const product = createProduct({ name: 'Groundnut oil', unit: 'litre' });
   db.prepare(`UPDATE products SET container_type = '5L' WHERE id = ?`).run(product.id);
@@ -77,7 +76,7 @@ function order(shopId, { stock = 10 } = {}) {
   db.prepare(`UPDATE consumer_orders SET delivery_latitude = 12.93, delivery_longitude = 77.58 WHERE id = ?`).run(o.id);
   db.prepare(`INSERT INTO consumer_order_items (order_id, product_id, quantity, price, total, is_refill) VALUES (?, ?, 2, 100, 200, 1)`).run(o.id, product.id);
   db.prepare(`INSERT INTO dealer_inventory (dealer_id, product_id, quantity) VALUES (?, ?, ?)`).run(shopId, product.id, stock);
-  db.prepare(`INSERT INTO commissions (trader_id, consumer_order_id, amount, rate, type, status) VALUES (?, ?, 20, 10, 'direct', 'pending')`).run(shopId, o.id);
+  db.prepare(`INSERT INTO commissions (trader_id, consumer_order_id, amount, rate, type, status) VALUES (?, ?, ?, 10, 'direct', 'pending')`).run(shopId, o.id, commission);
   return o;
 }
 
@@ -215,10 +214,10 @@ describe('riders', () => {
 describe('delivering', () => {
   const photo = () => sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } }).png().toBuffer();
 
-  async function riderOrder() {
+  async function riderOrder(opts) {
     const s = shop();
     const r = rider(1);
-    const o = order(s.id);
+    const o = order(s.id, opts);
     await at(NOON);
     await request(app).post(`/api/partner/orders/offers/${openOffers(o.id)[0].id}/decline`).set(s.headers);
     const res = await request(app).post(`/api/partner/orders/offers/${openOffers(o.id)[0].id}/accept`).set(r.headers);
@@ -226,7 +225,7 @@ describe('delivering', () => {
     return { s, r, o };
   }
 
-  test('pack → pickup code → customer code + door photo → paid, with the trader’s share', async () => {
+  test('pack → pickup code → customer code + door photo → rider paid out of the trader’s commission', async () => {
     const { s, r, o } = await riderOrder();
     const riderView = (await request(app).get(`/api/partner/orders/${o.id}`).set(r.headers)).body;
     expect(riderView).toMatchObject({ role: 'rider', stage: 'rider_assigned', earn: 45 });
@@ -235,7 +234,7 @@ describe('delivering', () => {
     expect(shopView.role).toBe('packer');
     expect(shopView.pickup_code).toBeUndefined();
     expect(shopView.rider).toMatchObject({ first_name: 'Ravi', vehicle_plate: 'KA05AB1234' });
-    expect(shopView.share_amount).toBe(14);
+    expect(shopView.share_amount).toBe(79); // ₹124 commission − ₹45 rider fee
 
     await request(app).post(`/api/partner/orders/${o.id}/packed`).set(s.headers).expect(200);
     // "I'm at the shop" tells the shop; only the rider can say it.
@@ -263,10 +262,25 @@ describe('delivering', () => {
     const fee = db.prepare(`SELECT * FROM commissions WHERE consumer_order_id = ? AND type = 'delivery_fee'`).get(o.id);
     expect(fee).toMatchObject({ trader_id: r.id, amount: 45, status: 'pending' });
     const direct = db.prepare(`SELECT * FROM commissions WHERE consumer_order_id = ? AND type = 'direct'`).get(o.id);
-    expect(direct).toMatchObject({ amount: 14, original_amount: 20 });
+    expect(direct).toMatchObject({ amount: 79, original_amount: 124 });
 
     const after = await request(app).get(`/api/partner/orders/${o.id}/customer-phone`).set(r.headers);
     expect(after.status).toBe(403);
+  });
+
+  test('a commission smaller than the rider fee all goes to the rider, never more', async () => {
+    const { s, r, o } = await riderOrder({ commission: 20 });
+    const riderView = (await request(app).get(`/api/partner/orders/${o.id}`).set(r.headers)).body;
+    expect(riderView.earn).toBe(20);
+    expect((await request(app).get(`/api/partner/orders/${o.id}`).set(s.headers)).body.share_amount).toBe(0);
+    await request(app).post(`/api/partner/orders/${o.id}/packed`).set(s.headers).expect(200);
+    await request(app).post(`/api/partner/orders/${o.id}/handover`).set(s.headers).send({ code: riderView.pickup_code }).expect(200);
+    const done = await request(app).post(`/api/partner/orders/${o.id}/deliver`).set(r.headers)
+      .field('otp', get(o.id).delivery_otp).attach('photo', await photo(), { filename: 'door.png', contentType: 'image/png' });
+    expect(done.body.earned).toBe(20);
+    expect(db.prepare(`SELECT amount FROM commissions WHERE consumer_order_id = ? AND type = 'delivery_fee'`).get(o.id).amount).toBe(20);
+    expect(db.prepare(`SELECT amount, original_amount FROM commissions WHERE consumer_order_id = ? AND type = 'direct'`).get(o.id))
+      .toMatchObject({ amount: 0, original_amount: 20 });
   });
 
   test('failed delivery: rider brings it back with a code, and it’s offered again from tomorrow', async () => {

@@ -15,6 +15,7 @@ interface PayoutTrader {
   phone: string | null;
   tier: number;
   status: string;
+  role?: 'trader' | 'rider';
   bank_account_name: string | null;
   bank_account_number: string | null;
   bank_ifsc: string | null;
@@ -326,7 +327,10 @@ export default function AdminPayouts() {
                             {t.name?.[0]?.toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900 text-sm">{t.name}</p>
+                            <p className="font-medium text-slate-900 text-sm">
+                              {t.name}
+                              {t.role === 'rider' && <span className="badge bg-amber-100 text-amber-700 ml-1.5 align-middle">Rider</span>}
+                            </p>
                             <p className="text-xs text-slate-400">{t.email}</p>
                           </div>
                         </div>
@@ -414,8 +418,8 @@ export default function AdminPayouts() {
                     <td className="font-mono text-xs">{c.order_number || '—'}</td>
                     <td className="text-sm text-slate-700">{c.trader_name}</td>
                     <td>
-                      <span className={`badge ${c.type === 'override' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                        {c.type}
+                      <span className={`badge ${c.type === 'override' ? 'bg-purple-100 text-purple-700' : c.type === 'delivery_fee' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        {c.type === 'delivery_fee' ? 'rider fee' : c.type}
                       </span>
                     </td>
                     <td className="text-sm text-slate-500">{c.rate}%</td>

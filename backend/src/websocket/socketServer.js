@@ -31,7 +31,8 @@ function initSocket(httpServer) {
           'http://localhost:5001',
           'https://localhost:5001',
         ];
-        if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+        // Same parsing as the HTTP CORS list in index.js: FRONTEND_URL may hold several, comma-separated.
+        if (process.env.FRONTEND_URL) process.env.FRONTEND_URL.split(',').map(o => o.trim()).filter(Boolean).forEach(o => allowedOrigins.push(o));
 
         // Allow requests with no origin (mobile apps, curl)
         if (!origin || allowedOrigins.includes(origin)) return callback(null, true);

@@ -50,10 +50,21 @@ function riderFee() {
   return Number.isFinite(n) && n >= 0 ? n : 45;
 }
 
-/** Trader's share of their usual commission on rider-delivered orders, in %. */
-function traderShare() {
-  const n = Number(setting('trader_share_on_rider_orders', '70'));
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 70;
+/** The linked trader's pending commission on this order: where a rider's pay comes from. */
+function traderCommissionPool(orderId) {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(COALESCE(original_amount, amount)), 0) AS total
+    FROM commissions WHERE consumer_order_id = ? AND type = 'direct' AND status = 'pending'
+  `).get(orderId);
+  return Number(row?.total) || 0;
+}
+
+/**
+ * What a rider earns on this order: the flat rider fee, paid out of the linked trader's
+ * commission, so never more than that commission (the trader keeps the rest).
+ */
+function riderCut(orderId) {
+  return Math.round(Math.min(riderFee(), traderCommissionPool(orderId)) * 100) / 100;
 }
 
 /* ── Small helpers ─────────────────────────────────────────────────────── */
@@ -187,7 +198,7 @@ function orderCard(order, viewer, kind, now = Date.now()) {
   if (kind === 'rider') {
     const me = db.prepare('SELECT * FROM users WHERE id = ?').get(viewer);
     const pos = me && positionOf(me, now);
-    card.earn = order.rider_fee ?? riderFee();
+    card.earn = order.rider_fee ?? riderCut(order.id);
     card.to_shop_km = pos && shop ? km(pos.lat, pos.lng, shop.latitude, shop.longitude) : null;
     card.shop_to_customer_km = shop ? km(shop.latitude, shop.longitude, order.delivery_latitude, order.delivery_longitude) : null;
   } else {
@@ -291,7 +302,7 @@ async function offerTrader(order, trader, now) {
 /** The trader can't or won't deliver: they pack, and riders are asked. */
 async function escalate(order, reason, now) {
   for (const o of openOffersFor(order.id)) closeOffer(o.id, reason === 'declined' ? 'declined' : 'expired', now);
-  setStage(order.id, { dispatch_stage: 'rider_search', escalated_at: iso(now), escalation_reason: reason, rider_fee: riderFee() });
+  setStage(order.id, { dispatch_stage: 'rider_search', escalated_at: iso(now), escalation_reason: reason, rider_fee: riderCut(order.id) });
   log(order, `rider search (${reason})`);
   if (order.delivery_dealer_id) {
     sendToUser(order.delivery_dealer_id, {
@@ -425,7 +436,7 @@ async function respond(offerId, userId, accept, now = Date.now()) {
     }
     closeOffer(offer.id, 'accepted', now);
     db.prepare('UPDATE users SET missed_offer_streak = 0 WHERE id = ?').run(userId);
-    setStage(order.id, { dispatch_stage: 'rider_assigned', rider_id: userId, rider_fee: order.rider_fee ?? riderFee(), pickup_code: code4() });
+    setStage(order.id, { dispatch_stage: 'rider_assigned', rider_id: userId, rider_fee: order.rider_fee ?? riderCut(order.id), pickup_code: code4() });
     const rider = db.prepare('SELECT name, vehicle_plate FROM users WHERE id = ?').get(userId);
     notifyConsumer(order, `${firstName(rider?.name)} is picking up your order — ${order.order_number}`,
       'Your delivery partner is on the way to the shop. You can follow them in your order.', { dispatch_stage: 'rider_assigned' });
@@ -556,6 +567,6 @@ function kick() {
 module.exports = {
   tick, kick, respond, start, escalate, offerNextRider, eligibleRiders, askShopToDeliver,
   orderCard, spokenSummary, orderLines, areaOf, firstName, positionOf, shopOf, toDate, iso, code4,
-  riderFee, traderShare, isEnabled, DispatchError,
+  riderFee, riderCut, traderCommissionPool, isEnabled, DispatchError,
   OFFER_MS, REALERT_MS, ADMIN_ALERT_MS, MISS_LIMIT,
 };

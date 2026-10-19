@@ -598,11 +598,11 @@ router.put('/commissions/payouts/:id/status', (req, res) => {
 });
 
 /* ── Razorpay Route Payouts — trader bank/linked-account overview ─────── */
-/* Admin payouts cover ONLY tier-1 traders. Sub-dealer (tier-2) direct
- * commissions are settled offline by the parent tier-1 dealer. */
+/* Admin payouts cover tier-1 traders and approved riders (rider delivery fees). Sub-dealer
+ * (tier-2) direct commissions are settled offline by the parent tier-1 dealer. */
 router.get('/payouts/traders', (_req, res) => {
   const rows = db.prepare(`
-    SELECT u.id, u.name, u.email, u.phone, u.tier, u.status,
+    SELECT u.id, u.name, u.email, u.phone, u.tier, u.status, u.role,
            u.bank_account_name, u.bank_account_number, u.bank_ifsc,
            u.razorpay_linked_account_id, u.razorpay_account_status,
            COALESCE(SUM(CASE WHEN cm.status='pending' THEN cm.amount END), 0) AS pending_amount,
@@ -611,7 +611,7 @@ router.get('/payouts/traders', (_req, res) => {
            COUNT(CASE WHEN cm.status='pending' THEN 1 END) AS pending_count
     FROM users u
     LEFT JOIN commissions cm ON cm.trader_id = u.id
-    WHERE u.role = 'trader' AND u.tier = 1
+    WHERE (u.role = 'trader' AND u.tier = 1) OR (u.role = 'rider' AND u.review_status = 'approved')
     GROUP BY u.id
     ORDER BY pending_amount DESC, u.name ASC
   `).all();
@@ -628,7 +628,7 @@ router.get('/payouts/pending-commissions', (req, res) => {
     FROM commissions cm
     JOIN users u ON u.id = cm.trader_id
     LEFT JOIN consumer_orders co ON co.id = cm.consumer_order_id
-    WHERE u.tier = 1
+    WHERE (u.tier = 1 OR u.role = 'rider')
       AND cm.status IN ('pending', 'transferring', 'transfer_failed', 'transferred')
   `;
   const params = [];
@@ -699,16 +699,11 @@ router.put('/settings', (req, res) => {
   }
 
   /* ST Partner app (handoff §4.11): rider fee, trader's share, and the dispatch switch. */
-  const { rider_fee_per_delivery, trader_share_on_rider_orders, partner_dispatch_enabled } = req.body;
+  const { rider_fee_per_delivery, partner_dispatch_enabled } = req.body;
   if (rider_fee_per_delivery !== undefined) {
     const fee = Number(rider_fee_per_delivery);
     if (!Number.isFinite(fee) || fee < 0 || fee > 1000) return res.status(400).json({ error: 'Rider fee must be ₹0–₹1000' });
     upsert.run('rider_fee_per_delivery', String(Math.round(fee * 100) / 100));
-  }
-  if (trader_share_on_rider_orders !== undefined) {
-    const share = Number(trader_share_on_rider_orders);
-    if (!Number.isFinite(share) || share < 0 || share > 100) return res.status(400).json({ error: 'Trader share must be 0–100%' });
-    upsert.run('trader_share_on_rider_orders', String(share));
   }
   if (partner_dispatch_enabled !== undefined) {
     const on = partner_dispatch_enabled === true || String(partner_dispatch_enabled) === '1';

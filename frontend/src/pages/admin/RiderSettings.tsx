@@ -4,25 +4,24 @@ import toast from 'react-hot-toast';
 import { Bike, Info, Timer, Radio } from 'lucide-react';
 
 /**
- * ST Partner rider deliveries (handoff §4.11): the rider's flat fee and the trader's share of
- * their usual commission when a rider delivers, plus the switch that sends paid orders
- * through the app's dispatch (ring the shop, then riders).
+ * ST Partner rider deliveries: the rider's flat fee, which comes out of the linked trader's
+ * commission when a rider delivers, plus the switch that sends paid orders through the app's
+ * dispatch (ring the shop, then riders).
  */
 export default function RiderSettings({ settings }: { settings: Record<string, string> }) {
   const [fee, setFee] = useState('45');
-  const [share, setShare] = useState('70');
   const [dispatchOn, setDispatchOn] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setFee(String(settings.rider_fee_per_delivery ?? 45));
-    setShare(String(settings.trader_share_on_rider_orders ?? 70));
     setDispatchOn(String(settings.partner_dispatch_enabled ?? '0') === '1');
   }, [settings]);
 
   const num = (v: string, d: number) => (v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
   const usual = 124;
-  const traderCut = Math.round((usual * num(share, 0)) / 100);
+  const riderCut = Math.min(num(fee, 0), usual);
+  const traderCut = usual - riderCut;
 
   const save = async (patch: Record<string, unknown>, done: string) => {
     setSaving(true);
@@ -55,8 +54,9 @@ export default function RiderSettings({ settings }: { settings: Record<string, s
           <div className="text-sm text-blue-800">
             <p className="font-semibold mb-1">How rider orders are paid</p>
             <ul className="list-disc pl-4 text-xs leading-relaxed text-blue-700">
-              <li>The rider gets the fixed fee below, sent to their bank after delivery.</li>
-              <li>The trader who packed it gets a share of their usual commission.</li>
+              <li>The rider gets the fixed fee below, sent to their bank (Razorpay Route) after delivery.</li>
+              <li>It comes out of the linked trader’s commission; the trader keeps the rest.</li>
+              <li>If the commission is smaller than the fee, the rider gets the whole commission.</li>
               <li>Orders the founder delivers still route as they do today.</li>
             </ul>
           </div>
@@ -70,13 +70,6 @@ export default function RiderSettings({ settings }: { settings: Record<string, s
               <input type="number" min={0} step={1} value={fee} onChange={e => setFee(e.target.value)} className="form-input pl-9 text-lg font-bold text-slate-900" />
             </span>
           </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="form-label mb-0">Trader’s share on rider orders</span>
-            <span className="relative block">
-              <input type="number" min={0} max={100} step={5} value={share} onChange={e => setShare(e.target.value)} className="form-input pr-40 text-lg font-bold text-slate-900" />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-slate-500">% of usual commission</span>
-            </span>
-          </label>
         </div>
 
         <div aria-live="polite" className="rounded-2xl bg-parchment-50 border border-parchment-200 px-4 py-3.5">
@@ -84,13 +77,13 @@ export default function RiderSettings({ settings }: { settings: Record<string, s
           <div className="grid gap-2.5 sm:grid-cols-3">
             <Example label="Trader delivers it" value={`₹${usual}`} who="to trader" />
             <Example label="Rider delivers it" value={`₹${traderCut}`} who="to trader" />
-            <Example label="…plus" value={`₹${num(fee, 0)}`} who="to rider" />
+            <Example label="…and" value={`₹${riderCut}`} who="to rider" />
           </div>
         </div>
 
         <button
           disabled={saving}
-          onClick={() => save({ rider_fee_per_delivery: num(fee, 45), trader_share_on_rider_orders: num(share, 70) }, 'Rider settings saved')}
+          onClick={() => save({ rider_fee_per_delivery: num(fee, 45) }, 'Rider settings saved')}
           className="btn-primary px-6"
         >
           Save rider settings

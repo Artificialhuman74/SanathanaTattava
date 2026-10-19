@@ -126,8 +126,9 @@ function detail(order, userId) {
     out.shop = { ...out.shop, address: shop.address, lat: shop.latitude, lng: shop.longitude, phone: role === 'rider' ? shop.phone : undefined };
   }
   if (role === 'packer') {
-    // What the shop keeps on a rider-delivered order (their usual commission × the admin's share %).
-    out.share_amount = Math.round(card.earn * dispatch.traderShare()) / 100;
+    // What the shop keeps on a rider-delivered order: their commission minus the rider's fee.
+    const riderPay = order.rider_fee ?? dispatch.riderCut(order.id);
+    out.share_amount = Math.max(0, Math.round((card.earn - riderPay) * 100) / 100);
   }
   if (order.rider_id && role !== 'rider') {
     const r = db.prepare('SELECT id, name, phone, vehicle_type, vehicle_plate, live_lat, live_lng, live_at, kyc_selfie FROM users WHERE id = ?').get(order.rider_id);
@@ -335,21 +336,35 @@ router.post('/:id/deliver', uploadProof('photo', 'doors'), (req, res) => {
   res.json({ ok: true, earned });
 });
 
-/** Rider fee as its own commission row; the linked trader keeps their configured share (pending rows only). */
+/**
+ * The rider's pay comes out of the linked trader's commission: the flat rider fee, capped at
+ * that commission. It's booked as the rider's own commission row, and the trader's pending
+ * `direct` row drops by the same amount (founder routing and paid rows are left alone).
+ */
 function settleRiderDelivery(order, riderId) {
-  const fee = order.rider_fee ?? dispatch.riderFee();
+  const pool = dispatch.traderCommissionPool(order.id);
+  const fee = Math.round(Math.min(order.rider_fee ?? dispatch.riderFee(), pool) * 100) / 100;
   const today = new Date();
   const ws = new Date(today); ws.setDate(today.getDate() - ((today.getDay() + 6) % 7));
   const we = new Date(ws); we.setDate(ws.getDate() + 6);
-  db.prepare(`
-    INSERT INTO commissions (trader_id, consumer_order_id, amount, rate, type, status, week_start, week_end)
-    VALUES (?, ?, ?, 0, 'delivery_fee', 'pending', ?, ?)
-  `).run(riderId, order.id, fee, ws.toISOString().slice(0, 10), we.toISOString().slice(0, 10));
-  const share = dispatch.traderShare();
-  db.prepare(`
-    UPDATE commissions SET original_amount = COALESCE(original_amount, amount), amount = ROUND(COALESCE(original_amount, amount) * ? / 100.0, 2)
-    WHERE consumer_order_id = ? AND type = 'direct' AND status = 'pending'
-  `).run(share, order.id);
+  if (fee > 0) {
+    db.prepare(`
+      INSERT INTO commissions (trader_id, consumer_order_id, amount, rate, type, status, week_start, week_end)
+      VALUES (?, ?, ?, 0, 'delivery_fee', 'pending', ?, ?)
+    `).run(riderId, order.id, fee, ws.toISOString().slice(0, 10), we.toISOString().slice(0, 10));
+  }
+  let left = fee;
+  const rows = db.prepare(`
+    SELECT id, amount, original_amount FROM commissions
+    WHERE consumer_order_id = ? AND type = 'direct' AND status = 'pending' ORDER BY id
+  `).all(order.id);
+  const update = db.prepare('UPDATE commissions SET original_amount = ?, amount = ? WHERE id = ?');
+  for (const r of rows) {
+    const original = r.original_amount ?? r.amount;
+    const take = Math.min(left, original);
+    update.run(original, Math.round((original - take) * 100) / 100, r.id);
+    left = Math.round((left - take) * 100) / 100;
+  }
   return fee;
 }
 

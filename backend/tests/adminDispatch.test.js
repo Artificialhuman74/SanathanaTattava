@@ -34,7 +34,7 @@ beforeEach(() => {
   clearAll();
   mockData.mockClear();
   mockNotify.mockClear();
-  for (const [k, v] of [['partner_dispatch_enabled', '1'], ['partner_dispatch_enabled_at', '2000-01-01T00:00:00.000Z'], ['rider_fee_per_delivery', '45'], ['trader_share_on_rider_orders', '70']]) {
+  for (const [k, v] of [['partner_dispatch_enabled', '1'], ['partner_dispatch_enabled_at', '2000-01-01T00:00:00.000Z'], ['rider_fee_per_delivery', '45']]) {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(k, v);
   }
   admin = createAdmin({ email: `admin-${Math.random()}@test.com` });
@@ -280,5 +280,22 @@ describe('delivery hours (admin)', () => {
     expect((await request(app).get(`/api/admin/dispatch/hours/${r.id}`).set(admin.headers)).status).toBe(404);
     const s = shop();
     expect((await request(app).get(`/api/admin/dispatch/hours/${s.id}`).set(s.headers)).status).toBe(403);
+  });
+});
+
+describe('rider payouts', () => {
+  test('approved riders show up in Route payouts with their delivery fees; pending ones don’t', async () => {
+    const r = rider(1);
+    const pending = rider(2);
+    db.prepare(`UPDATE users SET review_status = 'pending_review' WHERE id = ?`).run(pending.id);
+    const o = order(shop().id);
+    db.prepare(`INSERT INTO commissions (trader_id, consumer_order_id, amount, rate, type, status) VALUES (?, ?, 45, 0, 'delivery_fee', 'pending')`).run(r.id, o.id);
+
+    const list = (await request(app).get('/api/admin/payouts/traders').set(admin.headers)).body.traders;
+    const me = list.find((t) => t.id === r.id);
+    expect(me).toMatchObject({ role: 'rider', pending_amount: 45, pending_count: 1 });
+    expect(list.some((t) => t.id === pending.id)).toBe(false);
+    const comms = (await request(app).get('/api/admin/payouts/pending-commissions').set(admin.headers).query({ trader_id: r.id })).body.commissions;
+    expect(comms).toEqual([expect.objectContaining({ type: 'delivery_fee', amount: 45 })]);
   });
 });
