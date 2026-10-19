@@ -5,17 +5,15 @@
  *  - Loading state is shown while the API call is in-flight
  *  - Product cards render after the API resolves
  *  - Empty state ("No products found") shows when the API returns []
- *  - Typing a search term triggers an API call with the `search` param
- *  - Clicking a category button triggers an API call with the `category` param
+ *  - Typing a search term filters the grid instantly, with no extra API call
+ *  - Category chips and the sort menu re-order/filter on the device
  *
- * Filtering is server-side (Shop.tsx passes `search` and `category` as query
- * params to `/consumer/products`) so these tests verify the API is invoked
- * with the correct arguments rather than testing DOM filtering.
+ * The catalogue loads once; search, category and sort run client-side so
+ * results change as you type without the grid reloading.
  */
 import React from 'react';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
@@ -131,7 +129,7 @@ describe('Shop — catalog UX (Part 12)', () => {
 
   // ── Empty state ────────────────────────────────────────────────────────────
 
-  test('renders "No products found" empty state when API returns empty array', async () => {
+  test('renders the empty state when the API returns no products', async () => {
     mockApiGet.mockImplementation((url: string) => {
       if (url.includes('/consumer/products')) {
         return Promise.resolve({ data: { products: [], categories: [] } });
@@ -145,104 +143,50 @@ describe('Shop — catalog UX (Part 12)', () => {
     renderShop();
 
     await waitFor(() => {
-      expect(screen.getByText(/no products found/i)).toBeTruthy();
+      expect(screen.getByText(/no oils available right now/i)).toBeTruthy();
     });
   });
 
-  // ── Search input ───────────────────────────────────────────────────────────
+  // ── Search, category, sort (client-side) ───────────────────────────────────
 
-  test('typing in the search input triggers an API call with the search param', async () => {
+  const productCalls = () => mockApiGet.mock.calls.filter(([url]) => url.includes('/consumer/products')).length;
+  const shownNames = () => Array.from(document.querySelectorAll('article p.font-bold')).map(e => e.textContent);
+
+  test('typing in the search filters instantly without refetching', async () => {
     renderShop();
+    await waitFor(() => expect(screen.getByText('Sesame Oil')).toBeTruthy());
+    const calls = productCalls();
 
-    // Wait for initial load to complete
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: 'sesame' } });
+
+    expect(shownNames()).toEqual(['Sesame Oil']);
+    // Description matches count too.
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: 'fresh' } });
+    expect(shownNames()).toEqual(['Turmeric']);
+    expect(productCalls()).toBe(calls);
+  });
+
+  test('category chips filter on the device and "All" clears them', async () => {
+    renderShop();
+    await waitFor(() => expect(screen.getByText('Sesame Oil')).toBeTruthy());
+    const calls = productCalls();
+
+    // Query by selector: getAllByRole over the whole page is very slow in jsdom.
+    const chip = (label: string) => screen.getByText(label, { selector: 'button' });
+    fireEvent.click(chip('spices'));
+    expect(shownNames()).toEqual(['Turmeric']);
+    fireEvent.click(chip('All'));
+    expect(shownNames()).toHaveLength(3);
+    expect(productCalls()).toBe(calls);
+  });
+
+  test('sorting by price re-orders the grid immediately', async () => {
+    renderShop();
     await waitFor(() => expect(screen.getByText('Sesame Oil')).toBeTruthy());
 
-    vi.clearAllMocks();
-    setupDefaultMock();
-
-    const searchInput = screen.getByPlaceholderText(/search/i);
-    await userEvent.clear(searchInput);
-    await userEvent.type(searchInput, 'sesame');
-
-    // The component debounces/re-fetches when `search` state changes.
-    // Wait for the API to be called with the search param.
-    await waitFor(() => {
-      const calls = mockApiGet.mock.calls.filter(([url]) => url.includes('/consumer/products'));
-      const searchCall = calls.find(([, config]) => config?.params?.search === 'sesame');
-      expect(searchCall).toBeDefined();
-    }, { timeout: 3000 });
-  });
-
-  // ── Category filter ────────────────────────────────────────────────────────
-
-  test('clicking a category chip triggers an API call with the category param', async () => {
-    renderShop();
-
-    // Wait for products and category chips to render
-    await waitFor(() => {
-      const allButtons = screen.getAllByRole('button');
-      expect(allButtons.some(b => b.textContent?.trim() === 'oils')).toBe(true);
-    });
-
-    vi.clearAllMocks();
-    setupDefaultMock();
-
-    // Click the "oils" category chip button.
-    // Category chips sit in a flex row alongside the "All" button and the
-    // search bar area. Use getAllByRole to find the chip that has ONLY "oils"
-    // as its accessible name (not product cards which also have "oils" text).
-    const allButtons = screen.getAllByRole('button');
-    const oilsBtn = allButtons.find(b => b.textContent?.trim() === 'oils');
-    expect(oilsBtn).toBeDefined();
-    await act(async () => { fireEvent.click(oilsBtn!); });
-
-    await waitFor(() => {
-      const calls = mockApiGet.mock.calls.filter(([url]) => url.includes('/consumer/products'));
-      const catCall = calls.find(([, config]) => config?.params?.category === 'oils');
-      expect(catCall).toBeDefined();
-    }, { timeout: 3000 });
-  });
-
-  test('clicking "All" chip clears the category filter', async () => {
-    // Start with a category selected
-    mockApiGet.mockImplementation((url: string) => {
-      if (url.includes('/consumer/products')) {
-        return Promise.resolve({ data: { products: mockProducts, categories: ['oils', 'spices'] } });
-      }
-      if (url.includes('/consumer/settings')) {
-        return Promise.resolve({ data: { referral_discount_percent: 0 } });
-      }
-      return Promise.resolve({ data: {} });
-    });
-
-    renderShop();
-
-    await waitFor(() => {
-      const allBtns0 = screen.getAllByRole('button');
-      expect(allBtns0.some(b => b.textContent?.trim() === 'oils')).toBe(true);
-    });
-
-    // Select a category first
-    const allBtnsFirst = screen.getAllByRole('button');
-    const oilsBtnFirst = allBtnsFirst.find(b => b.textContent?.trim() === 'oils');
-    expect(oilsBtnFirst).toBeDefined();
-    await act(async () => { fireEvent.click(oilsBtnFirst!); });
-
-    vi.clearAllMocks();
-    setupDefaultMock();
-
-    // Now click "All" to clear
-    const allBtns = screen.getAllByRole('button');
-    const allBtn = allBtns.find(b => b.textContent?.trim() === 'All');
-    expect(allBtn).toBeDefined();
-    await act(async () => { fireEvent.click(allBtn!); });
-
-    await waitFor(() => {
-      const calls = mockApiGet.mock.calls.filter(([url]) => url.includes('/consumer/products'));
-      // When "All" is selected, category param should not be set
-      const allCall = calls.find(([, config]) => !config?.params?.category);
-      expect(calls.length).toBeGreaterThan(0);
-      expect(allCall).toBeDefined();
-    }, { timeout: 3000 });
+    fireEvent.change(screen.getByLabelText(/sort products/i), { target: { value: 'price-asc' } });
+    expect(shownNames()).toEqual(['Turmeric', 'Coconut Oil', 'Sesame Oil']);
+    fireEvent.change(screen.getByLabelText(/sort products/i), { target: { value: 'price-desc' } });
+    expect(shownNames()).toEqual(['Sesame Oil', 'Coconut Oil', 'Turmeric']);
   });
 });

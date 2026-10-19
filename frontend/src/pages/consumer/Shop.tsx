@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSeo } from '../../hooks/useSeo';
@@ -8,7 +8,7 @@ import RollingNumber from '../../components/RollingNumber';
 import { loadCart, saveCart } from '../../services/cartStorage';
 import { Link } from 'react-router-dom';
 import {
-  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, Info, Star, MessageSquare,
+  ShoppingCart, Search, Package, Plus, Minus, X, Trash2, Tag, Info, Star, MessageSquare, ArrowUpDown,
 } from 'lucide-react';
 import { consumerApi } from '../../contexts/AuthContext';
 import { formatIstDate } from '../../utils/dateTime';
@@ -31,6 +31,8 @@ interface Product {
 }
 
 type CartMode = 'refill' | 'buy';
+
+type SortKey = 'featured' | 'price-asc' | 'price-desc' | 'name';
 
 interface CartItem {
   product: Product;
@@ -167,6 +169,7 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('featured');
   const [introOpen, setIntroOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SHOP_INTRO_KEY) !== 'true';
@@ -185,13 +188,10 @@ export default function Shop() {
   const [shakingId, setShakingId] = useState<number | null>(null);
   const [cartIconBounce, setCartIconBounce] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [flyItems, setFlyItems] = useState<FlyItem[]>([]);
-  const [collapseItems, setCollapseItems] = useState<CollapseItem[]>([]);
   const prevCartCountRef = useRef(0);
   const cartButtonRef = useRef<HTMLButtonElement | null>(null);
   const cardRefs = useRef<Record<number, HTMLElement | null>>({});
-  const flyRafRefs = useRef<Record<number, number>>({});
-  const collapseRafRefs = useRef<Record<number, number>>({});
+  const flyLayer = useRef<FlyLayerHandle | null>(null);
   const flyStartTimeoutRefs = useRef<Record<number, number>>({});
 
   // Pre-fill cart from "order again" (set in Orders.tsx)
@@ -229,20 +229,39 @@ export default function Shop() {
     }
   }, [products]);
 
-  const fetchProducts = useCallback(() => {
-    setLoading(true);
-    const params: any = {};
-    if (search) params.search = search;
-    if (catFilter) params.category = catFilter;
-    api.get('/consumer/products', { params })
+  // The catalogue is small: load it once, then search, filter and sort on the
+  // device so results change as you type without the grid reloading.
+  useEffect(() => {
+    let alive = true;
+    api.get('/consumer/products')
       .then(r => {
+        if (!alive) return;
         setProducts(r.data.products || r.data || []);
         setCategories(r.data.categories || []);
       })
-      .finally(() => setLoading(false));
-  }, [search, catFilter]);
+      .catch(() => { if (alive) toast.error('Couldn’t load products. Please refresh the page.'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  const visibleProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = products.filter(p =>
+      (!catFilter || p.category === catFilter) &&
+      (!q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)));
+    if (q) {
+      // Names that start with what you typed come first, then name matches, then description-only.
+      const rank = (p: Product) => {
+        const n = p.name.toLowerCase();
+        return n.startsWith(q) ? 0 : n.includes(q) ? 1 : 2;
+      };
+      list.sort((a, b) => rank(a) - rank(b));
+    }
+    if (sortBy === 'price-asc') list.sort((a, b) => a.price - b.price);
+    else if (sortBy === 'price-desc') list.sort((a, b) => b.price - a.price);
+    else if (sortBy === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [products, search, catFilter, sortBy]);
 
   // Reconcile persisted cart with latest product data/stock.
   useEffect(() => {
@@ -266,12 +285,15 @@ export default function Shop() {
   }, []);
 
   /* Refill caps — count of 'held' containers per current_product_id. */
+  // Keyed on the id, not the object: a refreshed profile object must not refetch
+  // (and re-render) in a loop.
+  const consumerId = consumer?.id;
   useEffect(() => {
-    if (!consumer) { setRefillCaps({}); return; }
+    if (!consumerId) { setRefillCaps({}); return; }
     consumerApi.get('/consumer/refill-caps')
       .then(r => setRefillCaps(r.data.caps || {}))
       .catch(() => setRefillCaps({}));
-  }, [consumer]);
+  }, [consumerId]);
 
   const cartInProduct = (id: number, mode: CartMode = 'buy') =>
     cart.find(i => i.product.id === id && i.mode === mode)?.quantity ?? 0;
@@ -281,10 +303,6 @@ export default function Shop() {
 
   useEffect(() => {
     return () => {
-      Object.values(flyRafRefs.current).forEach((rafId) => cancelAnimationFrame(rafId));
-      flyRafRefs.current = {};
-      Object.values(collapseRafRefs.current).forEach((rafId) => cancelAnimationFrame(rafId));
-      collapseRafRefs.current = {};
       Object.values(flyStartTimeoutRefs.current).forEach((timer) => clearTimeout(timer));
       flyStartTimeoutRefs.current = {};
     };
@@ -314,126 +332,6 @@ export default function Shop() {
       return a.getBoundingClientRect().top - b.getBoundingClientRect().top;
     });
     return visible[0];
-  };
-
-  const animateFlyToCart = (id: number, onLand: () => void, durationMs = 870) => {
-    const startedAt = performance.now();
-
-    const step = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / durationMs);
-      setFlyItems((prev) => prev.map((item) => {
-        if (item.id !== id) return item;
-
-        // Exact quadratic Bezier parabola to cart.
-        const decelT = Math.log2(1 + 31 * t) / Math.log2(32);
-        const mt = 1 - decelT;
-        const x = mt * mt * item.startX + 2 * mt * decelT * item.controlX + decelT * decelT * item.endX;
-        const y = mt * mt * item.startY + 2 * mt * decelT * item.controlY + decelT * decelT * item.endY;
-
-        const numDots = 7;
-        const tStep = 0.055;
-        const trail = Array.from({ length: numDots }, (_, i) => {
-          const dT = Math.max(0, decelT - (i + 1) * tStep);
-          if (dT <= 0) return null;
-          const m2 = 1 - dT;
-          return {
-            x: m2 * m2 * item.startX + 2 * m2 * dT * item.controlX + dT * dT * item.endX,
-            y: m2 * m2 * item.startY + 2 * m2 * dT * item.controlY + dT * dT * item.endY,
-            life: (numDots - i) / numDots,
-          };
-        }).filter((d): d is { x: number; y: number; life: number } => d !== null);
-
-        return {
-          ...item,
-          x,
-          y,
-          scale: 0.62 - (0.34 * decelT),
-          opacity: 0.98 - (0.76 * decelT),
-          trail,
-        };
-      }));
-
-      if (t < 1) {
-        flyRafRefs.current[id] = requestAnimationFrame(step);
-      } else {
-        delete flyRafRefs.current[id];
-        setFlyItems((prev) => prev.filter((item) => item.id !== id));
-        onLand();
-      }
-    };
-
-    flyRafRefs.current[id] = requestAnimationFrame(step);
-  };
-
-  const animateImageCollapse = (id: number, durationMs = 353) => {
-    const startedAt = performance.now();
-
-    const step = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / durationMs);
-
-      setCollapseItems((prev) => prev.map((item) => {
-        if (item.id !== id) return item;
-
-        // Phase 1: pull upward from current position with a slower bounce (+20%).
-        if (t <= 0.55) {
-          const p = t / 0.55;
-          const bump = Math.sin(Math.PI * p);
-          const easedLift = 1 - ((1 - p) * (1 - p));
-          if (item.kind === 'image') {
-            const desiredX = item.startX;
-            const desiredY = item.startY - (item.liftPx * bump);
-            const x = Math.min(item.maxX ?? desiredX, Math.max(item.minX ?? desiredX, desiredX));
-            const y = Math.min(item.maxY ?? desiredY, Math.max(item.minY ?? desiredY, desiredY));
-            return {
-              ...item,
-              x,
-              y,
-              scale: 1 + (0.12 * bump),
-              opacity: 1,
-            };
-          }
-
-          return {
-            ...item,
-            x: item.startX,
-            y: item.startY - (item.liftPx * easedLift),
-            scale: 1 + (0.05 * bump),
-            opacity: 1,
-          };
-        }
-
-        // Phase 2: collapse. For image clone, keep it anchored in place.
-        const p = (t - 0.55) / 0.45;
-        const ease = 1 - Math.pow(1 - p, 3);
-        const liftedY = item.startY - item.liftPx;
-        if (item.kind === 'image') {
-          return {
-            ...item,
-            x: item.startX,
-            y: item.startY,
-            scale: 1.05 - (0.93 * ease),
-            opacity: 1 - (0.9 * ease),
-          };
-        }
-
-        return {
-          ...item,
-          x: item.startX + ((item.targetX - item.startX) * ease),
-          y: liftedY + ((item.targetY - liftedY) * ease),
-          scale: 1.05 - (0.92 * ease),
-          opacity: 1 - (0.2 * ease),
-        };
-      }));
-
-      if (t < 1) {
-        collapseRafRefs.current[id] = requestAnimationFrame(step);
-      } else {
-        delete collapseRafRefs.current[id];
-        setCollapseItems((prev) => prev.filter((item) => item.id !== id));
-      }
-    };
-
-    collapseRafRefs.current[id] = requestAnimationFrame(step);
   };
 
   const triggerFlyToCart = (product: Product, sourceEl?: HTMLElement | null) => {
@@ -497,8 +395,7 @@ export default function Shop() {
         background: '#15803d',
         borderColor: '#166534',
       };
-      setCollapseItems((prev) => [...prev, buttonCollapse]);
-      animateImageCollapse(collapseId);
+      flyLayer.current?.collapse(buttonCollapse);
     }
 
     if (imageNode && imageSrc) {
@@ -526,14 +423,12 @@ export default function Shop() {
         minY: constraints.minY,
         maxY: constraints.maxY,
       };
-      setCollapseItems((prev) => [...prev, collapse]);
-      animateImageCollapse(collapseId);
+      flyLayer.current?.collapse(collapse);
     }
 
     flyStartTimeoutRefs.current[id] = window.setTimeout(() => {
       delete flyStartTimeoutRefs.current[id];
-      setFlyItems(prev => [...prev, item]);
-      animateFlyToCart(id, () => {
+      flyLayer.current?.fly(item, () => {
         // Dot has landed — bounce the cart icon
         setCartIconBounce(true);
         setTimeout(() => setCartIconBounce(false), 500);
@@ -741,15 +636,43 @@ export default function Shop() {
         }}
       >
         <div className="px-4 sm:px-6 pt-3 pb-2">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="form-input pl-9"
-              placeholder="Search products"
-              aria-label="Search products"
-            />
+          <div className="flex items-center gap-2 max-w-xl">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+              <input
+                type="text"
+                enterKeyHint="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="form-input pl-9 pr-9"
+                placeholder="Search oils"
+                aria-label="Search products"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-parchment-200"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <div className="relative flex-shrink-0">
+              <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4 pointer-events-none" />
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as SortKey)}
+                aria-label="Sort products"
+                className="form-input pl-8 pr-7 w-auto text-sm"
+              >
+                <option value="featured">Featured</option>
+                <option value="price-asc">Lowest price</option>
+                <option value="price-desc">Highest price</option>
+                <option value="name">Name A–Z</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -794,7 +717,7 @@ export default function Shop() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {products.map(p => {
+          {visibleProducts.map(p => {
             const buyQty    = cartInProduct(p.id, 'buy');
             const refillQty = cartInProduct(p.id, 'refill');
             const outOfStock = p.stock === 0;
@@ -848,8 +771,9 @@ export default function Shop() {
                 <div className="mt-auto border-t border-[#e8dcc8] p-2 bg-[#fdfaf5] space-y-1.5" onClick={(e) => e.stopPropagation()}>
                   {/* Refill button (only when product has a container and consumer holds at least one) */}
                   {hasContainer && cap > 0 && (
-                    refillQty === 0 ? (
-                      <button
+                    <Swap
+                      showSecond={refillQty > 0}
+                      first={<button
                         onClick={(e) => addToCart(p, e.currentTarget, 'refill')}
                         disabled={outOfStock}
                         className={`w-full min-h-[44px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
@@ -857,9 +781,8 @@ export default function Shop() {
                         }`}
                       >
                         <span className="truncate">Refill ({cap} held)</span>
-                      </button>
-                    ) : (
-                      <div className="w-full min-h-[44px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
+                      </button>}
+                      second={<div className="w-full min-h-[44px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
                         <button
                           onClick={() => updateQty(p.id, refillQty - 1, 'refill')}
                           className="w-11 h-11 flex items-center justify-center text-emerald-700"
@@ -876,12 +799,13 @@ export default function Shop() {
                         >
                           <Plus size={14} />
                         </button>
-                      </div>
-                    )
+                      </div>}
+                    />
                   )}
                   {/* Buy more / Add to Cart */}
-                  {buyQty === 0 ? (
-                    <button
+                  <Swap
+                    showSecond={buyQty > 0}
+                    first={<button
                       onClick={(e) => addToCart(p, e.currentTarget, 'buy')}
                       className={`w-full min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
                         outOfStock
@@ -891,9 +815,8 @@ export default function Shop() {
                     >
                       <ShoppingCart size={14} />
                       <span className="truncate">{hasContainer && cap > 0 ? 'Buy more' : 'Add to Cart'}</span>
-                    </button>
-                  ) : (
-                    <div className="w-full min-h-[44px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
+                    </button>}
+                    second={<div className="w-full min-h-[44px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
                       <button
                         onClick={() => updateQty(p.id, buyQty - 1, 'buy')}
                         className="w-11 h-11 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
@@ -911,13 +834,13 @@ export default function Shop() {
                       >
                         <Plus size={16} />
                       </button>
-                    </div>
-                  )}
+                    </div>}
+                  />
                 </div>
               </article>
             );
           })}
-          {products.length === 0 && (
+          {visibleProducts.length === 0 && (
             <div className="col-span-full text-center py-16 text-slate-500">
               <Package size={40} className="mx-auto mb-3 text-slate-300" />
               <p className="font-medium">
@@ -992,16 +915,16 @@ export default function Shop() {
             <div className="border-t border-[#e8dcc8] p-3 sm:p-4 bg-[#fffbf2] space-y-2">
               {/* Refill control */}
               {selectedHasContainer && selectedCap > 0 && (
-                selectedRefillQty === 0 ? (
-                  <button
+                <Swap
+                  showSecond={selectedRefillQty > 0}
+                  first={<button
                     onClick={(e) => addToCart(selectedProduct, e.currentTarget, 'refill')}
                     disabled={selectedProduct.stock === 0}
                     className="w-full min-h-[42px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
                   >
                     Refill ({selectedCap} held · no deposit)
-                  </button>
-                ) : (
-                  <div className="w-full min-h-[42px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
+                  </button>}
+                  second={<div className="w-full min-h-[42px] rounded-xl border border-emerald-200 bg-emerald-50 flex items-center">
                     <button
                       onClick={() => updateQty(selectedProduct.id, selectedRefillQty - 1, 'refill')}
                       className="w-11 h-11 flex items-center justify-center text-emerald-700"
@@ -1016,12 +939,13 @@ export default function Shop() {
                     >
                       <Plus size={16} />
                     </button>
-                  </div>
-                )
+                  </div>}
+                />
               )}
               {/* Buy / Add to Cart */}
-              {selectedBuyQty === 0 ? (
-                <button
+              <Swap
+                showSecond={selectedBuyQty > 0}
+                first={<button
                   onClick={(e) => addToCart(selectedProduct, e.currentTarget, 'buy')}
                   className={`w-full min-h-[46px] rounded-xl text-sm sm:text-base font-semibold flex items-center justify-center gap-2 transition-colors ${
                     selectedProduct.stock === 0
@@ -1031,9 +955,8 @@ export default function Shop() {
                 >
                   <ShoppingCart size={16} />
                   {selectedProduct.stock === 0 ? 'Out of Stock' : (selectedHasContainer && selectedCap > 0 ? 'Buy more' : 'Add to Cart')}
-                </button>
-              ) : (
-                <div className="w-full min-h-[46px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
+                </button>}
+                second={<div className="w-full min-h-[46px] rounded-xl border border-brand-200 bg-brand-50 flex items-center">
                   <button
                     onClick={() => updateQty(selectedProduct.id, selectedBuyQty - 1, 'buy')}
                     className="w-12 h-12 flex items-center justify-center text-brand-700 active:scale-95 transition-transform"
@@ -1051,80 +974,14 @@ export default function Shop() {
                   >
                     <Plus size={18} />
                   </button>
-                </div>
-              )}
+                </div>}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Fly-to-cart: collapse-and-lift layer.
-          Same z-index as the fly-trail layer below; DOM order keeps the
-          trail on top. Avoids arbitrary [69]/[70] z-values. */}
-      <div className="pointer-events-none fixed inset-0 z-50">
-        {collapseItems.map(item => (
-          <div
-            key={item.id}
-            className="absolute overflow-hidden shadow-md"
-            style={{
-              left: `${item.x}px`,
-              top: `${item.y}px`,
-              width: `${item.width}px`,
-              height: `${item.height}px`,
-              transform: `translate(-50%, -50%) scale(${item.scale})`,
-              opacity: item.opacity,
-              transformOrigin: 'center center',
-              borderRadius: `${item.borderRadius}px`,
-              background: item.kind === 'button' ? (item.background || '#15803d') : '#ffffff',
-              border: `1px solid ${item.kind === 'button' ? (item.borderColor || '#166534') : '#ffffff99'}`,
-            }}
-          >
-            {item.kind === 'image' && item.image
-              ? <img src={item.image} alt="" className="w-full h-full object-cover" />
-              : <div className="w-full h-full bg-brand-700/90" />
-            }
-          </div>
-        ))}
-      </div>
-
-      {/* Fly-to-cart: trail dots + ghost image. Rendered after the
-          collapse layer so it stacks above it via DOM order. */}
-      <div className="pointer-events-none fixed inset-0 z-50">
-        {flyItems.map(item => (
-          <React.Fragment key={item.id}>
-            {item.trail.map((node, idx) => {
-              const size = 2.4 + (node.life * 3.6);
-              return (
-                <div
-                  key={`${item.id}-trail-${idx}`}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-600"
-                  style={{
-                    left: `${node.x}px`,
-                    top: `${node.y}px`,
-                    width: `${size}px`,
-                    height: `${size}px`,
-                    opacity: Math.max(0, item.opacity * node.life * 0.58),
-                  }}
-                />
-              );
-            })}
-            <div
-              className="absolute w-10 h-10 rounded-full overflow-hidden border border-brand-200 shadow-lg bg-white"
-              style={{
-                left: `${item.x}px`,
-                top: `${item.y}px`,
-                transform: `translate(-50%, -50%) scale(${item.scale})`,
-                opacity: item.opacity,
-              }}
-            >
-              {item.image
-                ? <img src={item.image} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-brand-600"><ShoppingCart size={14} /></div>
-              }
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
+      <FlyLayer ref={flyLayer} />
 
       {/* ── Cart Drawer ───────────────────────────────────────────────── */}
       <div className={`fixed inset-0 z-50 transition-all duration-300 ${cartOpen ? 'visible' : 'invisible pointer-events-none'}`}>
@@ -1279,6 +1136,241 @@ export default function Shop() {
 }
 
 /* ── Star rating display ─────────────────────────────────────────────── */
+/* The fly-to-cart overlay owns its own per-frame state, so the animation
+ * re-renders only these few floating nodes — never the product grid. */
+interface FlyLayerHandle {
+  collapse: (item: CollapseItem) => void;
+  fly: (item: FlyItem, onLand: () => void) => void;
+}
+
+const FlyLayer = forwardRef<FlyLayerHandle>(function FlyLayer(_props, ref) {
+  const [flyItems, setFlyItems] = useState<FlyItem[]>([]);
+  const [collapseItems, setCollapseItems] = useState<CollapseItem[]>([]);
+  const flyRafRefs = useRef<Record<number, number>>({});
+  const collapseRafRefs = useRef<Record<number, number>>({});
+
+  useEffect(() => () => {
+    Object.values(flyRafRefs.current).forEach((rafId) => cancelAnimationFrame(rafId));
+    Object.values(collapseRafRefs.current).forEach((rafId) => cancelAnimationFrame(rafId));
+  }, []);
+
+  const animateFlyToCart = (id: number, onLand: () => void, durationMs = 870) => {
+    const startedAt = performance.now();
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs);
+      setFlyItems((prev) => prev.map((item) => {
+        if (item.id !== id) return item;
+
+        // Exact quadratic Bezier parabola to cart.
+        const decelT = Math.log2(1 + 31 * t) / Math.log2(32);
+        const mt = 1 - decelT;
+        const x = mt * mt * item.startX + 2 * mt * decelT * item.controlX + decelT * decelT * item.endX;
+        const y = mt * mt * item.startY + 2 * mt * decelT * item.controlY + decelT * decelT * item.endY;
+
+        const numDots = 7;
+        const tStep = 0.055;
+        const trail = Array.from({ length: numDots }, (_, i) => {
+          const dT = Math.max(0, decelT - (i + 1) * tStep);
+          if (dT <= 0) return null;
+          const m2 = 1 - dT;
+          return {
+            x: m2 * m2 * item.startX + 2 * m2 * dT * item.controlX + dT * dT * item.endX,
+            y: m2 * m2 * item.startY + 2 * m2 * dT * item.controlY + dT * dT * item.endY,
+            life: (numDots - i) / numDots,
+          };
+        }).filter((d): d is { x: number; y: number; life: number } => d !== null);
+
+        return {
+          ...item,
+          x,
+          y,
+          scale: 0.62 - (0.34 * decelT),
+          opacity: 0.98 - (0.76 * decelT),
+          trail,
+        };
+      }));
+
+      if (t < 1) {
+        flyRafRefs.current[id] = requestAnimationFrame(step);
+      } else {
+        delete flyRafRefs.current[id];
+        setFlyItems((prev) => prev.filter((item) => item.id !== id));
+        onLand();
+      }
+    };
+
+    flyRafRefs.current[id] = requestAnimationFrame(step);
+  };
+
+  const animateImageCollapse = (id: number, durationMs = 353) => {
+    const startedAt = performance.now();
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs);
+
+      setCollapseItems((prev) => prev.map((item) => {
+        if (item.id !== id) return item;
+
+        // Phase 1: pull upward from current position with a slower bounce (+20%).
+        if (t <= 0.55) {
+          const p = t / 0.55;
+          const bump = Math.sin(Math.PI * p);
+          const easedLift = 1 - ((1 - p) * (1 - p));
+          if (item.kind === 'image') {
+            const desiredX = item.startX;
+            const desiredY = item.startY - (item.liftPx * bump);
+            const x = Math.min(item.maxX ?? desiredX, Math.max(item.minX ?? desiredX, desiredX));
+            const y = Math.min(item.maxY ?? desiredY, Math.max(item.minY ?? desiredY, desiredY));
+            return {
+              ...item,
+              x,
+              y,
+              scale: 1 + (0.12 * bump),
+              opacity: 1,
+            };
+          }
+
+          return {
+            ...item,
+            x: item.startX,
+            y: item.startY - (item.liftPx * easedLift),
+            scale: 1 + (0.05 * bump),
+            opacity: 1,
+          };
+        }
+
+        // Phase 2: collapse. For image clone, keep it anchored in place.
+        const p = (t - 0.55) / 0.45;
+        const ease = 1 - Math.pow(1 - p, 3);
+        const liftedY = item.startY - item.liftPx;
+        if (item.kind === 'image') {
+          return {
+            ...item,
+            x: item.startX,
+            y: item.startY,
+            scale: 1.05 - (0.93 * ease),
+            opacity: 1 - (0.9 * ease),
+          };
+        }
+
+        return {
+          ...item,
+          x: item.startX + ((item.targetX - item.startX) * ease),
+          y: liftedY + ((item.targetY - liftedY) * ease),
+          scale: 1.05 - (0.92 * ease),
+          opacity: 1 - (0.2 * ease),
+        };
+      }));
+
+      if (t < 1) {
+        collapseRafRefs.current[id] = requestAnimationFrame(step);
+      } else {
+        delete collapseRafRefs.current[id];
+        setCollapseItems((prev) => prev.filter((item) => item.id !== id));
+      }
+    };
+
+    collapseRafRefs.current[id] = requestAnimationFrame(step);
+  };
+
+  useImperativeHandle(ref, () => ({
+    collapse: (item) => {
+      setCollapseItems((prev) => [...prev, item]);
+      animateImageCollapse(item.id);
+    },
+    fly: (item, onLand) => {
+      setFlyItems((prev) => [...prev, item]);
+      animateFlyToCart(item.id, onLand);
+    },
+  }));
+
+  return (
+    <>
+  {/* Fly-to-cart: collapse-and-lift layer.
+      Same z-index as the fly-trail layer below; DOM order keeps the
+      trail on top. Avoids arbitrary [69]/[70] z-values. */}
+  <div className="pointer-events-none fixed inset-0 z-50">
+    {collapseItems.map(item => (
+      <div
+        key={item.id}
+        className="absolute overflow-hidden shadow-md"
+        style={{
+          left: `${item.x}px`,
+          top: `${item.y}px`,
+          width: `${item.width}px`,
+          height: `${item.height}px`,
+          transform: `translate(-50%, -50%) scale(${item.scale})`,
+          opacity: item.opacity,
+          transformOrigin: 'center center',
+          borderRadius: `${item.borderRadius}px`,
+          background: item.kind === 'button' ? (item.background || '#15803d') : '#ffffff',
+          border: `1px solid ${item.kind === 'button' ? (item.borderColor || '#166534') : '#ffffff99'}`,
+        }}
+      >
+        {item.kind === 'image' && item.image
+          ? <img src={item.image} alt="" className="w-full h-full object-cover" />
+          : <div className="w-full h-full bg-brand-700/90" />
+        }
+      </div>
+    ))}
+  </div>
+
+  {/* Fly-to-cart: trail dots + ghost image. Rendered after the
+      collapse layer so it stacks above it via DOM order. */}
+  <div className="pointer-events-none fixed inset-0 z-50">
+    {flyItems.map(item => (
+      <React.Fragment key={item.id}>
+        {item.trail.map((node, idx) => {
+          const size = 2.4 + (node.life * 3.6);
+          return (
+            <div
+              key={`${item.id}-trail-${idx}`}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-600"
+              style={{
+                left: `${node.x}px`,
+                top: `${node.y}px`,
+                width: `${size}px`,
+                height: `${size}px`,
+                opacity: Math.max(0, item.opacity * node.life * 0.58),
+              }}
+            />
+          );
+        })}
+        <div
+          className="absolute w-10 h-10 rounded-full overflow-hidden border border-brand-200 shadow-lg bg-white"
+          style={{
+            left: `${item.x}px`,
+            top: `${item.y}px`,
+            transform: `translate(-50%, -50%) scale(${item.scale})`,
+            opacity: item.opacity,
+          }}
+        >
+          {item.image
+            ? <img src={item.image} alt="" className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-brand-600"><ShoppingCart size={14} /></div>
+          }
+        </div>
+      </React.Fragment>
+    ))}
+  </div>
+    </>
+  );
+});
+
+/* Add button ⇄ stepper. Both are always mounted on the same grid cell and
+ * cross-fade, so the swap is smooth and the card never jumps in height. */
+function Swap({ showSecond, first, second }: { showSecond: boolean; first: React.ReactNode; second: React.ReactNode }) {
+  const layer = 'col-start-1 row-start-1 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none';
+  const hidden = 'opacity-0 scale-[0.96] pointer-events-none';
+  return (
+    <div className="grid">
+      <div className={`${layer} ${showSecond ? hidden : 'opacity-100 scale-100'}`} aria-hidden={showSecond} {...({ inert: showSecond ? '' : undefined } as any)}>{first}</div>
+      <div className={`${layer} ${showSecond ? 'opacity-100 scale-100' : hidden}`} aria-hidden={!showSecond} {...({ inert: showSecond ? undefined : '' } as any)}>{second}</div>
+    </div>
+  );
+}
+
 function StarRow({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
     <div className="flex gap-0.5">
