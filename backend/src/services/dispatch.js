@@ -357,6 +357,25 @@ async function alertAdmin(order, reason, now) {
   try { emitAdminEvent('dispatch:alert', { orderId: order.id, orderNumber: order.order_number, reason }); } catch (_) {}
 }
 
+/**
+ * Admin's "Ask the shop to deliver" on an order nobody has taken: the rider search stops and
+ * the shop is rung again with a fresh 20 minutes. If they say no again, riders are asked
+ * again and the 30-minute admin alert starts over.
+ */
+async function askShopToDeliver(orderId, now = Date.now()) {
+  const order = getOrder(orderId);
+  if (!order) throw new DispatchError(404, 'Order not found');
+  if (order.dispatch_stage !== 'rider_search') throw new DispatchError(409, 'This order isn’t waiting for a rider');
+  const shop = order.delivery_dealer_id
+    && db.prepare(`SELECT * FROM users WHERE id = ? AND role = 'trader' AND status = 'active'`).get(order.delivery_dealer_id);
+  if (!shop) throw new DispatchError(409, 'This order has no shop to ask');
+  for (const o of openOffersFor(order.id)) closeOffer(o.id, 'withdrawn', now);
+  setStage(order.id, { escalated_at: null, escalation_reason: null, admin_alerted_at: null, admin_alert_dismissed_at: null });
+  log(order, `admin asked shop ${shop.id} to deliver`);
+  await offerTrader(getOrder(order.id), shop, now);
+  return getOrder(order.id);
+}
+
 /* ── Responses from the app ────────────────────────────────────────────── */
 
 class DispatchError extends Error {
@@ -460,7 +479,20 @@ async function tick(now = Date.now()) {
       }
     }
 
-    // 4. Open offers: closed elsewhere, expired, or due a re-ring.
+    // 4. Admin took over on the website (/delivery/orders/:id/takeover): the engine lets go,
+    //    so riders stop being rung for an order admin is now delivering.
+    const taken = db.prepare(`
+      SELECT * FROM consumer_orders
+      WHERE admin_taken_over_at IS NOT NULL AND dispatch_stage IN ('awaiting_hours','trader_offer','rider_search')
+    `).all();
+    for (const o of taken) {
+      for (const offer of openOffersFor(o.id)) closeOffer(offer.id, 'withdrawn', now);
+      setStage(o.id, { dispatch_stage: 'admin' });
+      emit(o);
+      log(o, 'admin took over');
+    }
+
+    // 5. Open offers: closed elsewhere, expired, or due a re-ring.
     const offers = db.prepare('SELECT * FROM dispatch_offers WHERE response IS NULL').all();
     for (const offer of offers) {
       const o = getOrder(offer.order_id);
@@ -491,7 +523,7 @@ async function tick(now = Date.now()) {
       }
     }
 
-    // 5. Searching orders: ask the next rider; alert admin after 30 minutes.
+    // 6. Searching orders: ask the next rider; alert admin after 30 minutes.
     const searching = db.prepare(`SELECT * FROM consumer_orders WHERE dispatch_stage = 'rider_search'`).all();
     for (const o of searching) {
       await offerNextRider(o, now);
@@ -512,7 +544,7 @@ function kick() {
 }
 
 module.exports = {
-  tick, kick, respond, start, escalate, offerNextRider, eligibleRiders,
+  tick, kick, respond, start, escalate, offerNextRider, eligibleRiders, askShopToDeliver,
   orderCard, spokenSummary, orderLines, areaOf, firstName, positionOf, shopOf, toDate, iso, code4,
   riderFee, traderShare, isEnabled, DispatchError,
   OFFER_MS, REALERT_MS, ADMIN_ALERT_MS, MISS_LIMIT,

@@ -74,4 +74,33 @@ function nextOpening(userId, date = new Date()) {
   return null;
 }
 
-module.exports = { getHours, setHours, isOpen, nextOpening, localClock, DEFAULTS, MIN, MAX };
+const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** 480 → "8 AM", 1230 → "8:30 PM". */
+function clockText(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+/**
+ * A week as one short line for lists: "Mon–Sat 8 AM–8 PM", "Every day 9 AM–6 PM",
+ * "Mon–Fri 8 AM–8 PM · Sat 9 AM–6 PM". Runs of days with the same hours are joined.
+ */
+function summarize(days) {
+  const open = days.filter((d) => d.enabled);
+  if (!open.length) return 'Closed every day';
+  const runs = [];
+  for (const d of days) {
+    const last = runs[runs.length - 1];
+    if (last && d.enabled && last.start === d.start && last.end === d.end && last.to === d.weekday - 1) last.to = d.weekday;
+    else if (d.enabled) runs.push({ from: d.weekday, to: d.weekday, start: d.start, end: d.end });
+  }
+  if (runs.length === 1 && open.length === 7) return `Every day ${clockText(runs[0].start)}–${clockText(runs[0].end)}`;
+  return runs.map((r) => {
+    const span = r.from === r.to ? DAY[r.from] : `${DAY[r.from]}${r.to - r.from === 1 ? ', ' : '–'}${DAY[r.to]}`;
+    return `${span} ${clockText(r.start)}–${clockText(r.end)}`;
+  }).join(' · ');
+}
+
+module.exports = { getHours, setHours, isOpen, nextOpening, localClock, summarize, clockText, DEFAULTS, MIN, MAX };

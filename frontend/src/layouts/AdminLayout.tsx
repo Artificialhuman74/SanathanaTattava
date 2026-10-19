@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Users, ShoppingBag,
   LogOut, Menu, X, ChevronRight,
-  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert, Bike,
+  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert, Bike, Map as MapIcon,
 } from 'lucide-react';
+import api from '../api/axios';
+import { useSocket } from '../contexts/SocketContext';
 import NotificationBell from '../components/NotificationBell';
 import ChakraIcon from '../components/luckyDraw/ChakraIcon';
 import { LUCKY_DRAW_NAME } from '../config/luckyDraw';
@@ -16,6 +18,7 @@ const navItems = [
   { to: '/admin/inventory',       icon: Package,         label: 'Inventory' },
   { to: '/admin/traders',         icon: Users,           label: 'Partners' },
   { to: '/admin/riders',          icon: Bike,            label: 'Riders' },
+  { to: '/admin/fleet',           icon: MapIcon,         label: 'Fleet' },
   { to: '/admin/lucky-draw',      icon: ChakraIcon,      label: LUCKY_DRAW_NAME },
   { to: '/admin/consumer-orders', icon: ShoppingBag,     label: 'Consumer Orders' },
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },
@@ -33,6 +36,17 @@ export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/login'); };
+
+  // Sidebar badges: urgent dispatch alerts (red dot on Fleet), riders waiting for review.
+  const [badges, setBadges] = useState({ fleet_alerts: 0, riders_waiting: 0 });
+  const { on, off } = useSocket();
+  useEffect(() => {
+    const load = () => api.get('/admin/dispatch/badges').then(r => setBadges(r.data)).catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    on('dispatch:alert', load);
+    return () => { clearInterval(id); off('dispatch:alert', load); };
+  }, [on, off]);
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>
@@ -58,7 +72,15 @@ export default function AdminLayout() {
           >
             <Icon className="flex-shrink-0" size={18} />
             <span>{label}</span>
-            <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100" size={14} />
+            {to === '/admin/fleet' && badges.fleet_alerts > 0 ? (
+              <span className="fleet-urgent ml-auto w-2.5 h-2.5 rounded-full bg-red-500" aria-label={`${badges.fleet_alerts} urgent`} />
+            ) : to === '/admin/riders' && badges.riders_waiting > 0 ? (
+              <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-gold-500 text-[#1c1a14] text-xs font-bold grid place-items-center" aria-label={`${badges.riders_waiting} waiting`}>
+                {badges.riders_waiting}
+              </span>
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-0 group-hover:opacity-100" size={14} />
+            )}
           </NavLink>
         ))}
 

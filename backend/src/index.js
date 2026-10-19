@@ -177,6 +177,7 @@ app.get('/api/__uploads-debug', (_req, res) => {
 app.use('/api/auth',          authRoutes);
 app.use('/api/admin/finance', financeRoutes);
 app.use('/api/admin/riders',  require('./routes/adminRiders'));
+app.use('/api/admin/dispatch', require('./routes/adminDispatch'));
 app.use('/api/admin',         adminRoutes);
 app.use('/api/trader',        traderRoutes);
 app.use('/api/consumer',      consumerRoutes);

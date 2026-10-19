@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { formatIstDate } from '../../utils/dateTime';
 import LiquidLoader from '../../components/LiquidLoader';
+import DeliveryHoursDrawer from './DeliveryHoursDrawer';
 
 interface Trader {
   id: number;
@@ -42,6 +43,8 @@ export default function AdminTraders() {
   const [editRate,     setEditRate]     = useState<{ id: number; value: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Trader | null>(null);
   const [syncingId,    setSyncingId]    = useState<number | null>(null);
+  const [hours,        setHours]        = useState<Record<number, { summary: string; saved: boolean }>>({});
+  const [hoursFor,     setHoursFor]     = useState<Trader | null>(null);
 
   const fetchTraders = useCallback(() => {
     setLoading(true);
@@ -55,6 +58,11 @@ export default function AdminTraders() {
   }, [search, tierFilter, statusFilter]);
 
   useEffect(() => { fetchTraders(); }, [fetchTraders]);
+
+  // Each shop's delivery week as one line (ST Partner app, handoff §4.10).
+  useEffect(() => {
+    api.get('/admin/dispatch/hours').then(r => setHours(r.data.hours || {})).catch(() => {});
+  }, []);
 
   const toggleStatus = async (trader: Trader) => {
     const newStatus = trader.status === 'active' ? 'suspended' : 'active';
@@ -256,6 +264,16 @@ export default function AdminTraders() {
           </div>
         </td>
         <td>
+          <button
+            onClick={() => setHoursFor(t)}
+            className="group flex items-center gap-1.5 text-left text-sm text-slate-700 hover:text-brand-600 min-w-[9rem]"
+            title="Change delivery hours"
+          >
+            <span className={`whitespace-nowrap ${hours[t.id]?.saved ? 'font-semibold text-brand-600' : ''}`}>{hours[t.id]?.summary || '—'}</span>
+            <Edit2 size={12} className="flex-shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
+          </button>
+        </td>
+        <td>
           <span className={`badge ${t.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
             {t.status}
           </span>
@@ -391,6 +409,7 @@ export default function AdminTraders() {
                   <th>C.Orders</th>
                   <th>Commission</th>
                   <th>Delivery</th>
+                  <th>Delivery hours</th>
                   <th>Status</th>
                   <th>Joined</th>
                   <th>Action</th>
@@ -414,6 +433,13 @@ export default function AdminTraders() {
           </div>
         )}
       </div>
+      {hoursFor && (
+        <DeliveryHoursDrawer
+          shop={hoursFor}
+          onClose={() => setHoursFor(null)}
+          onSaved={(summary) => setHours(prev => ({ ...prev, [hoursFor.id]: { summary, saved: true } }))}
+        />
+      )}
       {/* Delete confirmation modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">

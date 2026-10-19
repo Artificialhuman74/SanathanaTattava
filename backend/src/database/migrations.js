@@ -1464,6 +1464,7 @@ function runMigrations(db) {
     ['escalated_at',             'DATETIME'],
     ['escalation_reason',        'TEXT'],   // timeout | declined | non_delivering_trader
     ['admin_alerted_at',         'DATETIME'],
+    ['admin_alert_dismissed_at', 'DATETIME'],  // admin chose "Keep searching" on the urgent alert
     ['door_photo_url',           'TEXT'],
     ['attempt_count',            'INTEGER NOT NULL DEFAULT 0'],
     ['retry_on',                 'DATETIME'],

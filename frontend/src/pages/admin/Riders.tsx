@@ -301,15 +301,15 @@ export default function AdminRiders() {
         <p className="mt-0.5 text-sm text-slate-500">Check each item. Approve when everything looks right, or send it back with reasons.</p>
       </div>
 
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+      <div className="grid gap-2 sm:gap-3 grid-cols-3">
         {[
           { label: 'Waiting for review', value: counts.pending_review, color: 'text-amber-700' },
           { label: 'Approved riders', value: counts.approved, color: 'text-emerald-700' },
           { label: 'Sent back', value: counts.rejected, color: 'text-red-700' },
         ].map((s) => (
-          <div key={s.label} className="card p-4 text-center">
-            <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{s.label}</p>
+          <div key={s.label} className="card p-3 sm:p-4 text-center">
+            <p className={`text-xl sm:text-2xl font-extrabold ${s.color}`}>{s.value}</p>
+            <p className="mt-0.5 text-[11px] sm:text-xs leading-tight text-slate-500">{s.label}</p>
           </div>
         ))}
       </div>
