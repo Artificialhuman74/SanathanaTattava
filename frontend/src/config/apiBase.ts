@@ -54,13 +54,12 @@ const envFallback = normalizeBaseUrl(import.meta.env.VITE_API_URL_FALLBACK);
 const envCandidates = parseCsv(import.meta.env.VITE_API_URL_CANDIDATES);
 const override = isBrowser ? normalizeBaseUrl(localStorage.getItem(API_OVERRIDE_KEY)) : '';
 
-const candidates = unique([
-  override,
-  envPrimary,
-  ...envCandidates,
-  envFallback,
-  runtimeOrigin,
-]);
+/* The page's own origin is only a candidate when no backend URL is configured
+ * (local dev / same-origin deploys). On Netlify it serves index.html with a
+ * 200 for every /api/* path, so failing over to it turns one dropped request
+ * into HTML being parsed as data — that crashed the admin Fleet page. */
+const configured = [override, envPrimary, ...envCandidates, envFallback].filter(Boolean);
+const candidates = unique(configured.length ? configured : [runtimeOrigin]);
 
 let activeApiBaseUrl = candidates[0] || (isLocalHost(runtimeOrigin) ? '' : runtimeOrigin);
 

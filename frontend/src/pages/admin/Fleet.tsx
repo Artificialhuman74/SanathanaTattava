@@ -155,6 +155,7 @@ export default function AdminFleet() {
     setRefreshing(true);
     try {
       const { data } = await api.get('/admin/dispatch/fleet');
+      if (!data || !Array.isArray(data.orders) || !Array.isArray(data.partners)) throw new Error('Unexpected fleet response');
       setFleet(data);
       setError(false);
     } catch {
