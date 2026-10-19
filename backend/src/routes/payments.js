@@ -1,5 +1,6 @@
 const express  = require('express');
 const Razorpay = require('razorpay');
+const dispatch = require('../services/dispatch');
 const crypto   = require('crypto');
 const jwt      = require('jsonwebtoken');
 const db       = require('../database/db');
@@ -123,6 +124,7 @@ router.post('/verify', authConsumer, async (req, res) => {
           razorpay_order_id=?, razorpay_payment_id=?
       WHERE id=?
     `).run(razorpay_order_id, razorpay_payment_id, consumer_order_id);
+    dispatch.kick(); // ST Partner: ring the shop now rather than at the next 30 s tick
 
     /* Phase 7 — burn the reserved store credit now that Razorpay has
      * confirmed payment. If this throws (e.g. balance manipulated since
@@ -345,6 +347,7 @@ router.post('/webhook', (req, res) => {
         if (order && order.payment_status !== 'paid') {
           db.prepare(`UPDATE consumer_orders SET payment_status='paid', status='confirmed', razorpay_payment_id=? WHERE id=?`)
             .run(p.id, order.id);
+          dispatch.kick(); // ST Partner: ring the shop now rather than at the next 30 s tick
           console.log(`[webhook] payment.captured → order ${order.order_number} marked paid (safety net)`);
           recordQualifyingOrder(order.id);
         }
@@ -399,6 +402,7 @@ router.post('/webhook', (req, res) => {
             SET payment_status='paid', status='confirmed', razorpay_payment_id=?
             WHERE id=?
           `).run(inv.payment_id || null, order.id);
+          dispatch.kick(); // ST Partner: ring the shop now rather than at the next 30 s tick
 
           if (!order.is_direct && order.linked_dealer_id) {
             const dealer = db.prepare('SELECT * FROM users WHERE id=?').get(order.linked_dealer_id);

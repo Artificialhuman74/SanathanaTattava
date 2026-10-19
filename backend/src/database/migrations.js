@@ -1347,6 +1347,158 @@ function runMigrations(db) {
     console.log('[migration] products: seeded the Bhagya Chakra welcome gift');
   }
 
+  /* ── ST Partner app: outside delivery riders (handoff §6.2) ─────────────
+   * Riders are users with role='rider'. They log in like traders, but stay
+   * review_status='pending_review' until an admin approves every item.
+   * Traders and admins keep review_status NULL, so nothing about them changes.
+   * KYC photos live in DATA_DIR/kyc/<userId>/ (never under public /uploads);
+   * the kyc_* columns hold only the file names. */
+  const riderColumns = [
+    ['review_status',        'TEXT'],     // pending_review | approved | rejected
+    ['review_issues',        'TEXT'],     // JSON [{ item, reason }] when sent back
+    ['review_submitted_at',  'DATETIME'],
+    ['reviewed_by',          'INTEGER'],
+    ['reviewed_at',          'DATETIME'],
+    ['vehicle_type',         'TEXT'],     // walk | cycle | scooter | bike
+    ['vehicle_plate',        'TEXT'],
+    ['licence_number',       'TEXT'],
+    ['emergency_name',       'TEXT'],
+    ['emergency_relation',   'TEXT'],
+    ['emergency_phone',      'TEXT'],
+    ['kyc_selfie',           'TEXT'],
+    ['kyc_licence_front',    'TEXT'],
+    ['kyc_licence_back',     'TEXT'],
+    ['kyc_pan',              'TEXT'],
+  ];
+  for (const [column, type] of riderColumns) {
+    if (!hasColumn('users', column)) {
+      db.exec(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
+      console.log(`[migration] users: added ${column}`);
+    }
+  }
+
+  /* Saved start places ("bases") for delivery partners. The default one is
+   * also mirrored onto users.latitude/longitude/h3_index for dispatch. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_addresses (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label       TEXT    NOT NULL DEFAULT 'home',
+      address     TEXT    NOT NULL,
+      latitude    REAL    NOT NULL,
+      longitude   REAL    NOT NULL,
+      h3_index    TEXT,
+      is_default  INTEGER NOT NULL DEFAULT 0,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_user_addresses_user ON user_addresses(user_id)`);
+
+  /* Online state from the ST Partner app (separate from availability_status, which the
+   * website's current dispatch reads). live_* is the phone's last reported position. */
+  const partnerColumns = [
+    ['partner_online',      'INTEGER NOT NULL DEFAULT 0'],
+    ['online_since',        'DATETIME'],
+    ['online_place_id',     'INTEGER'],
+    ['live_lat',            'REAL'],
+    ['live_lng',            'REAL'],
+    ['live_at',             'DATETIME'],
+    ['missed_offer_streak', 'INTEGER NOT NULL DEFAULT 0'],
+    ['auto_offline_at',     'DATETIME'],
+  ];
+  for (const [column, type] of partnerColumns) {
+    if (!hasColumn('users', column)) {
+      db.exec(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
+      console.log(`[migration] users: added ${column}`);
+    }
+  }
+
+  /* Phones that can receive push notifications (FCM) for a partner account.
+   * One user may have several phones; a token belongs to one user at a time. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS device_tokens (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token        TEXT    NOT NULL UNIQUE,
+      platform     TEXT    NOT NULL DEFAULT 'android',
+      app_version  TEXT,
+      updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id)`);
+
+  /* Trader opt-in to other shops' rider jobs (handoff §4.4 item 11). */
+  if (!hasColumn('users', 'takes_rider_jobs')) {
+    db.exec(`ALTER TABLE users ADD COLUMN takes_rider_jobs INTEGER NOT NULL DEFAULT 0`);
+    console.log('[migration] users: added takes_rider_jobs');
+  }
+
+  /* A trader's delivery hours per weekday (0 = Monday). Minutes from midnight, local time.
+   * No rows = never set; the app shows the defaults until the trader saves. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS delivery_hours (
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      weekday     INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+      enabled     INTEGER NOT NULL DEFAULT 1,
+      start_min   INTEGER NOT NULL,
+      end_min     INTEGER NOT NULL,
+      updated_by  INTEGER REFERENCES users(id),
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, weekday)
+    )
+  `);
+
+  /* Dispatch from the ST Partner app (handoff §4.4, §6.2). dispatch_stage drives the ticker:
+   *   awaiting_hours → trader_offer → (accepted by trader) | rider_search → rider_assigned
+   *   → picked_up → delivered | returning → retry next day.
+   * NULL = an order the new engine never touched (older orders, website-only flow). */
+  const dispatchColumns = [
+    ['dispatch_stage',           'TEXT'],
+    ['dispatch_started_at',      'DATETIME'],
+    ['trader_offer_expires_at',  'DATETIME'],
+    ['rider_id',                 'INTEGER REFERENCES users(id)'],
+    ['rider_fee',                'REAL'],
+    ['pickup_code',              'TEXT'],
+    ['return_code',              'TEXT'],
+    ['picked_up_at',             'DATETIME'],
+    ['escalated_at',             'DATETIME'],
+    ['escalation_reason',        'TEXT'],   // timeout | declined | non_delivering_trader
+    ['admin_alerted_at',         'DATETIME'],
+    ['door_photo_url',           'TEXT'],
+    ['attempt_count',            'INTEGER NOT NULL DEFAULT 0'],
+    ['retry_on',                 'DATETIME'],
+  ];
+  for (const [column, type] of dispatchColumns) {
+    if (!hasColumn('consumer_orders', column)) {
+      db.exec(`ALTER TABLE consumer_orders ADD COLUMN ${column} ${type}`);
+      console.log(`[migration] consumer_orders: added ${column}`);
+    }
+  }
+
+  /* Rider-delivered orders reduce the trader's pending commission to their share; keep the original. */
+  if (!hasColumn('commissions', 'original_amount')) {
+    db.exec(`ALTER TABLE commissions ADD COLUMN original_amount REAL`);
+    console.log('[migration] commissions: added original_amount');
+  }
+
+  /* One row per person an order was offered to. response: accepted | declined | skipped | expired | withdrawn. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dispatch_offers (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id       INTEGER NOT NULL REFERENCES consumer_orders(id) ON DELETE CASCADE,
+      user_id        INTEGER NOT NULL REFERENCES users(id),
+      kind           TEXT    NOT NULL,            -- trader | rider
+      offered_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at     DATETIME NOT NULL,
+      last_alert_at  DATETIME,
+      alert_count    INTEGER NOT NULL DEFAULT 0,
+      response       TEXT,
+      responded_at   DATETIME
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_offers_order ON dispatch_offers(order_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_offers_user_open ON dispatch_offers(user_id, response)`);
+
   console.log('[migration] all migrations applied');
 }
 

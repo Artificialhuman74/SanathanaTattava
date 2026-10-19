@@ -32,6 +32,7 @@ import AdminFinance        from './pages/admin/Finance';
 import AdminContainerFinance from './pages/admin/ContainerFinance';
 import AdminHoldings           from './pages/admin/Holdings';
 import AdminLuckyDraw          from './pages/admin/LuckyDraw';
+import AdminRiders             from './pages/admin/Riders';
 
 import TraderDashboard     from './pages/trader/Dashboard';
 import TraderProducts      from './pages/trader/Products';
@@ -86,6 +87,7 @@ const PartnerRoutes = () => {
         <Route path="dashboard"       element={<AdminDashboard />} />
         <Route path="inventory"       element={<AdminInventory />} />
         <Route path="traders"         element={<AdminTraders />} />
+        <Route path="riders"          element={<AdminRiders />} />
         <Route path="orders"          element={<AdminOrders />} />
         <Route path="consumer-orders" element={<AdminConsumerOrders />} />
         <Route path="consumers"       element={<AdminConsumers />} />

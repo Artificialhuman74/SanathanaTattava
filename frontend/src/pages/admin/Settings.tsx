@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import LiquidLoader from '../../components/LiquidLoader';
+import RiderSettings from './RiderSettings';
 import {
   Settings, Percent, Save, Info, MapPin, Navigation,
   RefreshCw, Loader2, AlertTriangle, Users, Clock, Zap,
@@ -21,6 +22,7 @@ interface LocationData {
 
 export default function AdminSettings() {
   const [discountPct, setDiscountPct] = useState<string>('10');
+  const [allSettings, setAllSettings] = useState<Record<string, string>>({});
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
 
@@ -56,6 +58,7 @@ export default function AdminSettings() {
          * shape here was the bug that kept the discount stuck at "10"
          * on screen while the real setting applied correctly. */
         const s = r.data.settings || {};
+        setAllSettings(s);
         setDiscountPct(String(s.referral_discount_percent ?? 10));
         setAutoPayoutEnabled(String(s.auto_payout_enabled ?? '1') === '1');
         setAutoPayoutDay(String(s.auto_payout_day ?? '5'));
@@ -351,6 +354,8 @@ export default function AdminSettings() {
       </div>
 
       {/* ── Bulk Trader Commission ────────────────────────────────────── */}
+      <RiderSettings settings={allSettings} />
+
       <div className="card p-6 space-y-5">
         <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">

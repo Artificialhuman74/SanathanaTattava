@@ -207,9 +207,9 @@ router.post('/partner/google', [
   if (!email) return res.status(400).json({ error: 'Google account has no email' });
 
   // Match by google_uid first (returning), then by email (auto-link).
-  let user = db.prepare(`SELECT * FROM users WHERE google_uid = ? AND role IN ('trader','admin')`).get(googleUid);
+  let user = db.prepare(`SELECT * FROM users WHERE google_uid = ? AND role IN ('trader','admin','rider')`).get(googleUid);
   if (!user) {
-    user = db.prepare(`SELECT * FROM users WHERE email = ? AND role IN ('trader','admin')`).get(email);
+    user = db.prepare(`SELECT * FROM users WHERE email = ? AND role IN ('trader','admin','rider')`).get(email);
     if (user && !user.google_uid) {
       db.prepare(`UPDATE users SET google_uid = ? WHERE id = ?`).run(googleUid, user.id);
       user.google_uid = googleUid;
@@ -256,7 +256,7 @@ router.post('/partner/google/register', [
   if (!email) return res.status(400).json({ error: 'Google account has no email' });
 
   // Already a partner? Sign them in instead of erroring (idempotent).
-  let existing = db.prepare(`SELECT * FROM users WHERE (google_uid = ? OR email = ?) AND role IN ('trader','admin')`).get(googleUid, email);
+  let existing = db.prepare(`SELECT * FROM users WHERE (google_uid = ? OR email = ?) AND role IN ('trader','admin','rider')`).get(googleUid, email);
   if (existing) {
     if (existing.status !== 'active') return res.status(403).json({ error: 'Account is suspended' });
     if (!existing.google_uid) db.prepare(`UPDATE users SET google_uid = ? WHERE id = ?`).run(googleUid, existing.id);

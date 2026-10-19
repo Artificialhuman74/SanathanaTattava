@@ -28,12 +28,17 @@ function createApp() {
   app.use(express.urlencoded({ extended: true }));
 
   app.use('/api/auth',          authRoutes);
+  app.use('/api/admin/riders',  require('../../src/routes/adminRiders'));
   app.use('/api/admin',         adminRoutes);
   app.use('/api/trader',        traderRoutes);
   app.use('/api/consumer',      consumerRoutes);
   app.use('/api/location',      locationRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/delivery',      deliveryRoutes);
+  app.use('/api/rider',         require('../../src/routes/rider'));
+  app.use('/api/devices',       require('../../src/routes/devices'));
+  app.use('/api/partner/orders', require('../../src/routes/partnerOrders'));
+app.use('/api/partner',       require('../../src/routes/partner'));
   app.use('/api/public',        publicRoutes);
   app.use('/api/payments',      paymentsRoutes);
 

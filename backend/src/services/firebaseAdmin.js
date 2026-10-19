@@ -49,4 +49,13 @@ async function verifyIdToken(idToken) {
   return admin.auth().verifyIdToken(idToken);
 }
 
-module.exports = { verifyIdToken };
+/**
+ * Firebase Cloud Messaging client (push notifications to the ST Partner app).
+ * Needs a real service-account credential; throws if Firebase Admin isn't configured.
+ */
+function messaging() {
+  ensureInit();
+  return admin.messaging();
+}
+
+module.exports = { verifyIdToken, messaging };

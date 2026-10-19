@@ -91,6 +91,7 @@ const allowedOrigins = [
   'https://delivery.sanathanatattva.shop',
   'http://localhost:3000',
   'https://localhost:3000',
+  'http://localhost:3001', // npm run dev:partner (admin + trader)
   'http://localhost:5001',
   'https://localhost:5001',
 ];
@@ -175,12 +176,17 @@ app.get('/api/__uploads-debug', (_req, res) => {
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/admin/finance', financeRoutes);
+app.use('/api/admin/riders',  require('./routes/adminRiders'));
 app.use('/api/admin',         adminRoutes);
 app.use('/api/trader',        traderRoutes);
 app.use('/api/consumer',      consumerRoutes);
 app.use('/api/location',      locationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/delivery',      deliveryRoutes);
+app.use('/api/rider',         require('./routes/rider'));
+app.use('/api/devices',       require('./routes/devices'));
+app.use('/api/partner/orders', require('./routes/partnerOrders'));
+app.use('/api/partner',       require('./routes/partner'));
 app.use('/api/payments',      paymentRoutes);
 app.use('/api/invoice',       require('./routes/invoices'));
 app.use('/api/public',        publicRoutes);
@@ -331,6 +337,10 @@ startPayoutScheduler();
 // ─── Bhagya Chakra monthly draw — 12th at 5PM IST by default ───────────────
 const { startDrawScheduler } = require('./services/luckyDraw/drawScheduler');
 startDrawScheduler();
+
+/* ── ST Partner dispatch: rings, re-rings, escalation, admin alerts (every 30 s) ── */
+const dispatch = require('./services/dispatch');
+setInterval(() => { dispatch.tick().catch((err) => console.error('[dispatch] tick:', err.message)); }, 30_000);
 
 /* ── Abandoned-order sweeper ──────────────────────────────────────────────── */
 const { sweepAbandonedOrders } = require('./services/orderSweeperService');

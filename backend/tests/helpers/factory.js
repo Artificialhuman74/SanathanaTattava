@@ -146,6 +146,7 @@ function clearAll() {
   db.prepare('DELETE FROM container_holdings').run();
   db.prepare('DELETE FROM consumer_store_credit_ledger').run();
   db.prepare('DELETE FROM invoices').run();
+  try { db.prepare('DELETE FROM dispatch_offers').run(); } catch (_) {}
   db.prepare('DELETE FROM consumer_order_items').run();
   db.prepare('DELETE FROM commissions').run();
   db.prepare('DELETE FROM weekly_payouts').run();
@@ -162,6 +163,9 @@ function clearAll() {
   db.prepare('DELETE FROM withdrawal_requests').run();
   db.prepare('DELETE FROM consumers').run();
   db.prepare('DELETE FROM products').run();
+  try { db.prepare('DELETE FROM user_addresses').run(); } catch (_) {}
+  try { db.prepare('DELETE FROM device_tokens').run(); } catch (_) {}
+  try { db.prepare('DELETE FROM delivery_hours').run(); } catch (_) {}
   db.prepare('DELETE FROM users').run();
 }
 

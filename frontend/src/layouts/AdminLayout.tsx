@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Package, Users, ShoppingBag,
   LogOut, Menu, X, ChevronRight,
-  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert,
+  UserCheck, Settings, Warehouse, Truck, Landmark, BarChart3, ExternalLink, Wallet, ShieldAlert, Bike,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ChakraIcon from '../components/luckyDraw/ChakraIcon';
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/admin/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/inventory',       icon: Package,         label: 'Inventory' },
   { to: '/admin/traders',         icon: Users,           label: 'Partners' },
+  { to: '/admin/riders',          icon: Bike,            label: 'Riders' },
   { to: '/admin/lucky-draw',      icon: ChakraIcon,      label: LUCKY_DRAW_NAME },
   { to: '/admin/consumer-orders', icon: ShoppingBag,     label: 'Consumer Orders' },
   { to: '/admin/consumers',       icon: UserCheck,       label: 'Consumers' },

@@ -698,6 +698,26 @@ router.put('/settings', (req, res) => {
     upsert.run('auto_payout_day', String(day));
   }
 
+  /* ST Partner app (handoff §4.11): rider fee, trader's share, and the dispatch switch. */
+  const { rider_fee_per_delivery, trader_share_on_rider_orders, partner_dispatch_enabled } = req.body;
+  if (rider_fee_per_delivery !== undefined) {
+    const fee = Number(rider_fee_per_delivery);
+    if (!Number.isFinite(fee) || fee < 0 || fee > 1000) return res.status(400).json({ error: 'Rider fee must be ₹0–₹1000' });
+    upsert.run('rider_fee_per_delivery', String(Math.round(fee * 100) / 100));
+  }
+  if (trader_share_on_rider_orders !== undefined) {
+    const share = Number(trader_share_on_rider_orders);
+    if (!Number.isFinite(share) || share < 0 || share > 100) return res.status(400).json({ error: 'Trader share must be 0–100%' });
+    upsert.run('trader_share_on_rider_orders', String(share));
+  }
+  if (partner_dispatch_enabled !== undefined) {
+    const on = partner_dispatch_enabled === true || String(partner_dispatch_enabled) === '1';
+    const was = db.prepare(`SELECT value FROM settings WHERE key = 'partner_dispatch_enabled'`).get()?.value === '1';
+    upsert.run('partner_dispatch_enabled', on ? '1' : '0');
+    // Only orders paid after switching on go through the app; older ones stay as they are.
+    if (on && !was) upsert.run('partner_dispatch_enabled_at', new Date().toISOString());
+  }
+
   if (auto_payout_time !== undefined) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(auto_payout_time))) {
       return res.status(400).json({ error: 'auto_payout_time must be HH:MM (24-hour)' });
