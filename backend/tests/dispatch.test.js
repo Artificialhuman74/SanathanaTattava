@@ -238,6 +238,10 @@ describe('delivering', () => {
     expect(shopView.share_amount).toBe(14);
 
     await request(app).post(`/api/partner/orders/${o.id}/packed`).set(s.headers).expect(200);
+    // "I'm at the shop" tells the shop; only the rider can say it.
+    await request(app).post(`/api/partner/orders/${o.id}/at-shop`).set(s.headers).expect(403);
+    await request(app).post(`/api/partner/orders/${o.id}/at-shop`).set(r.headers).expect(200);
+    expect(mockNotify).toHaveBeenCalledWith(s.id, expect.objectContaining({ title: 'Ravi is at your shop' }));
     await request(app).post(`/api/partner/orders/${o.id}/handover`).set(s.headers).send({ code: '0000' }).expect(400);
     await request(app).post(`/api/partner/orders/${o.id}/handover`).set(s.headers).send({ code: riderView.pickup_code }).expect(200);
     expect(get(o.id)).toMatchObject({ dispatch_stage: 'picked_up', delivery_status: 'out_for_delivery' });

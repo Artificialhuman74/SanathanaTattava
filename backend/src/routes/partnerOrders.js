@@ -252,6 +252,18 @@ router.post('/:id/start', (req, res) => {
   res.json({ ok: true });
 });
 
+/** Rider tapped "I'm at the shop": the shop gets a heads-up to have it ready and ask for the code. */
+router.post('/:id/at-shop', (req, res) => {
+  const got = load(req, res, ['rider']);
+  if (!got) return;
+  const { order } = got;
+  if (order.dispatch_stage !== 'rider_assigned') return fail(res, 409, 'This order isn’t waiting for pickup');
+  const rider = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+  const first = dispatch.firstName(rider?.name);
+  pushTo(order.delivery_dealer_id, `${first} is at your shop`, `${order.order_number}: ask ${first} for their pickup code.`, { type: 'rider_assigned', order_id: order.id });
+  res.json({ ok: true });
+});
+
 router.post('/:id/handover', (req, res) => {
   const got = load(req, res, ['packer']);
   if (!got) return;
