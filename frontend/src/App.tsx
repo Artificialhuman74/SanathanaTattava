@@ -51,6 +51,7 @@ import Shop                from './pages/consumer/Shop';
 import ConsumerLogin       from './pages/consumer/Login';
 import ConsumerRegister    from './pages/consumer/Register';
 import ConsumerOrders      from './pages/consumer/Orders';
+import ConsumerOrderTracking from './pages/consumer/OrderTracking';
 import ConsumerContainers  from './pages/consumer/Containers';
 import ConsumerWallet      from './pages/consumer/Wallet';
 import ConsumerAddresses   from './pages/consumer/Addresses';
@@ -161,6 +162,7 @@ const ConsumerRoutes = () => (
       <Route path="verify-pending"  element={<VerifyPending />} />
       <Route path="resend-verification" element={<VerifyPending />} />
       <Route path="orders"    element={<ConsumerRoute><ConsumerOrders /></ConsumerRoute>} />
+      <Route path="orders/:id" element={<ConsumerRoute><ConsumerOrderTracking /></ConsumerRoute>} />
       <Route path="containers" element={<ConsumerRoute><ConsumerContainers /></ConsumerRoute>} />
       <Route path="wallet"     element={<ConsumerRoute><ConsumerWallet /></ConsumerRoute>} />
       <Route path="addresses" element={<ConsumerRoute><ConsumerAddresses /></ConsumerRoute>} />

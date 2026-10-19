@@ -180,6 +180,7 @@ app.use('/api/admin/riders',  require('./routes/adminRiders'));
 app.use('/api/admin/dispatch', require('./routes/adminDispatch'));
 app.use('/api/admin',         adminRoutes);
 app.use('/api/trader',        traderRoutes);
+app.use('/api/consumer',      require('./routes/consumerTracking'));
 app.use('/api/consumer',      consumerRoutes);
 app.use('/api/location',      locationRoutes);
 app.use('/api/notifications', notificationRoutes);

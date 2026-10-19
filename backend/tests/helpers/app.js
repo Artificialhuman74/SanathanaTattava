@@ -32,6 +32,7 @@ function createApp() {
   app.use('/api/admin/dispatch', require('../../src/routes/adminDispatch'));
   app.use('/api/admin',         adminRoutes);
   app.use('/api/trader',        traderRoutes);
+  app.use('/api/consumer',      require('../../src/routes/consumerTracking'));
   app.use('/api/consumer',      consumerRoutes);
   app.use('/api/location',      locationRoutes);
   app.use('/api/notifications', notificationRoutes);

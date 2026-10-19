@@ -1115,3 +1115,4 @@ router.get('/review/check', authConsumer, (req, res) => {
 });
 
 module.exports = router;
+module.exports.authConsumer = authConsumer;

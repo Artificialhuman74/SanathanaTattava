@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, consumerApi } from '../../contexts/AuthContext';
 import { useOrderUpdates } from '../../hooks/useOrderUpdates';
 import toast from 'react-hot-toast';
-import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw } from 'lucide-react';
+import { ShoppingBag, X, Package, Phone, Truck, ChevronRight, RotateCcw, MapPin } from 'lucide-react';
 import { getCartCount } from '../../services/cartStorage';
 import { formatIst, formatIstDate } from '../../utils/dateTime';
 import LiquidLoader from '../../components/LiquidLoader';
@@ -69,6 +69,10 @@ const STATUS_COLORS: Record<string, string> = {
   delivered:  'text-emerald-600 bg-emerald-50',
   cancelled:  'text-red-600 bg-red-50',
 };
+
+/** Paid and not finished yet: these open the live tracking page instead of the details sheet. */
+const isActive = (o: ConsumerOrder) =>
+  o.payment_status === 'paid' && !['delivered', 'cancelled'].includes(o.status);
 
 const PAYMENT_LABELS: Record<string, string> = {
   pending:  'Pending',
@@ -177,7 +181,7 @@ export default function ConsumerOrders() {
           return (
             <div
               key={order.id}
-              onClick={() => setSelected(order)}
+              onClick={() => (isActive(order) ? navigate(`/shop/orders/${order.id}`) : setSelected(order))}
               className={`rounded-2xl border shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform ${bc ? '' : 'bg-white border-[#e8dcc8]'}`}
               style={bc ? { backgroundColor: '#fdf8ee', borderColor: '#e8c164' } : undefined}
             >
@@ -228,8 +232,17 @@ export default function ConsumerOrders() {
                 </div>
               )}
 
-              {/* Order Again */}
-              <div className="px-4 pb-4">
+              {/* Order Again (and, while it's on its way, Track) */}
+              <div className="px-4 pb-4 flex flex-col gap-2">
+                {isActive(order) && (
+                  <button
+                    onClick={e => { e.stopPropagation(); navigate(`/shop/orders/${order.id}`); }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-brand-600 text-brand-700 rounded-xl text-sm font-semibold hover:bg-brand-50 transition-colors"
+                  >
+                    <MapPin size={14} />
+                    Track order
+                  </button>
+                )}
                 <button
                   onClick={e => handleOrderAgain(order, e)}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-700 text-white rounded-xl text-sm font-semibold hover:bg-brand-800 transition-colors"

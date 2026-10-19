@@ -212,7 +212,12 @@ function openOffersFor(orderId) {
 }
 
 function closeOffer(offerId, response, now) {
-  db.prepare('UPDATE dispatch_offers SET response = ?, responded_at = ? WHERE id = ? AND response IS NULL').run(response, iso(now), offerId);
+  const r = db.prepare('UPDATE dispatch_offers SET response = ?, responded_at = ? WHERE id = ? AND response IS NULL').run(response, iso(now), offerId);
+  // Gone elsewhere or timed out: tell their phone, so it stops ringing for an order that isn't theirs.
+  if (r.changes && (response === 'withdrawn' || response === 'expired')) {
+    const offer = db.prepare('SELECT user_id FROM dispatch_offers WHERE id = ?').get(offerId);
+    if (offer) sendDataToUser(offer.user_id, { type: 'offer_closed', offer_id: offerId, reason: response }).catch(() => {});
+  }
 }
 
 async function ring(offer, now, reminder) {
@@ -267,6 +272,9 @@ async function start(order, now) {
   if (opens && opens.getTime() > now) {
     setStage(order.id, { dispatch_stage: 'awaiting_hours', dispatch_started_at: iso(opens) });
     log(order, `waits for ${owner.name}'s hours (${iso(opens)})`);
+    const at = hours.clockText(hours.localClock(opens).minutes);
+    notifyConsumer(order, `Will be delivered from ${at} — ${order.order_number}`,
+      `Your shop is closed right now. Your order is first in line when they open at ${at}.`, { dispatch_stage: 'awaiting_hours' });
     return;
   }
   await offerTrader(getOrder(order.id), owner, now);
@@ -419,6 +427,8 @@ async function respond(offerId, userId, accept, now = Date.now()) {
     db.prepare('UPDATE users SET missed_offer_streak = 0 WHERE id = ?').run(userId);
     setStage(order.id, { dispatch_stage: 'rider_assigned', rider_id: userId, rider_fee: order.rider_fee ?? riderFee(), pickup_code: code4() });
     const rider = db.prepare('SELECT name, vehicle_plate FROM users WHERE id = ?').get(userId);
+    notifyConsumer(order, `${firstName(rider?.name)} is picking up your order — ${order.order_number}`,
+      'Your delivery partner is on the way to the shop. You can follow them in your order.', { dispatch_stage: 'rider_assigned' });
     if (order.delivery_dealer_id) {
       sendToUser(order.delivery_dealer_id, {
         title: `${firstName(rider?.name)} is coming to pick up`,
