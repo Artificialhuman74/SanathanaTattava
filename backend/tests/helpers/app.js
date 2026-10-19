@@ -41,6 +41,7 @@ function createApp() {
   app.use('/api/devices',       require('../../src/routes/devices'));
   app.use('/api/partner/orders', require('../../src/routes/partnerOrders'));
 app.use('/api/partner',       require('../../src/routes/partner'));
+  app.use('/api/route',         require('../../src/routes/routing'));
   app.use('/api/public',        publicRoutes);
   app.use('/api/payments',      paymentsRoutes);
 

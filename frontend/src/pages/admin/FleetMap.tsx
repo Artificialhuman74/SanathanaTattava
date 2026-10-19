@@ -15,7 +15,8 @@ export interface FleetMapData {
   customers: { id: number; label: string; pos: MapPoint }[];
 }
 
-const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+// Google-Maps-like repaint of OpenFreeMap's tiles (frontend/scripts/build-map-style.mjs).
+const STYLE = `${window.location.origin}/map/st-google.json`;
 const BENGALURU: [number, number] = [77.5946, 12.9716];
 
 function shopEl(name: string, needsRider: boolean) {

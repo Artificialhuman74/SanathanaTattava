@@ -35,7 +35,8 @@ interface Tracking {
 
 const STEPS = ['Placed', 'Packed', 'On the way', 'Delivered'];
 const POLL_MS = 10_000;
-const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+// Google-Maps-like repaint of OpenFreeMap's tiles (frontend/scripts/build-map-style.mjs).
+const STYLE = `${window.location.origin}/map/st-google.json`;
 
 function StatusPill({ t }: { t: Tracking }) {
   if (t.state === 'scheduled') {
@@ -76,7 +77,7 @@ function LiveMap({ home, rider, label }: { home: Point; rider: Point | null; lab
       const m = new ml.Map({ container: box.current, style: STYLE, center: [home.lng, home.lat], zoom: 14, attributionControl: false, interactive: false });
       m.addControl(new ml.AttributionControl({ compact: true }), 'top-right');
       const pin = document.createElement('div');
-      pin.innerHTML = '<svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M13 29s-13-12-13-19a13 13 0 0 1 26 0c0 7-13 19-13 19z" fill="#1a6b2e"/><path d="M7 12l6-5 6 5v6H7z" fill="#fffbf2"/></svg>';
+      pin.innerHTML = '<svg width="26" height="30" viewBox="0 0 26 30" aria-hidden="true"><path d="M13 29s-13-12-13-19a13 13 0 0 1 26 0c0 7-13 19-13 19z" fill="#ea4335" stroke="#b31412" stroke-width="1"/><path d="M7 12l6-5 6 5v6H7z" fill="#fff"/></svg>';
       new ml.Marker({ element: pin, anchor: 'bottom' }).setLngLat([home.lng, home.lat]).addTo(m);
       m.on('load', () => {
         if (cancelled) return;
@@ -92,12 +93,24 @@ function LiveMap({ home, rider, label }: { home: Point; rider: Point | null; lab
     const m = map.current;
     const ml = lib.current;
     if (!m || !ml || !ready) return;
-    const route = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: rider ? [[rider.lng, rider.lat], [home.lng, home.lat]] : [] } };
+    const line = (coordinates: number[][]) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates } });
+    // Straight line first, then the real road route from /api/route (OSRM) when it arrives.
+    const route = line(rider ? [[rider.lng, rider.lat], [home.lng, home.lat]] : []);
+    if (rider) {
+      consumerApi.get('/route', { params: { from: `${rider.lat},${rider.lng}`, to: `${home.lat},${home.lng}` } })
+        .then(({ data }) => {
+          const s = map.current?.getSource('route') as any;
+          if (s && data?.points?.length) s.setData(line(data.points.map(([lat, lng]: [number, number]) => [lng, lat])));
+        })
+        .catch(() => {});
+    }
     const src = m.getSource('route') as any;
     if (src) src.setData(route);
     else {
       m.addSource('route', { type: 'geojson', data: route });
-      m.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#1a6b2e', 'line-width': 4, 'line-dasharray': [0.25, 2.2] }, layout: { 'line-cap': 'round' } });
+      // Google-style route: a solid blue line on a darker blue edge.
+      m.addLayer({ id: 'route-casing', type: 'line', source: 'route', paint: { 'line-color': '#1967d2', 'line-width': 7 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
+      m.addLayer({ id: 'route', type: 'line', source: 'route', paint: { 'line-color': '#4285f4', 'line-width': 4.5 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
     }
     if (!rider) { riderMarker.current?.remove(); riderMarker.current = null; return; }
     if (!riderMarker.current) {

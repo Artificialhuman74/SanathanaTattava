@@ -191,6 +191,7 @@ app.use('/api/partner/orders', require('./routes/partnerOrders'));
 app.use('/api/partner',       require('./routes/partner'));
 app.use('/api/payments',      paymentRoutes);
 app.use('/api/invoice',       require('./routes/invoices'));
+app.use('/api/route',         require('./routes/routing'));
 app.use('/api/public',        publicRoutes);
 app.use('/api/lucky-draw',    luckyDrawRoutes);
 app.use('/api/dev-tools',     devToolsRoutes);
