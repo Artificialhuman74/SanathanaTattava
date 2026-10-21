@@ -165,10 +165,12 @@
     </script>
 
     <!-- ── Fonts ──────────────────────────────────────────────────────────── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Inter as a single variable font (300-900 continuous) so we can dial body weight per surface. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
+    <!-- Inter (one variable font, 300-900 continuous, so body weight can be dialled per surface) and
+         EB Garamond: Google's own files, served from this site (src/fonts.css, public/fonts/) so the
+         first paint doesn't wait on two more connections. The Latin files every page uses start
+         downloading now; the other scripts load only if a page needs them. -->
+    <link rel="preload" href="/fonts/inter-1dc044f482.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/eb-garamond-fbc7eeae79.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- ── Razorpay ───────────────────────────────────────────────────────── -->
     <!-- defer: no longer holds up the page while it downloads; it still runs before the app starts,

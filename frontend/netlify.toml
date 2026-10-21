@@ -45,6 +45,12 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# Font files are named by content hash too
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 # Tell bots not to index admin/auth routes
 [[headers]]
   for = "/admin/*"
