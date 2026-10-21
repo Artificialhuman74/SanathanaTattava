@@ -263,10 +263,11 @@ function checkLowStockAlerts(dealerId) {
 
   // Use the notification service if available
   try {
-    const { notifyAdminLowStock } = require('./notificationService');
+    const { notifyAdminLowStock, notifyDealerStock } = require('./notificationService');
     for (const item of lowItems) {
       notifyAdminLowStock(item);
     }
+    notifyDealerStock(lowItems);
   } catch {
     // Notification service not loaded yet — just log
     for (const item of lowItems) {
@@ -301,7 +302,7 @@ function getAllLowStockAlerts() {
  */
 function getDealerInventory(dealerId) {
   return db.prepare(`
-    SELECT di.*, p.name as product_name, p.sku, p.image_url, p.price, p.unit, p.category,
+    SELECT di.*, p.name as product_name, p.sku, p.image_url, p.price, p.unit, p.category, p.container_type,
            CASE WHEN di.quantity <= 0 THEN 'OUT_OF_STOCK'
                 WHEN di.quantity <= di.low_stock_threshold THEN 'LOW_STOCK'
                 ELSE 'OK' END as stock_status

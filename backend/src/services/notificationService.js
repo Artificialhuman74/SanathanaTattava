@@ -240,6 +240,62 @@ function notifyAdminLowStock({ dealer_name, product_name, quantity, low_stock_th
 }
 
 /**
+ * ST Delivery "My Shop": tell the shop on its phone when products run low or finish, and a
+ * Tier 1 trader when one of their sub-dealers does. One push per message a day, like the
+ * admin alert, so a shop dipping below its level on every sale isn't buzzed each time.
+ *
+ * @param {Array<{dealer_id:number, dealer_name:string, product_id:number, product_name:string, quantity:number}>} items
+ *   the shop's products at or under their alert level
+ */
+function notifyDealerStock(items) {
+  if (!items || items.length === 0) return;
+  const sorted = [...items].sort((a, b) => a.quantity - b.quantity);
+  const worst = sorted[0];
+  const others = sorted.slice(1);
+  const finished = worst.quantity <= 0;
+  const title = finished ? `${worst.product_name} is finished` : `${worst.product_name} is running low`;
+  const body = others.length === 0
+    ? (finished ? 'Ask the admin for more from the app.' : `Only ${worst.quantity} left. Ask for more?`)
+    : others.length === 1
+      ? `${others[0].product_name} is running low too.`
+      : `${others.length} more products are running low too.`;
+  pushOncePerDay(worst.dealer_id, title, body, { type: 'stock_low', product_id: worst.product_id });
+
+  const sub = db.prepare(`SELECT referred_by_id, address, phone FROM users WHERE id = ? AND tier = 2`).get(worst.dealer_id);
+  if (sub?.referred_by_id) {
+    const first = String(worst.dealer_name || '').trim().split(/\s+/)[0] || 'Your sub-dealer';
+    let area = '';
+    try { area = require('./dispatch').areaOf(sub.address) || ''; } catch { /* no area */ }
+    pushOncePerDay(
+      sub.referred_by_id,
+      finished ? `${first} has no ${worst.product_name}` : `${first} is running low on ${worst.product_name}`,
+      area ? `Your sub-dealer in ${area}.` : 'Your sub-dealer.',
+      { type: 'sub_dealer_stock', sub_dealer_id: worst.dealer_id, phone: sub.phone || '' },
+    );
+  }
+}
+
+/** In-app row plus a phone push, unless the same message went out in the last 24 hours. */
+function pushOncePerDay(dealerId, title, body, data) {
+  const recent = db.prepare(`
+    SELECT id FROM notifications
+    WHERE user_type = 'dealer' AND user_id = ? AND title = ? AND created_at > datetime('now', '-24 hours')
+  `).get(dealerId, title);
+  if (recent) return;
+  createNotification('dealer', dealerId, title, body, data);
+  sendShopPush(dealerId, title, body, data);
+}
+
+/**
+ * Data-only (the ST Delivery app builds the notification and its buttons) and kept for a day,
+ * so a phone that is off still hears about it. Older app versions show title and body as-is.
+ */
+function sendShopPush(userId, title, body, data = {}) {
+  const { sendDataToUser } = require('./pushService');
+  sendDataToUser(userId, { ...data, title, body }, { ttlMs: 24 * 60 * 60 * 1000 }).catch(() => {});
+}
+
+/**
  * Notify a linked dealer that a consumer order was routed to a different
  * (nearest) dealer for delivery, based on H3 proximity.
  *
@@ -375,6 +431,8 @@ module.exports = {
   notifyConsumerDeliveryAssigned,
   notifyLinkedDealerOrderRouted,
   notifyAdminLowStock,
+  notifyDealerStock,
+  sendShopPush,
   notifyContainerRefundRequested,
   getUnreadNotifications,
   getNotifications,

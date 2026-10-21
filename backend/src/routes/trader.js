@@ -46,6 +46,14 @@ router.get('/sub-dealers', (req, res) => {
   res.json({ subDealers: subs });
 });
 
+/* A sub-dealer's shelf, for the Tier 1 trader's ST Delivery app (People → their shelf). */
+router.get('/sub-dealers/:id/inventory', (req, res) => {
+  if (req.user.tier !== 1) return res.status(403).json({ error: 'Tier 1 only' });
+  const sub = db.prepare(`SELECT id FROM users WHERE id=? AND referred_by_id=? AND role='trader'`).get(req.params.id, req.user.id);
+  if (!sub) return res.status(404).json({ error: 'Sub-partner not found under your account' });
+  res.json({ inventory: getDealerInventory(sub.id) });
+});
+
 router.put('/sub-dealers/:id/pan-verify', (req, res) => {
   if (req.user.tier !== 1) return res.status(403).json({ error: 'Tier 1 only' });
   const sub = db.prepare(`SELECT id, pan FROM users WHERE id=? AND referred_by_id=?`).get(req.params.id, req.user.id);
@@ -354,7 +362,12 @@ router.get('/commissions', (req, res) => {
     SELECT * FROM weekly_payouts WHERE trader_id=? ORDER BY created_at DESC LIMIT 10
   `).all(req.user.id);
 
-  res.json({ commissions, summary, weeklyBreakdown, payouts });
+  /* The weekday automatic payouts run on (0 = Sunday), for "Goes to your bank on Friday";
+   * null when payouts are made by hand. */
+  const setting = (key, fallback) => db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key)?.value ?? fallback;
+  const payoutDay = setting('auto_payout_enabled', '1') === '1' ? Number(setting('auto_payout_day', '5')) : null;
+
+  res.json({ commissions, summary, weeklyBreakdown, payouts, payoutDay });
 });
 
 /* ── Sub-dealer Commission Settlement (offline cash/bank) ─────────────────

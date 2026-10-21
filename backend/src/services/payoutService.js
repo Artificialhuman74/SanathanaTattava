@@ -49,6 +49,24 @@ function processWeeklyPayouts(trigger = 'manual') {
     return { payoutsCreated: count, totalAmount: +totalAmount.toFixed(2) };
   })();
 
+  /* ST Delivery "My Shop": each shop hears about its own money on its phone. */
+  if (result.payoutsCreated > 0) {
+    try {
+      const { createNotification, sendShopPush } = require('./notificationService');
+      const byTrader = new Map();
+      for (const row of pending) byTrader.set(row.trader_id, (byTrader.get(row.trader_id) || 0) + row.total);
+      for (const [traderId, amount] of byTrader) {
+        const rupees = `₹${Math.round(amount).toLocaleString('en-IN')}`;
+        const title = `${rupees} sent to your bank`;
+        const body = 'Your shop money for last week.';
+        createNotification('dealer', traderId, title, body, { type: 'commission_paid' });
+        sendShopPush(traderId, title, body, { type: 'commission_paid' });
+      }
+    } catch (err) {
+      console.error('[payouts] shop push failed:', err.message);
+    }
+  }
+
   if (result.payoutsCreated > 0) {
     console.log(
       `[payouts] ${trigger} run: created ${result.payoutsCreated} payout(s) totalling ₹${result.totalAmount}`

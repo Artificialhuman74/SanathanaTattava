@@ -60,7 +60,7 @@ async function sendToUser(userId, { title, body, data = {}, channelId = 'account
  * Data-only, high-priority push: the app decides how to show it (order offers become a
  * full-screen ring the app builds itself, which a plain notification message can't do).
  */
-async function sendDataToUser(userId, data) {
+async function sendDataToUser(userId, data, { ttlMs = 120 * 1000 } = {}) {
   const tokens = db.prepare('SELECT token FROM device_tokens WHERE user_id = ?').all(userId).map((r) => r.token);
   if (tokens.length === 0) return { sent: 0, failed: 0 };
   let client;
@@ -77,7 +77,7 @@ async function sendDataToUser(userId, data) {
     const res = await client.sendEachForMulticast({
       tokens,
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-      android: { priority: 'high', ttl: 120 * 1000 },
+      android: { priority: 'high', ttl: ttlMs },
     });
     res.responses.forEach((r, i) => {
       if (!r.success && r.error && DEAD_TOKEN_CODES.has(r.error.code)) {

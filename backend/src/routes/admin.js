@@ -350,8 +350,24 @@ router.put('/orders/:id/status', (req, res) => {
   const valid = ['pending','confirmed','processing','shipped','delivered','cancelled'];
   const { status } = req.body;
   if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  if (!db.prepare(`SELECT id FROM orders WHERE id = ?`).get(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  const order = db.prepare(`SELECT id, trader_id, status, order_number FROM orders WHERE id = ?`).get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Not found' });
   db.prepare(`UPDATE orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(status, req.params.id);
+  /* ST Delivery "My Shop": the shop hears on its phone when the stock it asked for moves. */
+  if (order.status !== status && (status === 'shipped' || status === 'delivered')) {
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM order_items WHERE order_id = ?`).get(order.id).n;
+    // The app shows "ORD-1792596838123-45" as "#38123" (the stamp's last 5 digits).
+    const short = (String(order.order_number).split('-')[1] || String(order.id)).slice(-5);
+    const title = status === 'shipped' ? 'Your stock is on the way' : 'Your stock has arrived';
+    const body = `Order #${short} · ${count} product${count === 1 ? '' : 's'}.`;
+    try {
+      const { createNotification, sendShopPush } = require('../services/notificationService');
+      createNotification('dealer', order.trader_id, title, body, { type: 'restock', restock_id: order.id });
+      sendShopPush(order.trader_id, title, body, { type: 'restock', restock_id: order.id });
+    } catch (err) {
+      console.error('[restock push] failed:', err.message);
+    }
+  }
   res.json({ success: true });
 });
 
