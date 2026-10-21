@@ -6,9 +6,12 @@ export async function onRequest({ request }) {
   const url = new URL(request.url);
   const upstream = `https://sanathanatattva.firebaseapp.com${url.pathname}${url.search}`;
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  // Firebase Hosting picks the site by Host: ours would make it answer "Site Not Found".
+  const headers = new Headers(request.headers);
+  headers.delete('host');
   const res = await fetch(upstream, {
     method: request.method,
-    headers: request.headers,
+    headers,
     body: hasBody ? request.body : undefined,
     redirect: 'manual',
   });
