@@ -1500,6 +1500,31 @@ function runMigrations(db) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_offers_order ON dispatch_offers(order_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_dispatch_offers_user_open ON dispatch_offers(user_id, response)`);
 
+  /* Lookups that read whole tables without these: an order's lines, a person's orders and
+   * commissions, and the dispatch sweep that runs every 30 s. They only get slower as orders grow. */
+  [
+    'CREATE INDEX IF NOT EXISTS idx_consumer_order_items_order ON consumer_order_items(order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_consumer ON consumer_orders(consumer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_delivery_dealer ON consumer_orders(delivery_dealer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_linked_dealer ON consumer_orders(linked_dealer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_rider ON consumer_orders(rider_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_dispatch ON consumer_orders(dispatch_stage)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_orders_payment_delivery ON consumer_orders(payment_status, delivery_status)',
+    'CREATE INDEX IF NOT EXISTS idx_orders_trader ON orders(trader_id)',
+    'CREATE INDEX IF NOT EXISTS idx_commissions_trader ON commissions(trader_id)',
+    'CREATE INDEX IF NOT EXISTS idx_commissions_consumer_order ON commissions(consumer_order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category)',
+    'CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews(product_id)',
+    'CREATE INDEX IF NOT EXISTS idx_inventory_tx_dealer_product ON inventory_transactions(dealer_id, product_id)',
+    'CREATE INDEX IF NOT EXISTS idx_distributions_dealer ON distributions(dealer_id)',
+    'CREATE INDEX IF NOT EXISTS idx_weekly_payouts_trader ON weekly_payouts(trader_id)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_otps_phone ON consumer_otps(phone)',
+    'CREATE INDEX IF NOT EXISTS idx_consumer_otps_email ON consumer_otps(email)',
+  ].forEach((sql) => {
+    try { db.prepare(sql).run(); } catch (e) { console.warn('[migration] index:', e.message); }
+  });
+
   console.log('[migration] all migrations applied');
 }
 
