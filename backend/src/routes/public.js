@@ -22,6 +22,18 @@ const loadByToken = (token) => db.prepare(`
   WHERE cm.confirmation_token = ?
 `).get(token);
 
+/**
+ * The oldest app build still allowed to run (Android versionCode). Builds below it show
+ * "Update to keep using the app" at launch. 0 = no requirement. Set on the admin Settings page.
+ */
+router.get('/app-version', (_req, res) => {
+  const min = (key) => Number(db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value) || 0;
+  res.set('Cache-Control', 'no-store').json({
+    consumer: { min_version_code: min('app_min_version_consumer') },
+    delivery: { min_version_code: min('app_min_version_delivery') },
+  });
+});
+
 router.get('/commission-confirmation/:token', (req, res) => {
   const c = loadByToken(req.params.token);
   if (!c) return res.status(404).json({ error: 'Invalid or unknown confirmation link' });

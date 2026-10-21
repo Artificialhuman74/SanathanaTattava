@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import LiquidLoader from '../../components/LiquidLoader';
 import RiderSettings from './RiderSettings';
+import AppUpdateSettings from './AppUpdateSettings';
 import {
   Settings, Percent, Save, Info, MapPin, Navigation,
   RefreshCw, Loader2, AlertTriangle, Users, Clock, Zap,
@@ -355,6 +356,7 @@ export default function AdminSettings() {
 
       {/* ── Bulk Trader Commission ────────────────────────────────────── */}
       <RiderSettings settings={allSettings} />
+      <AppUpdateSettings settings={allSettings} />
 
       <div className="card p-6 space-y-5">
         <div className="flex items-center gap-3 pb-4 border-b border-slate-100">

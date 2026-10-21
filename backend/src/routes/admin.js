@@ -713,6 +713,14 @@ router.put('/settings', (req, res) => {
     if (on && !was) upsert.run('partner_dispatch_enabled_at', new Date().toISOString());
   }
 
+  /* Android apps: builds below these version codes must update before they open. */
+  for (const key of ['app_min_version_consumer', 'app_min_version_delivery']) {
+    if (req.body[key] === undefined) continue;
+    const code = Number(req.body[key]);
+    if (!Number.isInteger(code) || code < 0 || code > 100000) return res.status(400).json({ error: 'Version code must be a whole number (0 = no requirement)' });
+    upsert.run(key, String(code));
+  }
+
   if (auto_payout_time !== undefined) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(auto_payout_time))) {
       return res.status(400).json({ error: 'auto_payout_time must be HH:MM (24-hour)' });
