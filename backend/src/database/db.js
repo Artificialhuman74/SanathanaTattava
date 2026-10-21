@@ -8,6 +8,14 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const db = new Database(path.join(dataDir, 'database.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+// WAL makes NORMAL as safe against corruption as FULL, with far fewer disk syncs per write.
+db.pragma('synchronous = NORMAL');
+// Wait for a busy writer instead of failing straight away.
+db.pragma('busy_timeout = 5000');
+// 16 MB page cache, temp tables in memory, and reads through a 128 MB memory map.
+db.pragma('cache_size = -16000');
+db.pragma('temp_store = MEMORY');
+db.pragma('mmap_size = 134217728');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (

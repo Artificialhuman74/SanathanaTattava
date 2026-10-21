@@ -10,6 +10,7 @@
     "dev": "vite --host",
     "dev:partner": "VITE_APP_MODE=partner vite --host --port 3001",
     "build": "tsc && vite build",
+    "build:pages": "npm run build && cp cloudflare/_headers dist/_headers",
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:watch": "vitest",

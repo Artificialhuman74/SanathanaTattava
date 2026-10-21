@@ -171,7 +171,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet" />
 
     <!-- ── Razorpay ───────────────────────────────────────────────────────── -->
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <!-- defer: no longer holds up the page while it downloads; it still runs before the app starts,
+         so window.Razorpay is ready long before anyone taps Pay. -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
   </head>
   <body>
     <div id="root"></div>

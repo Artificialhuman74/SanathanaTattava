@@ -949,7 +949,7 @@ export default function Landing() {
               }}
             >
               <SealImage
-                src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+                src="/ghani-press.webp"
                 alt="A bullock walking the wooden ghani press; coconut kernels and oil at its base."
                 eager
                 className="w-full h-full object-cover"
@@ -1125,7 +1125,7 @@ export default function Landing() {
               }}
             >
               <SealImage
-                src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+                src="/ghani-press.webp"
                 alt="The same wooden ghani, shown in detail; the bullock harnessed to the central pillar, sesame seeds at the base."
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ filter: 'sepia(0.12) saturate(0.95)' }}

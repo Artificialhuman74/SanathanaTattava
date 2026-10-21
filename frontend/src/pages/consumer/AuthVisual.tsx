@@ -89,7 +89,7 @@ export function AuthVisual({ tagline }: { tagline: string }) {
           }}
         >
           <img
-            src="/Gemini_Generated_Image_agra6kagra6kagra.png"
+            src="/ghani-press.webp"
             alt=""
             className="w-full h-full object-cover"
             draggable={false}

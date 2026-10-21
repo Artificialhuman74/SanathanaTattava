@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useRubberBandScroll } from './hooks/useRubberBandScroll';
 import { Toaster, toast } from 'react-hot-toast';
@@ -6,72 +6,77 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { PrivateRoute, DeliveryRoute, ConsumerRoute } from './components/RouteGuards';
 import { APP_MODE } from './appMode';
+import LiquidLoader from './components/LiquidLoader';
 
-import Landing         from './pages/Landing';
-import Login           from './pages/Login';
-import Register        from './pages/Register';
-import ForgotPassword  from './pages/ForgotPassword';
-import ResetPassword   from './pages/ResetPassword';
+// Every page and layout loads on its own, when first opened: the shop no longer downloads the
+// admin, trader and delivery screens (and the other way round). Navigation runs in a transition
+// (main.tsx), so the current screen stays up while the next one's code arrives.
 
-import AdminLayout  from './layouts/AdminLayout';
-import TraderLayout from './layouts/TraderLayout';
-import ConsumerLayout from './layouts/ConsumerLayout';
-import DeliveryLayout from './layouts/DeliveryLayout';
+const Landing         = lazy(() => import('./pages/Landing'));
+const Login           = lazy(() => import('./pages/Login'));
+const Register        = lazy(() => import('./pages/Register'));
+const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword   = lazy(() => import('./pages/ResetPassword'));
 
-import AdminDashboard     from './pages/admin/Dashboard';
-import AdminInventory     from './pages/admin/Inventory';
-import AdminTraders       from './pages/admin/Traders';
-import AdminOrders        from './pages/admin/Orders';
-import AdminConsumerOrders from './pages/admin/ConsumerOrders';
-import AdminCommissions   from './pages/admin/Commissions';
-import AdminPayouts       from './pages/admin/Payouts';
-import AdminConsumers     from './pages/admin/Consumers';
-import AdminSettings      from './pages/admin/Settings';
-import AdminDealerInventory from './pages/admin/DealerInventory';
-import AdminFinance        from './pages/admin/Finance';
-import AdminContainerFinance from './pages/admin/ContainerFinance';
-import AdminHoldings           from './pages/admin/Holdings';
-import AdminLuckyDraw          from './pages/admin/LuckyDraw';
-import AdminRiders             from './pages/admin/Riders';
-import AdminFleet              from './pages/admin/Fleet';
+const AdminLayout  = lazy(() => import('./layouts/AdminLayout'));
+const TraderLayout = lazy(() => import('./layouts/TraderLayout'));
+const ConsumerLayout = lazy(() => import('./layouts/ConsumerLayout'));
+const DeliveryLayout = lazy(() => import('./layouts/DeliveryLayout'));
 
-import TraderDashboard     from './pages/trader/Dashboard';
-import TraderProducts      from './pages/trader/Products';
-import TraderOrders        from './pages/trader/MyOrders';
-import TraderSubDealers    from './pages/trader/SubDealers';
-import TraderConsumerOrders from './pages/trader/ConsumerOrders';
-import TraderCommissions   from './pages/trader/Commissions';
-import TraderProfile       from './pages/trader/Profile';
-import TraderInventory     from './pages/trader/Inventory';
-import TraderSubDealerCommissions from './pages/trader/SubDealerCommissions';
-import TraderLuckyDraw     from './pages/trader/LuckyDraw';
-import ConfirmCommission   from './pages/ConfirmCommission';
+const AdminDashboard     = lazy(() => import('./pages/admin/Dashboard'));
+const AdminInventory     = lazy(() => import('./pages/admin/Inventory'));
+const AdminTraders       = lazy(() => import('./pages/admin/Traders'));
+const AdminOrders        = lazy(() => import('./pages/admin/Orders'));
+const AdminConsumerOrders = lazy(() => import('./pages/admin/ConsumerOrders'));
+const AdminCommissions   = lazy(() => import('./pages/admin/Commissions'));
+const AdminPayouts       = lazy(() => import('./pages/admin/Payouts'));
+const AdminConsumers     = lazy(() => import('./pages/admin/Consumers'));
+const AdminSettings      = lazy(() => import('./pages/admin/Settings'));
+const AdminDealerInventory = lazy(() => import('./pages/admin/DealerInventory'));
+const AdminFinance        = lazy(() => import('./pages/admin/Finance'));
+const AdminContainerFinance = lazy(() => import('./pages/admin/ContainerFinance'));
+const AdminHoldings           = lazy(() => import('./pages/admin/Holdings'));
+const AdminLuckyDraw          = lazy(() => import('./pages/admin/LuckyDraw'));
+const AdminRiders             = lazy(() => import('./pages/admin/Riders'));
+const AdminFleet              = lazy(() => import('./pages/admin/Fleet'));
 
-import Shop                from './pages/consumer/Shop';
-import ConsumerLogin       from './pages/consumer/Login';
-import ConsumerRegister    from './pages/consumer/Register';
-import ConsumerOrders      from './pages/consumer/Orders';
-import ConsumerOrderTracking from './pages/consumer/OrderTracking';
-import ConsumerContainers  from './pages/consumer/Containers';
-import ConsumerWallet      from './pages/consumer/Wallet';
-import ConsumerAddresses   from './pages/consumer/Addresses';
-import ConsumerCheckout    from './pages/consumer/Checkout';
-import ConsumerProfile     from './pages/consumer/Profile';
-import ConsumerAccount     from './pages/consumer/Account';
-import ConsumerSupport     from './pages/consumer/Support';
-import ConsumerLegal       from './pages/consumer/Legal';
-import ConsumerReview      from './pages/consumer/Review';
-import VerifyPending       from './pages/consumer/VerifyPending';
-import ConsumerLuckyDraw   from './pages/consumer/LuckyDraw';
-import ConsumerTestConsole from './pages/consumer/TestConsole';
+const TraderDashboard     = lazy(() => import('./pages/trader/Dashboard'));
+const TraderProducts      = lazy(() => import('./pages/trader/Products'));
+const TraderOrders        = lazy(() => import('./pages/trader/MyOrders'));
+const TraderSubDealers    = lazy(() => import('./pages/trader/SubDealers'));
+const TraderConsumerOrders = lazy(() => import('./pages/trader/ConsumerOrders'));
+const TraderCommissions   = lazy(() => import('./pages/trader/Commissions'));
+const TraderProfile       = lazy(() => import('./pages/trader/Profile'));
+const TraderInventory     = lazy(() => import('./pages/trader/Inventory'));
+const TraderSubDealerCommissions = lazy(() => import('./pages/trader/SubDealerCommissions'));
+const TraderLuckyDraw     = lazy(() => import('./pages/trader/LuckyDraw'));
+const ConfirmCommission   = lazy(() => import('./pages/ConfirmCommission'));
 
-import DeliveryLogin     from './pages/delivery/Login';
-import DeliveryDashboard from './pages/delivery/Dashboard';
-import DeliveryOrders    from './pages/delivery/Orders';
-import DeliveryOrderDetail from './pages/delivery/OrderDetail';
-import DeliveryHistory   from './pages/delivery/History';
-import DeliveryProfile   from './pages/delivery/DeliveryProfile';
-import DeliveryPickups   from './pages/delivery/ContainerPickups';
+const Shop                = lazy(() => import('./pages/consumer/Shop'));
+const ConsumerLogin       = lazy(() => import('./pages/consumer/Login'));
+const ConsumerRegister    = lazy(() => import('./pages/consumer/Register'));
+const ConsumerOrders      = lazy(() => import('./pages/consumer/Orders'));
+const ConsumerOrderTracking = lazy(() => import('./pages/consumer/OrderTracking'));
+const ConsumerContainers  = lazy(() => import('./pages/consumer/Containers'));
+const ConsumerWallet      = lazy(() => import('./pages/consumer/Wallet'));
+const ConsumerAddresses   = lazy(() => import('./pages/consumer/Addresses'));
+const ConsumerCheckout    = lazy(() => import('./pages/consumer/Checkout'));
+const ConsumerProfile     = lazy(() => import('./pages/consumer/Profile'));
+const ConsumerAccount     = lazy(() => import('./pages/consumer/Account'));
+const ConsumerSupport     = lazy(() => import('./pages/consumer/Support'));
+const ConsumerLegal       = lazy(() => import('./pages/consumer/Legal'));
+const ConsumerReview      = lazy(() => import('./pages/consumer/Review'));
+const VerifyPending       = lazy(() => import('./pages/consumer/VerifyPending'));
+const ConsumerLuckyDraw   = lazy(() => import('./pages/consumer/LuckyDraw'));
+const ConsumerTestConsole = lazy(() => import('./pages/consumer/TestConsole'));
+
+const DeliveryLogin     = lazy(() => import('./pages/delivery/Login'));
+const DeliveryDashboard = lazy(() => import('./pages/delivery/Dashboard'));
+const DeliveryOrders    = lazy(() => import('./pages/delivery/Orders'));
+const DeliveryOrderDetail = lazy(() => import('./pages/delivery/OrderDetail'));
+const DeliveryHistory   = lazy(() => import('./pages/delivery/History'));
+const DeliveryProfile   = lazy(() => import('./pages/delivery/DeliveryProfile'));
+const DeliveryPickups   = lazy(() => import('./pages/delivery/ContainerPickups'));
 
 const PartnerRoutes = () => {
   const { user } = useAuth();
@@ -217,9 +222,11 @@ const AppRoutes = () => {
           );
         }}
       </Toaster>
-      {APP_MODE === 'partner'  ? <PartnerRoutes /> :
-       APP_MODE === 'delivery' ? <DeliveryRoutes /> :
-                                 <ConsumerRoutes />}
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><LiquidLoader size={96} /></div>}>
+        {APP_MODE === 'partner'  ? <PartnerRoutes /> :
+         APP_MODE === 'delivery' ? <DeliveryRoutes /> :
+                                   <ConsumerRoutes />}
+      </Suspense>
     </>
   );
 };

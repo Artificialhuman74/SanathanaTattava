@@ -63,6 +63,7 @@ const https   = require('https');
 const http    = require('http');
 const cors    = require('cors');
 const helmet  = require('helmet');
+const compression = require('compression');
 
 const { initSocket } = require('./websocket/socketServer');
 const db = require('./database/db');
@@ -105,12 +106,35 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+// Compressed responses (brotli or gzip, whichever the client takes): JSON shrinks to a fraction.
+app.use(compression({ threshold: 1024 }));
+
 // Razorpay webhook MUST receive raw bytes for HMAC verification — register
 // before the global JSON parser so req.body stays a Buffer for this route.
 app.use('/api/payments/webhook', express.raw({ type: '*/*', limit: '1mb' }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Product photos as links, and the photos themselves ───────────────────
+const { linkPhotos, serveMedia } = require('./services/productImages');
+app.get('/api/media/:name', serveMedia);
+app.use(linkPhotos);
+
+// ─── Answers that are the same for everyone ───────────────────────────────
+// The shop's product list, a product, its reviews and the public settings. The CDN keeps them for
+// 30 s, so a busy minute costs the server one request per edge instead of one per visitor; phones
+// and browsers check back every time (a 304, with no body, while nothing changed).
+const SHARED_GET = /^\/api\/consumer\/(products(\/\d+(\/reviews)?)?|settings)$/;
+app.use((req, res, next) => {
+  if ((req.method === 'GET' || req.method === 'HEAD') && SHARED_GET.test(req.path)) {
+    res.set('Cache-Control', 'public, max-age=0, s-maxage=30, stale-while-revalidate=30');
+    // A cached answer goes to every site, so it can't name just one of them.
+    res.set('Access-Control-Allow-Origin', '*');
+    res.removeHeader('Access-Control-Allow-Credentials');
+  }
+  next();
+});
 
 // ─── Static uploads (refund proof + damage photos) ────────────────────────
 // Lives on the same DATA_DIR volume as the SQLite DB so it survives redeploys.

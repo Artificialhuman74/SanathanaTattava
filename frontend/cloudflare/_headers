@@ -1,0 +1,28 @@
+# Cloudflare Pages headers: the same as the [[headers]] in netlify.toml (see the notes there).
+# Copied into dist/ only by `npm run build:pages`, so Netlify builds stay exactly as they were.
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Strict-Transport-Security: max-age=31536000
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+
+/trader/*
+  X-Robots-Tag: noindex, nofollow
+
+/delivery/*
+  X-Robots-Tag: noindex, nofollow
+
+/sitemap.xml
+  Cache-Control: public, max-age=86400
+  Content-Type: application/xml; charset=utf-8
+
+/robots.txt
+  Cache-Control: public, max-age=86400
