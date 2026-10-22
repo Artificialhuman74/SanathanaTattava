@@ -94,6 +94,8 @@ export function shouldRotateApiBase(err: any): boolean {
 
   if (!err?.response) return true; // network / DNS / CORS failure
   if ([502, 503, 504].includes(status)) return true;
+  // Cloudflare's own "couldn't reach the server" answers (520-527, 530) when the API sits behind it.
+  if (status >= 520 && status <= 530) return true;
   if (status === 404 && /Application not found/i.test(message)) return true;
   // Wrong-host API calls often return HTML 404 pages instead of JSON.
   if (status === 404 && (contentType.includes('text/html') || /<!doctype html|<html/i.test(body))) return true;
