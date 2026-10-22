@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -40,13 +41,15 @@ export default function AdminLayout() {
   // Sidebar badges: urgent dispatch alerts (red dot on Fleet), riders waiting for review.
   const [badges, setBadges] = useState({ fleet_alerts: 0, riders_waiting: 0 });
   const { on, off } = useSocket();
+  const loadBadges = useCallback(() => {
+    api.get('/admin/dispatch/badges').then(r => setBadges(r.data)).catch(() => {});
+  }, []);
   useEffect(() => {
-    const load = () => api.get('/admin/dispatch/badges').then(r => setBadges(r.data)).catch(() => {});
-    load();
-    const id = setInterval(load, 60_000);
-    on('dispatch:alert', load);
-    return () => { clearInterval(id); off('dispatch:alert', load); };
-  }, [on, off]);
+    loadBadges();
+    on('dispatch:alert', loadBadges);
+    return () => { off('dispatch:alert', loadBadges); };
+  }, [on, off, loadBadges]);
+  usePolling(loadBadges, 60_000);
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={`flex flex-col h-full bg-gradient-to-b from-[#0d1f10] to-[#1a3d20] ${mobile ? 'w-72' : 'w-64'}`}>

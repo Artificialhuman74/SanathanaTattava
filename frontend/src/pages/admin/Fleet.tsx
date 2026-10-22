@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
@@ -167,11 +168,11 @@ export default function AdminFleet() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, POLL_MS);
     // "updated N s ago" stays honest between polls.
     const clock = setInterval(() => tick((n) => n + 1), 5_000);
-    return () => { clearInterval(id); clearInterval(clock); };
+    return () => { clearInterval(clock); };
   }, [load]);
+  usePolling(load, POLL_MS);
 
   useEffect(() => {
     const now = () => load();

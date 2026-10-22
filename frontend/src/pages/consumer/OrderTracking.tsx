@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Clock, Loader2, Phone } from 'lucide-react';
@@ -183,9 +184,8 @@ export default function OrderTracking() {
   useEffect(() => {
     load();
     consumerApi.get(`/consumer/orders/${id}`).then((r) => setPlacedAt(r.data.order?.created_at || null)).catch(() => {});
-    const timer = setInterval(load, POLL_MS);
-    return () => clearInterval(timer);
   }, [id, load]);
+  usePolling(load, POLL_MS);
   useOrderUpdates(() => { load(); }, Number(id));
 
   // The rider's photo comes through the account (it is private), so fetch it as a blob.
