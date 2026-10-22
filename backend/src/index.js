@@ -83,6 +83,9 @@ const devToolsRoutes      = require('./routes/devTools');
 
 const app  = express();
 const PORT = process.env.PORT || 5001;
+// Railway's edge sits in front of us: req.ip is the caller it saw, not the proxy (which made every
+// user share one rate-limit bucket and put the proxy's address in the audit log).
+app.set('trust proxy', 1);
 
 // ─── Middleware ────────────────────────────────────────────────────────────
 const { isAllowedOrigin } = require('./config/corsOrigins');

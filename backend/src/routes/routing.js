@@ -48,12 +48,13 @@ router.get('/', async (req, res) => {
   const to = point(req.query.to);
   if (!from || !to) return res.status(400).json({ error: 'from and to must be "lat,lng"' });
   const now = Date.now();
-  if (limited(req.ip, now)) return res.status(429).json({ error: 'Too many route requests' });
+  // Behind Cloudflare, the caller is in CF-Connecting-IP (req.ip would be the edge, shared by many).
+  if (limited(req.get('cf-connecting-ip') || req.ip, now)) return res.status(429).json({ error: 'Too many route requests' });
 
   const r = (v) => v.toFixed(4);
   const key = `${r(from.lng)},${r(from.lat)};${r(to.lng)},${r(to.lat)}`;
   const hit = cache.get(key);
-  if (hit && now - hit.at < CACHE_MS) return res.json(hit.route);
+  if (hit && now - hit.at < CACHE_MS) return res.set('Cache-Control', 'public, max-age=300').json(hit.route);
 
   try {
     const upstream = await fetch(`${osrmBase()}/route/v1/driving/${key}?overview=full&geometries=geojson`, {
