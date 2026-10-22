@@ -171,6 +171,17 @@
          downloading now; the other scripts load only if a page needs them. -->
     <link rel="preload" href="/fonts/inter-1dc044f482.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/eb-garamond-fbc7eeae79.woff2" as="font" type="font/woff2" crossorigin />
+    <script>
+      // The seal photo is the shop front page's largest paint. The page's code loads on demand,
+      // so start fetching the photo alongside it, not after it; only on that page, not the
+      // partner or delivery sites.
+      if (location.pathname === '/' && !/^(partner|delivery)\./.test(location.hostname)) {
+        var seal = document.createElement('link');
+        seal.rel = 'preload'; seal.as = 'image'; seal.href = '/ghani-press.webp';
+        seal.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(seal);
+      }
+    </script>
 
     <!-- ── Razorpay ───────────────────────────────────────────────────────── -->
     <!-- defer: no longer holds up the page while it downloads; it still runs before the app starts,
