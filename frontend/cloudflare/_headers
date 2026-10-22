@@ -14,6 +14,19 @@
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Logos, the hero photo and the map style keep their names when they change: browsers keep them a
+# day (and check in the background after that) instead of asking on every visit.
+/logo.webp
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/logo-192.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/ghani-press.webp
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/og-image.jpg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/map/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 /admin/*
   X-Robots-Tag: noindex, nofollow
 

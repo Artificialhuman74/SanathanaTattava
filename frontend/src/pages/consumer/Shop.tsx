@@ -1032,7 +1032,7 @@ export default function Shop() {
                 <div key={`${product.id}::${mode}`} className="flex items-center gap-3 p-3 bg-parchment-100 rounded-2xl">
                   <div className="w-14 h-14 rounded-xl bg-[#fffbf2] border border-[#e8dcc8] overflow-hidden flex-shrink-0">
                     {getPrimaryImage(product)
-                      ? <img src={getPrimaryImage(product)} alt={product.name} className="w-full h-full object-cover" />
+                      ? <img src={getPrimaryImage(product)} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                       : <Package size={18} className="text-slate-300 m-auto mt-4" />
                     }
                   </div>
@@ -1309,7 +1309,7 @@ const FlyLayer = forwardRef<FlyLayerHandle>(function FlyLayer(_props, ref) {
         }}
       >
         {item.kind === 'image' && item.image
-          ? <img src={item.image} alt="" className="w-full h-full object-cover" />
+          ? <img src={item.image} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
           : <div className="w-full h-full bg-brand-700/90" />
         }
       </div>
@@ -1347,7 +1347,7 @@ const FlyLayer = forwardRef<FlyLayerHandle>(function FlyLayer(_props, ref) {
           }}
         >
           {item.image
-            ? <img src={item.image} alt="" className="w-full h-full object-cover" />
+            ? <img src={item.image} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-brand-600"><ShoppingCart size={14} /></div>
           }
         </div>
@@ -1476,7 +1476,7 @@ function ProductReviews({ productId, consumer }: { productId: number; consumer: 
                 <div className="flex gap-2 ml-9 flex-wrap">
                   {imgs.map((img, i) => (
                     <button key={i} onClick={() => setLightboxImg(img)} className="w-16 h-16 rounded-lg overflow-hidden border border-[#e8dcc8] flex-shrink-0">
-                      <img src={img} alt="Review" className="w-full h-full object-cover" />
+                      <img src={img} alt="Review" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -1527,7 +1527,7 @@ function ProductImageGallery({ images, name, contain }: { images: string[]; name
         >
           {images.map((img, idx) => (
             <div key={`${img}-${idx}`} className="w-full h-full flex-shrink-0 snap-center">
-              <img src={img} alt={name} className={`w-full h-full ${contain ? 'object-contain' : 'object-cover'}`} />
+              <img src={img} alt={name} loading="lazy" decoding="async" className={`w-full h-full ${contain ? 'object-contain' : 'object-cover'}`} />
             </div>
           ))}
         </div>
