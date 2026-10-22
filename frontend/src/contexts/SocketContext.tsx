@@ -14,7 +14,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { getApiBaseUrl, rotateApiBaseUrl } from '../config/apiBase';
 
 interface SocketContextType {
@@ -51,6 +51,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Subscription registry: survives socket instance replacement on reconnect
   // Map<event, Set<handler>> — re-registered on every new socket
   const subsRef = useRef<Map<string, Set<(...args: any[]) => void>>>(new Map());
+  // Bumped by every (re)connect and on unmount, so a library load that finishes late can tell
+  // it has been superseded (logged out, logged in again) and does nothing.
+  const genRef = useRef(0);
 
   /** Attach all registered subscriptions to the given socket instance */
   function rehydrate(sock: Socket) {
@@ -61,6 +64,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   /** Create a fresh socket with the current token. Tears down any existing one. */
   const initSocket = useCallback(() => {
+    const gen = ++genRef.current;
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -72,49 +76,55 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const baseUrl = getApiBaseUrl() || window.location.origin;
 
-    const sock = io(baseUrl, {
-      auth: { token },
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
-    });
+    // The client library loads only for signed-in visitors: shoppers just browsing never need it,
+    // and it was a large part of the first download.
+    import('socket.io-client').then(({ io }) => {
+      if (gen !== genRef.current) return;
+      const sock = io(baseUrl, {
+        auth: { token },
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
+        timeout: 20000,
+      });
 
-    sock.on('connect', () => {
-      console.log('[ws] connected', sock.id);
-      setConnected(true);
-    });
-    sock.on('disconnect', (reason) => {
-      console.log('[ws] disconnected:', reason);
-      setConnected(false);
-    });
-    sock.on('connect_error', (err) => {
-      console.warn('[ws] connect error:', err.message);
-      const msg = String(err.message || '');
-      const authFailure = /No auth token|Invalid token|jwt|unauthorized/i.test(msg);
-      if (!authFailure) {
-        const nextBase = rotateApiBaseUrl();
-        if (nextBase) {
-          console.warn('[ws] retrying with next API base:', nextBase);
-          setTimeout(() => initSocket(), 300);
-          return;
+      sock.on('connect', () => {
+        console.log('[ws] connected', sock.id);
+        setConnected(true);
+      });
+      sock.on('disconnect', (reason) => {
+        console.log('[ws] disconnected:', reason);
+        setConnected(false);
+      });
+      sock.on('connect_error', (err) => {
+        console.warn('[ws] connect error:', err.message);
+        const msg = String(err.message || '');
+        const authFailure = /No auth token|Invalid token|jwt|unauthorized/i.test(msg);
+        if (!authFailure) {
+          const nextBase = rotateApiBaseUrl();
+          if (nextBase) {
+            console.warn('[ws] retrying with next API base:', nextBase);
+            setTimeout(() => initSocket(), 300);
+            return;
+          }
         }
-      }
-      setConnected(false);
-    });
+        setConnected(false);
+      });
 
-    // Re-attach all subscriptions that were registered before this socket existed
-    rehydrate(sock);
+      // Re-attach all subscriptions that were registered before this socket existed
+      rehydrate(sock);
 
-    socketRef.current = sock;
+      socketRef.current = sock;
+    }).catch((err) => console.warn('[ws] client failed to load:', err));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial connect on mount
   useEffect(() => {
     initSocket();
     return () => {
+      genRef.current++;
       socketRef.current?.disconnect();
       socketRef.current = null;
       setConnected(false);
