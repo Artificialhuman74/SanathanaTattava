@@ -9,7 +9,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line,
 } from 'recharts';
-import * as XLSX from 'xlsx';
 import LiquidLoader from '../../components/LiquidLoader';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -78,13 +77,19 @@ const todayMonth = () => {
 };
 const todayDate = () => new Date().toISOString().slice(0, 10);
 
-function downloadXlsx(filename: string, sheets: { name: string; rows: any[] }[]) {
-  const wb = XLSX.utils.book_new();
-  for (const s of sheets) {
-    const ws = XLSX.utils.json_to_sheet(s.rows);
-    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+/** The Excel library is most of this page's weight, so it loads on the first export, not with the page. */
+async function downloadXlsx(filename: string, sheets: { name: string; rows: any[] }[]) {
+  try {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    for (const s of sheets) {
+      const ws = XLSX.utils.json_to_sheet(s.rows);
+      XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+    }
+    XLSX.writeFile(wb, filename);
+  } catch {
+    toast.error('Could not create the Excel file. Please try again.');
   }
-  XLSX.writeFile(wb, filename);
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
